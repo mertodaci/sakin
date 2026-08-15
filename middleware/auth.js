@@ -17,8 +17,7 @@ async function requireAuth(req, res, next) {
   if (!token) return res.status(401).json({ error: "Oturum bulunamadı, lütfen giriş yapın." });
   try {
     const payload = jwt.verify(token, SECRET);
-    const data = await db.load();
-    const user = data.users.find((u) => u.id === payload.id);
+    const user = await db.prisma.user.findUnique({ where: { id: payload.id } });
     if (!user) return res.status(401).json({ error: "Oturum geçersiz veya süresi dolmuş." });
     if (user.isActive === false) return res.status(403).json({ error: "Hesabınız pasife alınmış." });
     if ((payload.tokenVersion || 0) !== (user.tokenVersion || 0)) {

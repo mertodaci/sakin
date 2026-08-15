@@ -5,6 +5,7 @@ const db = require("../db");
 const { sign, requireAuth } = require("../middleware/auth");
 
 const router = express.Router();
+const prisma = db.prisma;
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000; // 15 dakika
@@ -23,16 +24,17 @@ function validatePassword(pw) {
   return null;
 }
 
+function findByEmail(email) {
+  return prisma.user.findFirst({ where: { email: { equals: email || "", mode: "insensitive" } } });
+}
+
 // Kayit icin bos/musait daire listesi (auth gerektirmez, kayit formunda kullanilir)
 router.get("/units-for-signup", async (req, res) => {
-  const data = await db.load();
-  res.json(
-    data.units.map((u) => ({ id: u.id, label: `${u.block} - Daire ${u.no}` }))
-  );
+  const units = await prisma.unit.findMany();
+  res.json(units.map((u) => ({ id: u.id, label: `${u.block} - Daire ${u.no}` })));
 });
 
 router.post("/register", registerLimiter, async (req, res) => {
-  const data = await db.load();
   const { name, email, phone, password, unitId } = req.body || {};
 
   if (!name || !email || !password || !unitId) {
@@ -40,52 +42,29 @@ router.post("/register", registerLimiter, async (req, res) => {
   }
   const pwError = validatePassword(password);
   if (pwError) return res.status(400).json({ error: pwError });
-  if (data.users.some((u) => u.email.toLowerCase() === String(email).toLowerCase())) {
+  if (await findByEmail(email)) {
     return res.status(409).json({ error: "Bu e-posta ile zaten bir hesap var." });
   }
-  if (!data.units.some((u) => u.id === unitId)) {
-    return res.status(400).json({ error: "Geçersiz daire seçimi." });
-  }
+  const unit = await prisma.unit.findUnique({ where: { id: unitId } });
+  if (!unit) return res.status(400).json({ error: "Geçersiz daire seçimi." });
 
-  const user = {
-    id: db.uid(),
-    name,
-    email,
-    phone: phone || "",
-    passwordHash: bcrypt.hashSync(password, 10),
-    role: "sakin",
-    unitId,
-    isApproved: false,
-    isActive: true,
-    tokenVersion: 0,
-    failedLoginAttempts: 0,
-    lockedUntil: null,
-    mustChangePassword: false,
-    resetRequestedAt: null,
-    createdAt: new Date().toISOString(),
-  };
-  data.users.push(user);
-
-  const admins = data.users.filter((u) => u.role === "yonetici");
-  admins.forEach((a) => {
-    data.notifications.push({
-      id: db.uid(),
-      userId: a.id,
-      message: `${name} kayıt onayı bekliyor.`,
-      read: false,
-      date: new Date().toISOString(),
-      link: "#/kullanicilar",
-    });
+  await prisma.user.create({
+    data: { name, email, phone: phone || "", passwordHash: bcrypt.hashSync(password, 10), role: "sakin", unitId, isApproved: false },
   });
 
-  await db.save(data);
+  const admins = await prisma.user.findMany({ where: { role: "yonetici" } });
+  if (admins.length) {
+    await prisma.notification.createMany({
+      data: admins.map((a) => ({ userId: a.id, message: `${name} kayıt onayı bekliyor.`, link: "#/kullanicilar" })),
+    });
+  }
+
   res.status(201).json({ message: "Kaydınız alındı. Yönetici onayından sonra giriş yapabilirsiniz." });
 });
 
 router.post("/login", loginLimiter, async (req, res) => {
-  const data = await db.load();
   const { email, password } = req.body || {};
-  const user = data.users.find((u) => u.email.toLowerCase() === String(email || "").toLowerCase());
+  const user = await findByEmail(email);
 
   if (user && user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
     const minutesLeft = Math.ceil((new Date(user.lockedUntil) - new Date()) / 60000);
@@ -94,12 +73,17 @@ router.post("/login", loginLimiter, async (req, res) => {
 
   if (!user || !bcrypt.compareSync(password || "", user.passwordHash)) {
     if (user) {
-      user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
-      if (user.failedLoginAttempts >= MAX_FAILED_ATTEMPTS) {
-        user.lockedUntil = new Date(Date.now() + LOCK_DURATION_MS).toISOString();
-        db.logActivity(data, null, "user.lockout", `${user.name} hesabı ${MAX_FAILED_ATTEMPTS} hatalı denemeden sonra kilitlendi.`, user.unitId || null);
+      const failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+      const lockOut = failedLoginAttempts >= MAX_FAILED_ATTEMPTS;
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts, lockedUntil: lockOut ? new Date(Date.now() + LOCK_DURATION_MS) : user.lockedUntil },
+      });
+      if (lockOut) {
+        await prisma.activityLog.create({
+          data: { actorId: "sistem", actorName: "Sistem", action: "user.lockout", detail: `${user.name} hesabı ${MAX_FAILED_ATTEMPTS} hatalı denemeden sonra kilitlendi.`, scopeUnitId: user.unitId || null },
+        });
       }
-      await db.save(data);
     }
     return res.status(401).json({ error: "E-posta veya şifre hatalı." });
   }
@@ -111,12 +95,10 @@ router.post("/login", loginLimiter, async (req, res) => {
     return res.status(403).json({ error: "Hesabınız pasife alınmış. Yardım için yönetici ile iletişime geçin." });
   }
 
-  user.failedLoginAttempts = 0;
-  user.lockedUntil = null;
-  await db.save(data);
+  await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, lockedUntil: null } });
 
   const token = sign(user);
-  const unit = user.unitId ? data.units.find((u) => u.id === user.unitId) : null;
+  const unit = user.unitId ? await prisma.unit.findUnique({ where: { id: user.unitId } }) : null;
   res.json({
     token,
     mustChangePassword: !!user.mustChangePassword,
@@ -127,56 +109,53 @@ router.post("/login", loginLimiter, async (req, res) => {
 // Sifremi unuttum: e-posta/SMS altyapisi olmadigindan, istek yoneticiye iletilir.
 // Yonetici "Kullanicilar" ekranindan tek tikla gecici sifre uretip sakine iletir.
 router.post("/forgot-password", forgotLimiter, async (req, res) => {
-  const data = await db.load();
   const { email } = req.body || {};
-  const user = data.users.find((u) => u.email.toLowerCase() === String(email || "").toLowerCase());
+  const user = await findByEmail(email);
   // Kullanici bulunamasa bile ayni mesaji donduruyoruz (e-posta enumerasyonunu onlemek icin)
   if (user) {
-    user.resetRequestedAt = new Date().toISOString();
-    data.users.filter((u) => u.role === "yonetici").forEach((a) => {
-      data.notifications.push({ id: db.uid(), userId: a.id, message: `${user.name} şifre sıfırlama talep etti.`, read: false, date: new Date().toISOString(), link: "#/kullanicilar" });
-    });
-    await db.save(data);
+    await prisma.user.update({ where: { id: user.id }, data: { resetRequestedAt: new Date() } });
+    const admins = await prisma.user.findMany({ where: { role: "yonetici" } });
+    if (admins.length) {
+      await prisma.notification.createMany({
+        data: admins.map((a) => ({ userId: a.id, message: `${user.name} şifre sıfırlama talep etti.`, link: "#/kullanicilar" })),
+      });
+    }
   }
   res.json({ message: "Talebiniz alındı. Yönetici sizinle iletişime geçip geçici bir şifre tanımlayacaktır." });
 });
 
 router.get("/me", requireAuth, async (req, res) => {
-  const data = await db.load();
-  const user = data.users.find((u) => u.id === req.user.id);
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
-  const unit = user.unitId ? data.units.find((u) => u.id === user.unitId) : null;
+  const unit = user.unitId ? await prisma.unit.findUnique({ where: { id: user.unitId } }) : null;
   res.json({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, unitId: user.unitId, department: user.department || null, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, mustChangePassword: !!user.mustChangePassword });
 });
 
 router.post("/change-password", requireAuth, async (req, res) => {
-  const data = await db.load();
-  const user = data.users.find((u) => u.id === req.user.id);
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
   const { currentPassword, newPassword } = req.body || {};
   if (!user || !bcrypt.compareSync(currentPassword || "", user.passwordHash)) {
     return res.status(401).json({ error: "Mevcut şifre hatalı." });
   }
   const pwError = validatePassword(newPassword);
   if (pwError) return res.status(400).json({ error: pwError });
-  user.passwordHash = bcrypt.hashSync(newPassword, 10);
-  user.mustChangePassword = false;
   // Sifre degisince diger tum cihazlardaki eski oturumlar gecersiz kilinir; bu
   // cihaz icin yeni bir token uretip donduruyoruz ki kullanici disari atilmasin.
-  user.tokenVersion = (user.tokenVersion || 0) + 1;
-  await db.save(data);
-  const newToken = sign(user);
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: bcrypt.hashSync(newPassword, 10), mustChangePassword: false, tokenVersion: { increment: 1 } },
+  });
+  const newToken = sign(updated);
   res.json({ message: "Şifreniz güncellendi.", token: newToken });
 });
 
 // "Tum oturumlari kapat": baska bir cihazda/tarayicida acik kalmis olabilecek
 // oturumlari gecersiz kilar (orn. cihaz kaybolduysa). Bu cihaz icin yeni token doner.
 router.post("/logout-all-sessions", requireAuth, async (req, res) => {
-  const data = await db.load();
-  const user = data.users.find((u) => u.id === req.user.id);
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
-  user.tokenVersion = (user.tokenVersion || 0) + 1;
-  await db.save(data);
-  const newToken = sign(user);
+  const updated = await prisma.user.update({ where: { id: user.id }, data: { tokenVersion: { increment: 1 } } });
+  const newToken = sign(updated);
   res.json({ message: "Tüm oturumlar kapatıldı. Bu cihazda oturumunuz devam ediyor.", token: newToken });
 });
 

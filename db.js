@@ -129,7 +129,6 @@ const simple = (model) => async () => (await prisma[model].findMany()).map(toPla
 // TERS sirada silinir (child'lar once) - boylece FK kisitlari ihlal edilmez.
 const LEGACY_COLLECTIONS = [
   { name: "units", model: "unit", load: simple("unit") },
-  { name: "users", model: "user", load: loadUsers },
   { name: "accounts", model: "account", load: simple("account") },
   { name: "facilities", model: "facility", load: simple("facility") },
   { name: "vendors", model: "vendor", load: simple("vendor") },
@@ -165,7 +164,11 @@ const LEGACY_COLLECTIONS = [
 // yazar), ama hala eski data.xxx seklini bekleyen baska legacy route'lar
 // (orn. dashboard.js, system.js /export) icin load()'da sunulmaya devam eder.
 const READONLY_PASSTHROUGH = [
-  // Ornek (adim 5'te doldurulacak): { name: "users", load: loadUsers },
+  // users: routes/auth.js ve routes/directory.js'nin kullanici mutasyonu
+  // yapan uclari artik dogrudan Prisma kullaniyor (bkz. db.prisma.user).
+  // Burada sadece hala data.users okuyan diger legacy route'lar (dashboard,
+  // comms, ops, jobs, system/export) icin salt-okunur olarak sunuluyor.
+  { name: "users", load: loadUsers },
 ];
 
 async function load() {

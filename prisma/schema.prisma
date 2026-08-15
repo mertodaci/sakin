@@ -316,9 +316,9 @@ model Personnel {
   phone         String
   department    String
   active        Boolean @default(true)
-  userId        String? @unique
-  user          User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
-  monthlySalary Decimal @db.Decimal(12, 2)
+  userId        String?  @unique
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  monthlySalary Decimal? @db.Decimal(12, 2)
 
   equipmentResponsible Equipment[]
   ticketsAssigned      Ticket[]

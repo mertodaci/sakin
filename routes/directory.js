@@ -4,6 +4,7 @@ const db = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
 const router = express.Router();
+const prisma = db.prisma;
 
 function unitDebt(data, unitId) {
   return data.charges
@@ -60,36 +61,29 @@ router.get("/users", requireAuth, requireRole("yonetici"), async (req, res) => {
 });
 
 router.patch("/users/:id/approve", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const user = data.users.find((u) => u.id === req.params.id);
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
-  user.isApproved = true;
-  db.logActivity(data, req.user, "user.approve", `${user.name} kaydı onaylandı.`, user.unitId || null);
-  await db.save(data);
+  await prisma.user.update({ where: { id: user.id }, data: { isApproved: true } });
+  await prisma.activityLog.create({ data: { actorId: req.user.id, actorName: req.user.name, action: "user.approve", detail: `${user.name} kaydı onaylandı.`, scopeUnitId: user.unitId || null } });
   res.json({ message: "Kullanıcı onaylandı." });
 });
 
 // Sakini/personeli KALICI OLARAK SILMEDEN pasife alir - gecmis odeme/talep kayitlari
 // korunur, ancak giris yapamaz hale gelir. Tasinan sakinler icin dogru yontem budur.
 router.patch("/users/:id/deactivate", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const user = data.users.find((u) => u.id === req.params.id);
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   if (req.params.id === req.user.id) return res.status(400).json({ error: "Kendi hesabınızı pasife alamazsınız." });
-  user.isActive = false;
-  user.tokenVersion = (user.tokenVersion || 0) + 1;
-  db.logActivity(data, req.user, "user.deactivate", `${user.name} pasife alındı.`, user.unitId || null);
-  await db.save(data);
+  await prisma.user.update({ where: { id: user.id }, data: { isActive: false, tokenVersion: { increment: 1 } } });
+  await prisma.activityLog.create({ data: { actorId: req.user.id, actorName: req.user.name, action: "user.deactivate", detail: `${user.name} pasife alındı.`, scopeUnitId: user.unitId || null } });
   res.json({ message: "Kullanıcı pasife alındı." });
 });
 
 router.patch("/users/:id/reactivate", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const user = data.users.find((u) => u.id === req.params.id);
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
-  user.isActive = true;
-  db.logActivity(data, req.user, "user.reactivate", `${user.name} yeniden aktif edildi.`, user.unitId || null);
-  await db.save(data);
+  await prisma.user.update({ where: { id: user.id }, data: { isActive: true } });
+  await prisma.activityLog.create({ data: { actorId: req.user.id, actorName: req.user.name, action: "user.reactivate", detail: `${user.name} yeniden aktif edildi.`, scopeUnitId: user.unitId || null } });
   res.json({ message: "Kullanıcı yeniden aktif edildi." });
 });
 
@@ -97,41 +91,37 @@ router.patch("/users/:id/reactivate", requireAuth, requireRole("yonetici"), asyn
 // yanitta bir kere gorunur - yonetici bunu kullaniciya sozlu/mesaj yoluyla iletir.
 // Sifre politikasina uygun (harf+rakam+8 karakter) bir gecici sifre uretilir.
 router.post("/users/:id/reset-password", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const user = data.users.find((u) => u.id === req.params.id);
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   const tempPassword = Math.random().toString(36).slice(-5) + Math.floor(10 + Math.random() * 89) + "A";
-  user.passwordHash = bcrypt.hashSync(tempPassword, 10);
-  user.mustChangePassword = true;
-  user.resetRequestedAt = null;
-  user.tokenVersion = (user.tokenVersion || 0) + 1;
-  user.failedLoginAttempts = 0;
-  user.lockedUntil = null;
-  db.logActivity(data, req.user, "user.reset-password", `${user.name} için geçici şifre oluşturuldu.`, user.unitId || null);
-  await db.save(data);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: bcrypt.hashSync(tempPassword, 10), mustChangePassword: true, resetRequestedAt: null, tokenVersion: { increment: 1 }, failedLoginAttempts: 0, lockedUntil: null },
+  });
+  await prisma.activityLog.create({ data: { actorId: req.user.id, actorName: req.user.name, action: "user.reset-password", detail: `${user.name} için geçici şifre oluşturuldu.`, scopeUnitId: user.unitId || null } });
   res.json({ message: "Geçici şifre oluşturuldu. Bu şifreyi güvenli bir şekilde kullanıcıya iletin.", tempPassword });
 });
 
 router.delete("/users/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   if (req.params.id === req.user.id) return res.status(400).json({ error: "Kendi hesabınızı silemezsiniz." });
-  data.users = data.users.filter((u) => u.id !== req.params.id);
-  await db.save(data);
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
+  await prisma.user.delete({ where: { id: req.params.id } });
   res.json({ message: "Kullanıcı silindi." });
 });
 
 // Yonetici tarafindan dogrudan personel hesabi olusturma
 router.post("/users/personnel", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   const { name, email, phone, password, department } = req.body || {};
   if (!name || !email || !password) return res.status(400).json({ error: "Ad, e-posta ve şifre zorunludur." });
-  if (data.users.some((u) => u.email.toLowerCase() === String(email).toLowerCase())) {
+  const existing = await prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } });
+  if (existing) {
     return res.status(409).json({ error: "Bu e-posta ile zaten bir hesap var." });
   }
-  const user = { id: db.uid(), name, email, phone: phone || "", passwordHash: bcrypt.hashSync(password, 10), role: "personel", unitId: null, department: department || "Genel", isApproved: true, isActive: true, tokenVersion: 0, failedLoginAttempts: 0, lockedUntil: null, mustChangePassword: false, resetRequestedAt: null, createdAt: new Date().toISOString() };
-  data.users.push(user);
-  data.personnel.push({ id: user.id, name, phone: phone || "", department: department || "Genel", active: true, userId: user.id });
-  await db.save(data);
+  const user = await prisma.user.create({
+    data: { name, email, phone: phone || "", passwordHash: bcrypt.hashSync(password, 10), role: "personel", department: department || "Genel", isApproved: true },
+  });
+  await prisma.personnel.create({ data: { id: user.id, name, phone: phone || "", department: department || "Genel", active: true, userId: user.id } });
   res.status(201).json({ message: "Personel hesabı oluşturuldu." });
 });
 
