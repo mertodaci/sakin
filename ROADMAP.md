@@ -69,6 +69,8 @@ sonra `npm start`, `http://localhost:3000`, demo giriş `yonetici@site.com` /
       silme-düzenleme, kargo/demirbaş geri alma, kullanıcı pasife alma
 - [x] Güvenlik sertleştirmesi: rate limiting, şifre politikası, hesap
       kilitleme, oturum iptali (tokenVersion + "tüm oturumları kapat")
+- [x] Git entegrasyonu: local repo (`git init`), ilk commit, `.gitignore`
+      teyidi (bkz. aşağıdaki "Git Entegrasyonu — Durum" bölümü)
 
 ## 🔜 Bekleyen Roadmap Maddeleri (Öncelik Sırasıyla)
 
@@ -117,23 +119,28 @@ edilecek şekilde planlandı. Sıra değiştirilebilir ama bağımlılıklara di
 
 ---
 
-## 🔧 Git Entegrasyonu — YARDIM İSTENİYOR
+## 🔧 Git Entegrasyonu — Durum
 
-**Mert'in notu:** Projeye git eklemek istiyorum ama nasıl yapılacağını
-bilmiyorum. Claude Code bu konuda **adım adım yardımcı olmalı** — sadece
-komutları yazıp geçmemeli, her adımda ne işe yaradığını da açıklamalı.
-Şunlar en azından ele alınmalı:
+**2026-08-16 itibarıyla tamamlandı.** Mert'in git deneyimi yoktu, adım adım
+anlatılarak kuruldu. Alınan kararlar:
 
-- `git init`, ilk commit, `.gitignore` kontrolü (proje zaten bir tane
-  içeriyor — `node_modules/`, `data/db.json`, `.env` hariç tutuluyor,
-  bunun doğru olup olmadığı teyit edilmeli)
-- Uzak bir depo (GitHub/GitLab) kullanılacaksa hesap oluşturma ve bağlama
-  adımları da anlatılmalı — bu konuda da deneyim yok
-- Bundan sonraki her özellik eklemesinin nasıl commit'leneceği (örn. her
-  roadmap maddesi kendi commit'i/branch'i olabilir mi, buna karar
-  verilmeli)
-- Şifre/gizli bilgilerin (`.env`, `JWT_SECRET`) yanlışlıkla commit'lenmesini
-  önleme konusunda özellikle dikkatli olunmalı
+- `git init` yapıldı, ilk commit atıldı (27 dosya).
+- Kullanıcı bilgisi **local** (repo'ya özel, `--global` değil) olarak
+  kişisel mail ile ayarlandı — çünkü global git config'te şirket maili
+  kayıtlıydı ve bu proje şirketle ilgisiz. Global ayar değiştirilmedi,
+  sadece bu repo içinde override edildi.
+- `.gitignore` teyit edildi: `node_modules/`, `data/db.json`, `.env`,
+  `server.log` zaten doğru hariç tutuluyordu. Ek olarak
+  `.claude/settings.local.json` eklendi (Claude Code'un makineye özel
+  izin ayarları — gizli bilgi içermiyor ama kişiye/makineye özel olduğu
+  için repo'ya girmemeli).
+- **Uzak depo (GitHub) şimdilik bağlanmadı** — Mert isteyince ayrı bir
+  oturumda hesap oluşturma/bağlama adımları anlatılacak.
+- **İş akışı kararı:** Bundan sonraki roadmap maddeleri (PostgreSQL geçişi
+  dahil) branch açılmadan **doğrudan `master` üzerine commit** edilecek.
+  Basitlik tercih edildi çünkü tek kullanıcı var ve henüz kimseyle
+  paylaşılmıyor. İleride bu karar değişebilir (örn. büyük/riskli işler
+  için branch'e geçilebilir).
 
 ---
 
