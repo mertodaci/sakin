@@ -4,13 +4,13 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 
 const router = express.Router();
 
-router.get("/settings", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.get("/settings", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   res.json(data.meta);
 });
 
-router.patch("/settings", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.patch("/settings", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const { buildingName, lateFeeRate, lateFeeGraceDays, autoDueEnabled, autoDueDay, autoDueAmount } = req.body || {};
   if (buildingName !== undefined) data.meta.buildingName = buildingName;
   if (lateFeeRate !== undefined) data.meta.lateFeeRate = Number(lateFeeRate);
@@ -19,7 +19,7 @@ router.patch("/settings", requireAuth, requireRole("yonetici"), (req, res) => {
   if (autoDueDay !== undefined) data.meta.autoDueDay = Number(autoDueDay);
   if (autoDueAmount !== undefined) data.meta.autoDueAmount = Number(autoDueAmount);
   db.logActivity(data, req.user, "settings.update", "Site ayarları güncellendi (gecikme faizi / otomatik borçlandırma).", null);
-  db.save();
+  await db.save(data);
   res.json({ message: "Ayarlar kaydedildi.", meta: data.meta });
 });
 

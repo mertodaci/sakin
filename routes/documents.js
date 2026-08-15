@@ -56,7 +56,7 @@ async function buildDocument({ heading, lines, footerNote }) {
 // Bankalarin konut kredisi vb. islemlerde talep ettigi "borcu yoktur" yazisi.
 // Sikayet konusu olan gecikmeyi ortadan kaldirmak icin ANINDA olusturulur.
 router.get("/documents/debt-letter", requireAuth, async (req, res) => {
-  const data = db.load();
+  const data = await db.load();
   if (req.user.role !== "sakin") return res.status(403).json({ error: "Bu belge yalnızca sakinler için üretilir." });
   const unit = data.units.find((u) => u.id === req.user.unitId);
   if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
@@ -80,7 +80,7 @@ router.get("/documents/debt-letter", requireAuth, async (req, res) => {
   });
 
   db.logActivity(data, req.user, "document.debt-letter", `${unit.block} - Daire ${unit.no} için borcu yoktur belgesi indirildi.`, unit.id);
-  db.save();
+  await db.save(data);
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="borcu-yoktur-${unit.block}-${unit.no}.pdf"`);
@@ -89,7 +89,7 @@ router.get("/documents/debt-letter", requireAuth, async (req, res) => {
 
 // Bir odeme icin resmi makbuz
 router.get("/documents/receipt/:paymentId", requireAuth, async (req, res) => {
-  const data = db.load();
+  const data = await db.load();
   const payment = data.payments.find((p) => p.id === req.params.paymentId);
   if (!payment) return res.status(404).json({ error: "Ödeme kaydı bulunamadı." });
   if (req.user.role === "sakin" && payment.unitId !== req.user.unitId) return res.status(403).json({ error: "Bu makbuza erişim yetkiniz yok." });
@@ -118,7 +118,7 @@ router.get("/documents/receipt/:paymentId", requireAuth, async (req, res) => {
 // Ilan panosuna asilabilecek, tum dairelerin guncel borc durumunu gosteren liste.
 // Turkiye'deki apartman yonetimlerinde cok yaygin bir rutin ihtiyactir.
 router.get("/documents/debt-list", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = db.load();
+  const data = await db.load();
   const rows = data.units
     .map((u) => ({ label: `${u.block} - Daire ${u.no}`, debt: data.charges.filter((c) => c.unitId === u.id && c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0) }))
     .sort((a, b) => a.label.localeCompare(b.label, "tr"));
@@ -158,7 +158,7 @@ router.get("/documents/debt-list", requireAuth, requireRole("yonetici"), async (
 
   const bytes = await doc.save();
   db.logActivity(data, req.user, "document.debt-list", "İlan panosu için aidat borç listesi PDF'i indirildi.", null);
-  db.save();
+  await db.save(data);
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="aidat-borc-listesi.pdf"`);

@@ -1,5 +1,6 @@
 require("dotenv").config();
 const express = require("express");
+require("./middleware/asyncErrors");
 const cors = require("cors");
 const path = require("path");
 
@@ -50,6 +51,6 @@ app.listen(PORT, () => {
   console.log(`Sakin sunucu ${PORT} portunda çalışıyor: http://localhost:${PORT}`);
   // Gecikme faizi ve otomatik aylik borclandirma icin: acilista bir kez, sonra
   // her 6 saatte bir kontrol edilir (gun degisiminde islemlerin gecikmeden yapilmasi icin).
-  runMaintenanceTasks();
-  setInterval(runMaintenanceTasks, 6 * 60 * 60 * 1000);
+  runMaintenanceTasks().catch((err) => console.error("Bakim gorevi hatasi:", err));
+  setInterval(() => runMaintenanceTasks().catch((err) => console.error("Bakim gorevi hatasi:", err)), 6 * 60 * 60 * 1000);
 });

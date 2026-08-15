@@ -88,11 +88,11 @@ function autoGenerateMonthlyDues(data) {
   return created;
 }
 
-function runMaintenanceTasks() {
-  const data = db.load();
+async function runMaintenanceTasks() {
+  const data = await db.load();
   const feesApplied = applyLateFees(data);
   const duesCreated = autoGenerateMonthlyDues(data);
-  if (feesApplied > 0 || duesCreated > 0) db.save();
+  if (feesApplied > 0 || duesCreated > 0) await db.save(data);
 }
 
 module.exports = { runMaintenanceTasks, applyLateFees, autoGenerateMonthlyDues };

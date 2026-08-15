@@ -15,25 +15,25 @@ function accountBalance(data, accountId) {
   return acc.openingBalance + income - expense + transfersIn - transfersOut;
 }
 
-router.get("/accounts", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.get("/accounts", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const list = data.accounts.map((a) => ({ ...a, balance: accountBalance(data, a.id) }));
   res.json(list);
 });
 
-router.post("/accounts", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.post("/accounts", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const { name, type, bankName, iban, openingBalance } = req.body || {};
   if (!name) return res.status(400).json({ error: "Hesap adı zorunludur." });
   const acc = { id: db.uid(), name, type: type || "banka", bankName: bankName || "", iban: iban || "", openingBalance: Number(openingBalance) || 0, createdAt: new Date().toISOString() };
   data.accounts.push(acc);
   db.logActivity(data, req.user, "account.create", `Yeni kasa/hesap eklendi: ${name}`, null);
-  db.save();
+  await db.save(data);
   res.status(201).json(acc);
 });
 
-router.patch("/accounts/:id", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.patch("/accounts/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const acc = data.accounts.find((a) => a.id === req.params.id);
   if (!acc) return res.status(404).json({ error: "Hesap bulunamadı." });
   const { name, type, bankName, iban } = req.body || {};
@@ -41,24 +41,24 @@ router.patch("/accounts/:id", requireAuth, requireRole("yonetici"), (req, res) =
   if (type !== undefined) acc.type = type;
   if (bankName !== undefined) acc.bankName = bankName;
   if (iban !== undefined) acc.iban = iban;
-  db.save();
+  await db.save(data);
   res.json(acc);
 });
 
-router.delete("/accounts/:id", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.delete("/accounts/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   if (data.accounts.length <= 1) return res.status(400).json({ error: "En az bir hesap bulunmalıdır." });
   const inUse = data.transactions.some((t) => t.accountId === req.params.id) || data.payments.some((p) => p.accountId === req.params.id) || data.transfers.some((tr) => tr.fromAccountId === req.params.id || tr.toAccountId === req.params.id);
   if (inUse) return res.status(400).json({ error: "Bu hesaba bağlı işlemler var, silinemez. Önce işlemleri başka bir hesaba taşıyın." });
   if (data.meta.defaultAccountId === req.params.id) return res.status(400).json({ error: "Varsayılan tahsilat hesabı silinemez. Önce Ayarlar'dan başka bir hesabı varsayılan yapın." });
   data.accounts = data.accounts.filter((a) => a.id !== req.params.id);
-  db.save();
+  await db.save(data);
   res.json({ message: "Hesap silindi." });
 });
 
 // Bir hesabin tum hareketlerini (gelir/gider/transfer) tarih sirali gosterir - "kasa ekstresi"
-router.get("/accounts/:id/ledger", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.get("/accounts/:id/ledger", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const acc = data.accounts.find((a) => a.id === req.params.id);
   if (!acc) return res.status(404).json({ error: "Hesap bulunamadı." });
 
@@ -76,8 +76,8 @@ router.get("/accounts/:id/ledger", requireAuth, requireRole("yonetici"), (req, r
 });
 
 // Kasalar arasi para transferi (ornek: nakit tahsilati bankaya yatirma)
-router.post("/accounts/transfer", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.post("/accounts/transfer", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const { fromAccountId, toAccountId, amount, description } = req.body || {};
   if (!fromAccountId || !toAccountId || !amount || Number(amount) <= 0) return res.status(400).json({ error: "Kaynak, hedef hesap ve tutar zorunludur." });
   if (fromAccountId === toAccountId) return res.status(400).json({ error: "Kaynak ve hedef hesap aynı olamaz." });
@@ -88,7 +88,7 @@ router.post("/accounts/transfer", requireAuth, requireRole("yonetici"), (req, re
   const fromName = data.accounts.find((a) => a.id === fromAccountId).name;
   const toName = data.accounts.find((a) => a.id === toAccountId).name;
   db.logActivity(data, req.user, "account.transfer", `${amount}₺ ${fromName} hesabından ${toName} hesabına transfer edildi.`, null);
-  db.save();
+  await db.save(data);
   res.status(201).json(transfer);
 });
 

@@ -24,15 +24,15 @@ function validatePassword(pw) {
 }
 
 // Kayit icin bos/musait daire listesi (auth gerektirmez, kayit formunda kullanilir)
-router.get("/units-for-signup", (req, res) => {
-  const data = db.load();
+router.get("/units-for-signup", async (req, res) => {
+  const data = await db.load();
   res.json(
     data.units.map((u) => ({ id: u.id, label: `${u.block} - Daire ${u.no}` }))
   );
 });
 
-router.post("/register", registerLimiter, (req, res) => {
-  const data = db.load();
+router.post("/register", registerLimiter, async (req, res) => {
+  const data = await db.load();
   const { name, email, phone, password, unitId } = req.body || {};
 
   if (!name || !email || !password || !unitId) {
@@ -78,12 +78,12 @@ router.post("/register", registerLimiter, (req, res) => {
     });
   });
 
-  db.save();
+  await db.save(data);
   res.status(201).json({ message: "Kaydınız alındı. Yönetici onayından sonra giriş yapabilirsiniz." });
 });
 
-router.post("/login", loginLimiter, (req, res) => {
-  const data = db.load();
+router.post("/login", loginLimiter, async (req, res) => {
+  const data = await db.load();
   const { email, password } = req.body || {};
   const user = data.users.find((u) => u.email.toLowerCase() === String(email || "").toLowerCase());
 
@@ -99,7 +99,7 @@ router.post("/login", loginLimiter, (req, res) => {
         user.lockedUntil = new Date(Date.now() + LOCK_DURATION_MS).toISOString();
         db.logActivity(data, null, "user.lockout", `${user.name} hesabı ${MAX_FAILED_ATTEMPTS} hatalı denemeden sonra kilitlendi.`, user.unitId || null);
       }
-      db.save();
+      await db.save(data);
     }
     return res.status(401).json({ error: "E-posta veya şifre hatalı." });
   }
@@ -113,7 +113,7 @@ router.post("/login", loginLimiter, (req, res) => {
 
   user.failedLoginAttempts = 0;
   user.lockedUntil = null;
-  db.save();
+  await db.save(data);
 
   const token = sign(user);
   const unit = user.unitId ? data.units.find((u) => u.id === user.unitId) : null;
@@ -126,8 +126,8 @@ router.post("/login", loginLimiter, (req, res) => {
 
 // Sifremi unuttum: e-posta/SMS altyapisi olmadigindan, istek yoneticiye iletilir.
 // Yonetici "Kullanicilar" ekranindan tek tikla gecici sifre uretip sakine iletir.
-router.post("/forgot-password", forgotLimiter, (req, res) => {
-  const data = db.load();
+router.post("/forgot-password", forgotLimiter, async (req, res) => {
+  const data = await db.load();
   const { email } = req.body || {};
   const user = data.users.find((u) => u.email.toLowerCase() === String(email || "").toLowerCase());
   // Kullanici bulunamasa bile ayni mesaji donduruyoruz (e-posta enumerasyonunu onlemek icin)
@@ -136,21 +136,21 @@ router.post("/forgot-password", forgotLimiter, (req, res) => {
     data.users.filter((u) => u.role === "yonetici").forEach((a) => {
       data.notifications.push({ id: db.uid(), userId: a.id, message: `${user.name} şifre sıfırlama talep etti.`, read: false, date: new Date().toISOString(), link: "#/kullanicilar" });
     });
-    db.save();
+    await db.save(data);
   }
   res.json({ message: "Talebiniz alındı. Yönetici sizinle iletişime geçip geçici bir şifre tanımlayacaktır." });
 });
 
-router.get("/me", requireAuth, (req, res) => {
-  const data = db.load();
+router.get("/me", requireAuth, async (req, res) => {
+  const data = await db.load();
   const user = data.users.find((u) => u.id === req.user.id);
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   const unit = user.unitId ? data.units.find((u) => u.id === user.unitId) : null;
   res.json({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, unitId: user.unitId, department: user.department || null, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, mustChangePassword: !!user.mustChangePassword });
 });
 
-router.post("/change-password", requireAuth, (req, res) => {
-  const data = db.load();
+router.post("/change-password", requireAuth, async (req, res) => {
+  const data = await db.load();
   const user = data.users.find((u) => u.id === req.user.id);
   const { currentPassword, newPassword } = req.body || {};
   if (!user || !bcrypt.compareSync(currentPassword || "", user.passwordHash)) {
@@ -163,19 +163,19 @@ router.post("/change-password", requireAuth, (req, res) => {
   // Sifre degisince diger tum cihazlardaki eski oturumlar gecersiz kilinir; bu
   // cihaz icin yeni bir token uretip donduruyoruz ki kullanici disari atilmasin.
   user.tokenVersion = (user.tokenVersion || 0) + 1;
-  db.save();
+  await db.save(data);
   const newToken = sign(user);
   res.json({ message: "Şifreniz güncellendi.", token: newToken });
 });
 
 // "Tum oturumlari kapat": baska bir cihazda/tarayicida acik kalmis olabilecek
 // oturumlari gecersiz kilar (orn. cihaz kaybolduysa). Bu cihaz icin yeni token doner.
-router.post("/logout-all-sessions", requireAuth, (req, res) => {
-  const data = db.load();
+router.post("/logout-all-sessions", requireAuth, async (req, res) => {
+  const data = await db.load();
   const user = data.users.find((u) => u.id === req.user.id);
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   user.tokenVersion = (user.tokenVersion || 0) + 1;
-  db.save();
+  await db.save(data);
   const newToken = sign(user);
   res.json({ message: "Tüm oturumlar kapatıldı. Bu cihazda oturumunuz devam ediyor.", token: newToken });
 });

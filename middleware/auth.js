@@ -11,13 +11,13 @@ function sign(user) {
 // gecersiz kilamaz. tokenVersion karsilastirmasi ile gercek bir iptal mekanizmasi
 // saglariz: sifre degisince veya "tum oturumlari kapat" tetiklenince kullanicinin
 // tokenVersion'i artar ve eski token'lar bu kontrolden gecemez.
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: "Oturum bulunamadı, lütfen giriş yapın." });
   try {
     const payload = jwt.verify(token, SECRET);
-    const data = db.load();
+    const data = await db.load();
     const user = data.users.find((u) => u.id === payload.id);
     if (!user) return res.status(401).json({ error: "Oturum geçersiz veya süresi dolmuş." });
     if (user.isActive === false) return res.status(403).json({ error: "Hesabınız pasife alınmış." });

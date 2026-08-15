@@ -16,8 +16,8 @@ function scopedUnitId(req) {
 
 /* ---------------- CHARGES (Borclandirmalar: aidat, sayac, diger) ---------------- */
 
-router.get("/charges", requireAuth, (req, res) => {
-  const data = db.load();
+router.get("/charges", requireAuth, async (req, res) => {
+  const data = await db.load();
   let list = data.charges;
   const unitFilter = req.query.unitId || scopedUnitId(req);
   if (unitFilter) list = list.filter((c) => c.unitId === unitFilter);
@@ -25,8 +25,8 @@ router.get("/charges", requireAuth, (req, res) => {
 });
 
 // Aylik aidat borclandirmasini tum dairelere otomatik uygular (mukerrer donem atlanir)
-router.post("/charges/generate-month", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.post("/charges/generate-month", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const { period, amount, dueDate } = req.body || {};
   if (!period || !amount) return res.status(400).json({ error: "Dönem (YYYY-MM) ve tutar zorunludur." });
 
@@ -50,37 +50,37 @@ router.post("/charges/generate-month", requireAuth, requireRole("yonetici"), (re
   });
   data.meta.monthlyDueDefault = Number(amount);
   db.logActivity(data, req.user, "charge.generate", `${period} dönemi aidat borcu ${created} daireye uygulandı (${amount}₺/daire).`, null);
-  db.save();
+  await db.save(data);
   res.status(201).json({ message: `${created} daire için ${period} dönemi aidat borcu oluşturuldu.` });
 });
 
-router.post("/charges", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.post("/charges", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const { unitId, type, period, amount, dueDate, description } = req.body || {};
   if (!unitId || !amount) return res.status(400).json({ error: "Daire ve tutar zorunludur." });
   const charge = { id: db.uid(), unitId, type: type || "diger", period: period || "", amount: Number(amount), dueDate: dueDate || new Date().toISOString(), status: "unpaid", paidAmount: 0, lateFeeAppliedPeriods: [], description: description || "", createdAt: new Date().toISOString() };
   data.charges.push(charge);
   db.logActivity(data, req.user, "charge.create", `${formatUnit(data, unitId)} için ${amount}₺ borçlandırma eklendi: ${description || "-"}`, unitId);
-  db.save();
+  await db.save(data);
   res.status(201).json(charge);
 });
 
 // Bir borc kalemini siler - sadece hic odeme yapilmamissa (paidAmount=0). Kismen veya
 // tamamen odenmis bir borcu silmek istersen once ilgili odemeyi iptal etmen gerekir,
 // aksi halde odeme kaydiyla borc kaydi tutarsiz kalir.
-router.delete("/charges/:id", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.delete("/charges/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const charge = data.charges.find((c) => c.id === req.params.id);
   if (!charge) return res.status(404).json({ error: "Borç kaydı bulunamadı." });
   if (charge.paidAmount > 0) return res.status(400).json({ error: "Bu borca kısmen veya tamamen ödeme yapılmış, önce ilgili ödemeyi Aidat Takibi ekranından iptal edin." });
   data.charges = data.charges.filter((c) => c.id !== req.params.id);
   db.logActivity(data, req.user, "charge.delete", `${formatUnit(data, charge.unitId)} için ${charge.amount}₺ borçlandırma silindi: ${charge.description || "-"}`, charge.unitId);
-  db.save();
+  await db.save(data);
   res.json({ message: "Borç kaydı silindi." });
 });
 
-router.patch("/charges/:id", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.patch("/charges/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const charge = data.charges.find((c) => c.id === req.params.id);
   if (!charge) return res.status(404).json({ error: "Borç kaydı bulunamadı." });
   if (charge.paidAmount > 0) return res.status(400).json({ error: "Kısmen veya tamamen ödenmiş bir borcun tutarı değiştirilemez." });
@@ -89,14 +89,14 @@ router.patch("/charges/:id", requireAuth, requireRole("yonetici"), (req, res) =>
   if (description !== undefined) charge.description = description;
   if (dueDate !== undefined) charge.dueDate = dueDate;
   db.logActivity(data, req.user, "charge.update", `${formatUnit(data, charge.unitId)} için borç kaydı düzenlendi.`, charge.unitId);
-  db.save();
+  await db.save(data);
   res.json(charge);
 });
 
 /* ---------------- PAYMENTS ---------------- */
 
-router.get("/payments", requireAuth, (req, res) => {
-  const data = db.load();
+router.get("/payments", requireAuth, async (req, res) => {
+  const data = await db.load();
   let list = data.payments;
   const unitFilter = req.query.unitId || scopedUnitId(req);
   if (unitFilter) list = list.filter((p) => p.unitId === unitFilter);
@@ -151,8 +151,8 @@ function applyPayment(data, unitId, amount, method, userId, note, accountId) {
 // Cift-tiklama / ag tekrarindan kaynaklanan cift odeme sikayetlerine karsi:
 // istemci her odeme denemesinde benzersiz bir requestId gonderir, ayni id
 // ikinci kez islenmez (idempotency key deseni).
-router.post("/payments/pay", requireAuth, (req, res) => {
-  const data = db.load();
+router.post("/payments/pay", requireAuth, async (req, res) => {
+  const data = await db.load();
   const unitId = req.user.role === "sakin" ? req.user.unitId : req.body.unitId;
   const { amount, method, requestId, accountId } = req.body || {};
   if (!unitId || !amount || Number(amount) <= 0) return res.status(400).json({ error: "Geçerli bir daire ve tutar giriniz." });
@@ -167,7 +167,7 @@ router.post("/payments/pay", requireAuth, (req, res) => {
 
   const payment = applyPayment(data, unitId, amount, method, req.user.id, "", accountId);
   db.logActivity(data, req.user, "payment.create", `${formatUnit(data, unitId)} için ${amount}₺ ödeme kaydedildi (${payment.method}, makbuz ${payment.receiptNo}).`, unitId);
-  db.save();
+  await db.save(data);
   res.status(201).json(payment);
 });
 
@@ -179,8 +179,8 @@ function formatUnit(data, unitId) {
 // Bir odemeyi iptal eder: ilgili borclardaki paidAmount'lari geri duser (appliedTo
 // kaydina gore, kismi tahsilatlarda dahil dogru calisir), bagli muhasebe hareketini
 // siler ve odemeyi "iptal edildi" olarak isaretler (kayit izlenebilirlik icin silinmez).
-router.post("/payments/:id/cancel", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.post("/payments/:id/cancel", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const payment = data.payments.find((p) => p.id === req.params.id);
   if (!payment) return res.status(404).json({ error: "Ödeme bulunamadı." });
   if (payment.cancelled) return res.status(400).json({ error: "Bu ödeme zaten iptal edilmiş." });
@@ -198,31 +198,31 @@ router.post("/payments/:id/cancel", requireAuth, requireRole("yonetici"), (req, 
   payment.cancelledBy = req.user.id;
 
   db.logActivity(data, req.user, "payment.cancel", `${formatUnit(data, payment.unitId)} için ${payment.amount}₺ tutarındaki ödeme (makbuz ${payment.receiptNo}) iptal edildi.`, payment.unitId);
-  db.save();
+  await db.save(data);
   res.json({ message: "Ödeme iptal edildi, ilgili borç yeniden açıldı." });
 });
 
 // Odeme altyapisina hazir ama bu surumde pasif uc (bkz README - gercek kredi karti icin
 // bir odeme kurulusu / sanal POS entegrasyonu gerekir)
-router.post("/pay-online", requireAuth, (req, res) => {
+router.post("/pay-online", requireAuth, async (req, res) => {
   res.status(501).json({ error: "Online kredi kartı ödemesi bu sürümde aktif değil. Bir ödeme kuruluşu (iyzico, PayTR vb.) entegrasyonu gereklidir - bkz. README." });
 });
 
 /* ---------------- TRANSACTIONS (Muhasebe: gelir/gider) ---------------- */
 
-router.get("/transactions", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.get("/transactions", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   res.json(data.transactions.slice().sort((a, b) => new Date(b.date) - new Date(a.date)));
 });
 
-router.post("/transactions", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.post("/transactions", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const { type, category, amount, description, date, accountId } = req.body || {};
   if (!type || !category || !amount) return res.status(400).json({ error: "Tür, kategori ve tutar zorunludur." });
   const t = { id: db.uid(), type, category, amount: Number(amount), accountId: accountId || data.meta.defaultAccountId, date: date || new Date().toISOString(), description: description || "", createdBy: req.user.id };
   data.transactions.unshift(t);
   db.logActivity(data, req.user, "transaction.create", `${type === "gelir" ? "Gelir" : "Gider"} kaydı: ${category} — ${amount}₺ (${description || "-"})`, null);
-  db.save();
+  await db.save(data);
   res.status(201).json(t);
 });
 
@@ -233,8 +233,8 @@ function isLinkedToPayment(data, transactionId) {
   return data.payments.some((p) => p.transactionId === transactionId) || data.partyPayments.some((p) => p.transactionId === transactionId);
 }
 
-router.patch("/transactions/:id", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.patch("/transactions/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const t = data.transactions.find((x) => x.id === req.params.id);
   if (!t) return res.status(404).json({ error: "Hareket bulunamadı." });
   if (isLinkedToPayment(data, t.id)) return res.status(400).json({ error: "Bu hareket bir ödeme kaydına bağlı, doğrudan düzenlenemez. İlgili ödemeyi iptal edip yeniden oluşturun." });
@@ -246,24 +246,24 @@ router.patch("/transactions/:id", requireAuth, requireRole("yonetici"), (req, re
   if (date !== undefined) t.date = date;
   if (accountId !== undefined) t.accountId = accountId;
   db.logActivity(data, req.user, "transaction.update", `Hareket düzenlendi: ${t.category} — ${t.amount}₺`, null);
-  db.save();
+  await db.save(data);
   res.json(t);
 });
 
-router.delete("/transactions/:id", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.delete("/transactions/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const t = data.transactions.find((x) => x.id === req.params.id);
   if (t && isLinkedToPayment(data, t.id)) return res.status(400).json({ error: "Bu hareket bir ödeme kaydına bağlı, doğrudan silinemez. İlgili ödemeyi iptal edin." });
   data.transactions = data.transactions.filter((x) => x.id !== req.params.id);
   if (t) db.logActivity(data, req.user, "transaction.delete", `Hareket silindi: ${t.category} — ${t.amount}₺ (${t.description || "-"})`, null);
-  db.save();
+  await db.save(data);
   res.json({ message: "Hareket silindi." });
 });
 
 /* ---------------- BUDGET (Yillik Butce Planlama) ---------------- */
 
-router.get("/budgets", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.get("/budgets", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const year = Number(req.query.year) || new Date().getFullYear();
   const budgets = data.budgets.filter((b) => b.year === year);
   const withActuals = budgets.map((b) => {
@@ -273,8 +273,8 @@ router.get("/budgets", requireAuth, requireRole("yonetici"), (req, res) => {
   res.json(withActuals);
 });
 
-router.post("/budgets", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.post("/budgets", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const { year, category, plannedAmount } = req.body || {};
   if (!category || !plannedAmount) return res.status(400).json({ error: "Kategori ve planlanan tutar zorunludur." });
   const y = Number(year) || new Date().getFullYear();
@@ -285,7 +285,7 @@ router.post("/budgets", requireAuth, requireRole("yonetici"), (req, res) => {
     data.budgets.push({ id: db.uid(), year: y, category, plannedAmount: Number(plannedAmount), createdBy: req.user.id });
   }
   db.logActivity(data, req.user, "budget.set", `${y} bütçesi güncellendi: ${category} — ${plannedAmount}₺ planlandı.`, null);
-  db.save();
+  await db.save(data);
   res.status(201).json({ message: "Bütçe kalemi kaydedildi." });
 });
 

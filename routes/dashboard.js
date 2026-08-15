@@ -5,8 +5,8 @@ const { accountBalance } = require("./accounts");
 
 const router = express.Router();
 
-router.get("/dashboard", requireAuth, (req, res) => {
-  const data = db.load();
+router.get("/dashboard", requireAuth, async (req, res) => {
+  const data = await db.load();
 
   if (req.user.role === "sakin") {
     const unitId = req.user.unitId;

@@ -13,45 +13,45 @@ function unitDebt(data, unitId) {
 
 /* ---------------- UNITS (Daireler) ---------------- */
 
-router.get("/units", requireAuth, (req, res) => {
-  const data = db.load();
+router.get("/units", requireAuth, async (req, res) => {
+  const data = await db.load();
   const list = data.units.map((u) => ({ ...u, debt: unitDebt(data, u.id) }));
   res.json(list);
 });
 
-router.post("/units", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.post("/units", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const { block, no, floor, ownerName, ownerPhone, tenantName, tenantPhone, occupancy } = req.body || {};
   if (!block || !no) return res.status(400).json({ error: "Blok ve daire no zorunludur." });
   const unit = { id: db.uid(), block, no, floor: floor || null, ownerName: ownerName || "", ownerPhone: ownerPhone || "", tenantName: tenantName || "", tenantPhone: tenantPhone || "", occupancy: occupancy || "owner" };
   data.units.push(unit);
   db.logActivity(data, req.user, "unit.create", `${block} - Daire ${no} eklendi.`, unit.id);
-  db.save();
+  await db.save(data);
   res.status(201).json(unit);
 });
 
-router.patch("/units/:id", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.patch("/units/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const unit = data.units.find((u) => u.id === req.params.id);
   if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
   Object.assign(unit, req.body || {});
-  db.save();
+  await db.save(data);
   res.json(unit);
 });
 
-router.delete("/units/:id", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.delete("/units/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const inUse = data.users.some((u) => u.unitId === req.params.id);
   if (inUse) return res.status(400).json({ error: "Bu daireye bağlı kullanıcılar var, önce onları kaldırın." });
   data.units = data.units.filter((u) => u.id !== req.params.id);
-  db.save();
+  await db.save(data);
   res.json({ message: "Daire silindi." });
 });
 
 /* ---------------- USERS (Sakinler / Onay / Personel) ---------------- */
 
-router.get("/users", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.get("/users", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const list = data.users.map((u) => {
     const unit = u.unitId ? data.units.find((x) => x.id === u.unitId) : null;
     return { id: u.id, name: u.name, email: u.email, phone: u.phone, role: u.role, unitId: u.unitId, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, department: u.department || null, isApproved: u.isApproved, isActive: u.isActive !== false, createdAt: u.createdAt, resetRequestedAt: u.resetRequestedAt || null };
@@ -59,45 +59,45 @@ router.get("/users", requireAuth, requireRole("yonetici"), (req, res) => {
   res.json(list);
 });
 
-router.patch("/users/:id/approve", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.patch("/users/:id/approve", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const user = data.users.find((u) => u.id === req.params.id);
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   user.isApproved = true;
   db.logActivity(data, req.user, "user.approve", `${user.name} kaydı onaylandı.`, user.unitId || null);
-  db.save();
+  await db.save(data);
   res.json({ message: "Kullanıcı onaylandı." });
 });
 
 // Sakini/personeli KALICI OLARAK SILMEDEN pasife alir - gecmis odeme/talep kayitlari
 // korunur, ancak giris yapamaz hale gelir. Tasinan sakinler icin dogru yontem budur.
-router.patch("/users/:id/deactivate", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.patch("/users/:id/deactivate", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const user = data.users.find((u) => u.id === req.params.id);
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   if (req.params.id === req.user.id) return res.status(400).json({ error: "Kendi hesabınızı pasife alamazsınız." });
   user.isActive = false;
   user.tokenVersion = (user.tokenVersion || 0) + 1;
   db.logActivity(data, req.user, "user.deactivate", `${user.name} pasife alındı.`, user.unitId || null);
-  db.save();
+  await db.save(data);
   res.json({ message: "Kullanıcı pasife alındı." });
 });
 
-router.patch("/users/:id/reactivate", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.patch("/users/:id/reactivate", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const user = data.users.find((u) => u.id === req.params.id);
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   user.isActive = true;
   db.logActivity(data, req.user, "user.reactivate", `${user.name} yeniden aktif edildi.`, user.unitId || null);
-  db.save();
+  await db.save(data);
   res.json({ message: "Kullanıcı yeniden aktif edildi." });
 });
 
 // Gecici sifre uretir (sifremi unuttum akisinin yonetici tarafi). Sifre sadece bu
 // yanitta bir kere gorunur - yonetici bunu kullaniciya sozlu/mesaj yoluyla iletir.
 // Sifre politikasina uygun (harf+rakam+8 karakter) bir gecici sifre uretilir.
-router.post("/users/:id/reset-password", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.post("/users/:id/reset-password", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const user = data.users.find((u) => u.id === req.params.id);
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   const tempPassword = Math.random().toString(36).slice(-5) + Math.floor(10 + Math.random() * 89) + "A";
@@ -108,21 +108,21 @@ router.post("/users/:id/reset-password", requireAuth, requireRole("yonetici"), (
   user.failedLoginAttempts = 0;
   user.lockedUntil = null;
   db.logActivity(data, req.user, "user.reset-password", `${user.name} için geçici şifre oluşturuldu.`, user.unitId || null);
-  db.save();
+  await db.save(data);
   res.json({ message: "Geçici şifre oluşturuldu. Bu şifreyi güvenli bir şekilde kullanıcıya iletin.", tempPassword });
 });
 
-router.delete("/users/:id", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.delete("/users/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   if (req.params.id === req.user.id) return res.status(400).json({ error: "Kendi hesabınızı silemezsiniz." });
   data.users = data.users.filter((u) => u.id !== req.params.id);
-  db.save();
+  await db.save(data);
   res.json({ message: "Kullanıcı silindi." });
 });
 
 // Yonetici tarafindan dogrudan personel hesabi olusturma
-router.post("/users/personnel", requireAuth, requireRole("yonetici"), (req, res) => {
-  const data = db.load();
+router.post("/users/personnel", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
   const { name, email, phone, password, department } = req.body || {};
   if (!name || !email || !password) return res.status(400).json({ error: "Ad, e-posta ve şifre zorunludur." });
   if (data.users.some((u) => u.email.toLowerCase() === String(email).toLowerCase())) {
@@ -131,7 +131,7 @@ router.post("/users/personnel", requireAuth, requireRole("yonetici"), (req, res)
   const user = { id: db.uid(), name, email, phone: phone || "", passwordHash: bcrypt.hashSync(password, 10), role: "personel", unitId: null, department: department || "Genel", isApproved: true, isActive: true, tokenVersion: 0, failedLoginAttempts: 0, lockedUntil: null, mustChangePassword: false, resetRequestedAt: null, createdAt: new Date().toISOString() };
   data.users.push(user);
   data.personnel.push({ id: user.id, name, phone: phone || "", department: department || "Genel", active: true, userId: user.id });
-  db.save();
+  await db.save(data);
   res.status(201).json({ message: "Personel hesabı oluşturuldu." });
 });
 
