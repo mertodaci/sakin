@@ -72,6 +72,44 @@ sonra `npm start`, `http://localhost:3000`, demo giriş `yonetici@site.com` /
 - [x] Git entegrasyonu: local repo (`git init`), ilk commit, `.gitignore`
       teyidi (bkz. aşağıdaki "Git Entegrasyonu — Durum" bölümü)
 
+## 🔄 PostgreSQL Geçişi — DEVAM EDİYOR (yarım kaldıysa buradan devam et)
+
+**Plan dosyası:** `C:\Users\mert_\.claude\plans\lazy-popping-hummingbird.md`
+(kapsam, şema kararları, commit sırası orada detaylı).
+
+**Şu ana kadar tamamlanan ve commit'lenen adımlar:**
+1. ✅ Docker Compose ile local Postgres (`docker-compose.yml`, `.env`'de
+   `DATABASE_URL`) — `docker compose up -d` ile ayağa kalkıyor.
+2. ✅ `prisma/schema.prisma` — tüm 27 koleksiyon için tablolar oluşturuldu
+   (`npx prisma migrate dev` ile uygulandı).
+3. ✅ `prisma/seed.js` — eski `buildSeed()` demo verisini birebir üretiyor
+   (`npx prisma db seed`).
+4. ✅ `db.js` Postgres-backed async shim'e çevrildi (`LEGACY_COLLECTIONS` +
+   `READONLY_PASSTHROUGH` deseni), **tüm route dosyaları** async/await'e
+   çevrildi, `middleware/asyncErrors.js` eklendi.
+5. ✅ Auth + kullanıcı yönetimi (`middleware/auth.js`, `routes/auth.js`,
+   `routes/directory.js`'nin 6 kullanıcı-mutasyon ucu) gerçek Prisma
+   sorgularına taşındı. `users` artık `LEGACY_COLLECTIONS`'ta değil,
+   salt-okunur passthrough'ta.
+
+**Sırada (henüz yapılmadı):**
+6. ⏳ `routes/contacts.js` → Prisma (basit CRUD, düşük risk).
+7. ⏳ `routes/finance.js` çekirdek uçları (charges/payments/transactions) →
+   Prisma, `applyPayment`/iptal akışı `prisma.$transaction` ile atomik
+   yapılacak. Eşlik eden küçük değişiklikler: `jobs.js`,
+   `routes/accounts.js`'teki `accountBalance()` (muhtemelen değişiklik
+   gerekmeyebilir, READONLY_PASSTHROUGH ile `data.transactions` zaten doğru
+   geliyor — kontrol et), `routes/dashboard.js`, `routes/documents.js`.
+8. ⏳ Bu ilerleme notunu güncelle, son commit'i at.
+
+**Nasıl devam edilir:** Sunucuyu test etmeden önce her zaman `docker compose
+ps` ile Postgres'in ayakta olduğunu doğrula. Test için: `npm start`, admin
+girişi `yonetici@site.com` / `Degistir123!` (veya `.env`'deki
+`ADMIN_EMAIL`/`ADMIN_PASSWORD`). Sunucu zaten çalışıyorsa önce portu boşalt
+(`Get-NetTCPConnection -LocalPort 3000` ile PID bulup `Stop-Process`) —
+aksi halde `EADDRINUSE` ile eski/yanlış bir süreç isteklere cevap verebilir
+(bu oturumda tam olarak bu yüzünden kaynaklanan bir hataya düşüldü).
+
 ## 🔜 Bekleyen Roadmap Maddeleri (Öncelik Sırasıyla)
 
 Bu sıralama gelişigüzel değil — her madde bir öncekinin üzerine inşa
