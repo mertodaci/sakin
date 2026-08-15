@@ -1,0 +1,156 @@
+# Sakin — Yol Haritası ve Devam Notları
+
+Bu dosya, projeye **Claude Code üzerinden devam ederken** bağlam kaybı yaşamamak
+için hazırlandı. Yeni bir Claude Code oturumu bu dosyayı okuyarak nerede
+kaldığımızı, neden bu sırayı seçtiğimizi ve senin (Mert'in) hangi konuda
+yardım istediğini anlayabilir.
+
+---
+
+## 🎯 Şu An Neredeyiz
+
+Uygulama **çalışır durumda ve production'a yakın** — demo değil, gerçek bir
+backend'i (Node.js + Express + JSON dosya veritabanı) olan, kayıt/onay,
+ödeme, muhasebe, iptal/düzenleme akışlarının hepsi test edilmiş bir sistem.
+
+**Tamamlanan ana modüller:**
+- Kimlik doğrulama: kayıt/onay akışı, şifremi unuttum, zorunlu şifre değişimi,
+  rate limiting, hesap kilitleme, şifre politikası, oturum iptali (tokenVersion)
+- Aidat/borç yönetimi: borçlandırma, kısmi tahsilat, ödeme iptali, gecikme
+  faizi (otomatik), otomatik aylık borçlandırma
+- Çoklu kasa/banka hesabı sistemi + hesaplar arası transfer + hesap ekstresi
+- Firma & Personel cari hesap (borçlandırma, ödeme, iptal)
+- Muhasebe (gelir-gider, düzenlenebilir/silinebilir hareketler, aylık grafik)
+- Bütçe planlama (planlanan vs gerçekleşen)
+- Duyuru, anket, site panosu, rezervasyon, arıza/talep (personele atanabilir)
+- Personel, demirbaş/bakım-onarım (geçmiş kayıtlı, geri alınabilir), sayaç
+  okuma & faturalama (silinebilir), kargo takibi (geri alınabilir), karar
+  defteri, anahtar takibi, telefon rehberi
+- Şeffaflık: değiştirilemez denetim kaydı (audit log), tüm veriyi dışa aktarma
+- PDF üretimi: "borcu yoktur" belgesi, ödeme makbuzu, yazdırılabilir borç listesi
+- Sol menü (accordion) navigasyon, mavi tonlu modern arayüz
+
+**Nasıl çalıştırılır:** `README.md` içinde detaylı var — özetle `npm install`
+sonra `npm start`, `http://localhost:3000`, demo giriş `yonetici@site.com` /
+`Degistir123!`.
+
+---
+
+## 📋 Nasıl Buraya Geldik (Kısa Özet)
+
+1. Apsiyon benzeri bir uygulama istendi → sıfırdan gerçek backend'li bir
+   uygulama (Sakin) yazıldı.
+2. Apsiyon'un gerçek kullanıcı şikayetleri (Şikayetvar) araştırılıp somut
+   çözümler eklendi: ödeme idempotency (çift çekim koruması), şeffaflık/audit
+   log, anında PDF belge üretimi, şifre kurtarma akışı.
+3. Rutin ama şikayet konusu olmayan özellikler eklendi: gecikme faizi,
+   otomatik borçlandırma, telefon rehberi, yazdırılabilir borç listesi.
+4. Gerçek bir rakip uygulamanın (Yönetimcell) menü yapısı ekran görüntüleriyle
+   incelendi, karşılaştırıldı, eksikler bulundu ve roadmap'e eklendi.
+5. Sırayla: sol menü navigasyonu, çoklu kasa sistemi, Firma & Personel cari
+   hesap yapıldı.
+6. Kullanıcı gerçek kullanım denemesinde iki sorun buldu: arayüz "çok beyaz"
+   ve tahsilat ekranında kısmi ödeme/iptal eksikti → ikisi de düzeltildi.
+7. "Bunu demo olmaktan çıkar" sorusuna karşılık kapsamlı bir üretim-hazırlığı
+   denetimi yapıldı → veri bütünlüğü eksikleri (iptal/silme/düzenleme
+   eksiklikleri her modülde tarandı) ve güvenlik sertleştirmesi (rate limit,
+   şifre politikası, hesap kilitleme, oturum iptali) tamamlandı.
+
+---
+
+## ✅ Tamamlanan Roadmap Maddeleri
+
+- [x] Sol menü (accordion) navigasyonu
+- [x] Çoklu kasa/banka hesabı sistemi
+- [x] Firma & Personel cari hesap yönetimi
+- [x] Kısmi tahsilat + ödeme iptali (aidat ve firma/personel için)
+- [x] Görsel tasarım iyileştirmesi (mavi tonlu, gölgeli, daha canlı)
+- [x] Veri bütünlüğü taraması: borç/sayaç faturası/muhasebe hareketi
+      silme-düzenleme, kargo/demirbaş geri alma, kullanıcı pasife alma
+- [x] Güvenlik sertleştirmesi: rate limiting, şifre politikası, hesap
+      kilitleme, oturum iptali (tokenVersion + "tüm oturumları kapat")
+
+## 🔜 Bekleyen Roadmap Maddeleri (Öncelik Sırasıyla)
+
+Bu sıralama gelişigüzel değil — her madde bir öncekinin üzerine inşa
+edilecek şekilde planlandı. Sıra değiştirilebilir ama bağımlılıklara dikkat:
+
+1. **PostgreSQL'e geçiş** — bilerek en başa/ayrı tutuldu çünkü:
+   - Şu an JSON dosya tabanlı veritabanı (`db.js`) var; küçük/orta ölçek
+     (tek bina) için yeterli ama eşzamanlı yazmada veri kaybı riski taşıyor.
+   - Her route dosyası (`routes/*.js`) doğrudan `data.xxx` dizilerini
+     manipüle ediyor — bu, gerçek bir DB'ye geçerken **hepsinin** yeniden
+     yazılması demek. Büyük, riskli, dikkatli test gerektiren bir iş.
+   - Önerim: Bu geçişi ayrı, odaklı bir oturumda yapmak — önce şema
+     tasarımı (Prisma/Drizzle ORM önerilir), sonra route route migrate
+     edip her birini test ederek ilerlemek.
+2. **Alacaklı/kredi bakiyesi desteği** — bir dairenin fazla ödeme yapıp
+   "alacaklı" duruma geçebilmesi (şu an sadece borç/ödendi var, negatif
+   bakiye/kredi kavramı yok).
+3. **İleri tarihli borçlandırma** — gelecek bir tarih için önceden borç
+   tanımlama (Yönetimcell karşılaştırmasından çıktı).
+4. **İş Takibi** — yöneticinin kendi iç görev/to-do listesi (sakin
+   taleplerinden farklı — "asansör firmasını ara" gibi dahili işler).
+5. **Ajanda (Notlar/Faaliyetler)** — dashboard'da güne özel not/hatırlatma
+   takvimi.
+6. **Raporlar modülü** — kategorize edilmiş, muhtemelen PDF/Excel
+   çıktı alınabilen yapılandırılmış raporlar (tahsilat, gelir-gider, üye,
+   muhasebe raporları vb.). Kasa/cari hesap sistemleri zaten var, bu
+   modül onların üzerine rapor katmanı ekleyecek — bu yüzden madde 1-3'ten
+   sonraya alındı.
+7. **Gelen Mesajlar** — sakin-yönetici arası özel (iki yönlü) mesajlaşma;
+   şu anki duyuru/pano tek yönlü.
+8. **Dosya Arşivi** — genel kurul tutanağı, sözleşme taraması gibi serbest
+   dosya yükleme/saklama. Şu an hiç dosya upload özelliği yok, bu da
+   backend'e `multer` gibi bir upload katmanı ve depolama stratejisi
+   (yerel disk mi, S3 mi) gerektirecek — karar senden gelmeli.
+9. **Toplu SMS/e-posta arayüzü** — gerçek gönderim için SMS/e-posta
+   gateway aboneliği gerekiyor (bkz. README "Neler Gerçek, Neler Demo"),
+   ama arayüz/seçim mekanizması şimdiden kurulabilir.
+10. **Excel/CSV liste dışa aktarma** — şu an sadece tüm veriyi JSON olarak
+    dışa aktarma var; tekil liste (örn. sadece borçlu üyeler) için
+    Excel/CSV export.
+11. **Yardım/SSS bölümü** — uygulama içi, en düşük öncelik.
+12. **Hukuki modül** — tebligat gönderme, icra takibi, genel kurul çağrısı,
+    vekaletname örneği, hazirun cetveli, antetli evrak, adres etiket
+    yazdırma. En özel/düşük frekanslı modül olduğu için en sona bırakıldı.
+
+---
+
+## 🔧 Git Entegrasyonu — YARDIM İSTENİYOR
+
+**Mert'in notu:** Projeye git eklemek istiyorum ama nasıl yapılacağını
+bilmiyorum. Claude Code bu konuda **adım adım yardımcı olmalı** — sadece
+komutları yazıp geçmemeli, her adımda ne işe yaradığını da açıklamalı.
+Şunlar en azından ele alınmalı:
+
+- `git init`, ilk commit, `.gitignore` kontrolü (proje zaten bir tane
+  içeriyor — `node_modules/`, `data/db.json`, `.env` hariç tutuluyor,
+  bunun doğru olup olmadığı teyit edilmeli)
+- Uzak bir depo (GitHub/GitLab) kullanılacaksa hesap oluşturma ve bağlama
+  adımları da anlatılmalı — bu konuda da deneyim yok
+- Bundan sonraki her özellik eklemesinin nasıl commit'leneceği (örn. her
+  roadmap maddesi kendi commit'i/branch'i olabilir mi, buna karar
+  verilmeli)
+- Şifre/gizli bilgilerin (`.env`, `JWT_SECRET`) yanlışlıkla commit'lenmesini
+  önleme konusunda özellikle dikkatli olunmalı
+
+---
+
+## 📁 Proje Yapısı (Hızlı Referans)
+
+```
+server.js          → Express giriş noktası
+db.js               → veri modeli + seed + migrate (JSON dosya tabanlı)
+jobs.js             → gecikme faizi + otomatik borçlandırma (zamanlayıcı)
+middleware/auth.js  → JWT doğrulama, rol kontrolü, oturum iptali
+routes/             → auth, directory, finance, comms, ops, dashboard,
+                      documents, system, settings, contacts, accounts, parties
+public/             → saf HTML/CSS/JS arayüz (derleme adımı yok)
+README.md           → kurulum + mimari + Apsiyon/Yönetimcell karşılaştırma notları
+ROADMAP.md          → bu dosya
+```
+
+Herhangi bir özelliğin "neden böyle tasarlandığı" sorusu için önce
+`README.md`'deki ilgili bölümlere bakılmalı — çoğu karar orada gerekçesiyle
+yazılı.
