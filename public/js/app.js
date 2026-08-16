@@ -297,7 +297,7 @@ const NAV_GROUPS = {
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
     { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"], ["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"]] },
-    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"], ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["uyedonem", "Üye/Dönem Raporu"], ["uyedetay", "Üye/Detay Raporu"], ["butce", "Bütçe"]] },
+    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"], ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["uyedonem", "Üye/Dönem Raporu"], ["uyedetay", "Üye/Detay Raporu"], ["tahsilatraporu", "Tahsilat Raporu"], ["giderraporu", "Detaylı Gider Raporu"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
     { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"], ["bilgibankasi", "Bilgi Bankası"]] },
@@ -652,6 +652,8 @@ async function renderTab(tab) {
     else if (tab === "tasinmazdetay") await renderTasinmazPivot(c, "unit-category");
     else if (tab === "uyedonem") await renderTasinmazPivot(c, "person-month");
     else if (tab === "uyedetay") await renderTasinmazPivot(c, "person-category");
+    else if (tab === "tahsilatraporu") await renderHareketLogu(c, "tahsilat");
+    else if (tab === "giderraporu") await renderHareketLogu(c, "gider");
     else if (tab === "bilgibankasi") await renderBilgiBankasi(c);
     else if (tab === "toplusms") await renderTopluSms(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
@@ -2252,6 +2254,57 @@ async function renderTasinmazPivot(c, pivotType) {
   });
 }
 const MONTH_NAMES_TR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+
+// Yonetimcell karsilastirmasi: "Tahsilat Raporu" + "Detaylı Gider Raporu" -
+// tum siteyi kapsayan, kasa/tarih/aciklama filtreli hareket loglari.
+// Tahsilat tarafinda tekli makbuz indirme mumkun (mevcut receipt PDF ucunu
+// kullanir); gider tarafinda tekli fis PDF'i henuz yok, o yuzden yok.
+async function renderHareketLogu(c, kind) {
+  const isTahsilat = kind === "tahsilat";
+  const endpoint = isTahsilat ? "tahsilat-raporu" : "gider-raporu";
+  const accounts = await api("/accounts");
+  async function load(params) {
+    const qs = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v)));
+    return api(`/reports/${endpoint}?` + qs.toString());
+  }
+  let result = await load({});
+
+  function renderTable() {
+    return `
+      <div class="report-wrap"><table class="report">
+        <thead><tr><th>Tarih</th><th>Makbuz No</th><th>Kasa</th><th>Açıklama</th><th class="num">Tutar</th>${isTahsilat ? "<th></th>" : ""}</tr></thead>
+        <tbody>
+          ${result.rows.map((r) => `<tr><td>${dt(r.date)}</td><td>${esc(r.receiptNo)}</td><td>${esc(r.kasa)}</td><td>${esc(r.aciklama)}</td><td class="num f-num">${tl(r.tutar)}</td>${isTahsilat ? `<td>${r.paymentId ? `<button class="btn btn-ghost btn-sm" data-print="${r.paymentId}">🖨️</button>` : ""}</td>` : ""}</tr>`).join("") || `<tr><td colspan="${isTahsilat ? 6 : 5}" class="empty-row">Kayıt yok.</td></tr>`}
+        </tbody>
+        <tfoot><tr><td colspan="${isTahsilat ? 3 : 3}">TOPLAM</td><td colspan="${isTahsilat ? 2 : 2}" class="num">${tl(result.total)}</td></tr></tfoot>
+      </table></div>`;
+  }
+
+  c.innerHTML = `
+    ${sectionTitle(isTahsilat ? "Tahsilat Raporu" : "Detaylı Gider Raporu", isTahsilat ? "Tüm üye tahsilatları + harici gelirler" : "Firma/Personel ödemeleri + genel giderler")}
+    <div class="report-wrap">
+      <form id="hareketForm" class="report-filter-bar">
+        <div class="field"><label>Kasa</label><select name="accountId"><option value="">Tümü</option>${accounts.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></div>
+        <div class="field"><label>Başlangıç</label><input name="startDate" type="date" /></div>
+        <div class="field"><label>Bitiş</label><input name="endDate" type="date" /></div>
+        <div class="field"><label>Ara</label><input name="search" placeholder="Açıklama / makbuz no…" /></div>
+        <button class="btn btn-primary btn-sm" type="submit">Sorgula</button>
+      </form>
+    </div>
+    <div id="hareketResult">${renderTable()}</div>
+  `;
+  function wirePrint() {
+    if (!isTahsilat) return;
+    c.querySelectorAll("[data-print]").forEach((b) => b.addEventListener("click", () => downloadFile("/documents/receipt/" + b.dataset.print, "makbuz.pdf")));
+  }
+  wirePrint();
+  document.getElementById("hareketForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    try { result = await load(f); document.getElementById("hareketResult").innerHTML = renderTable(); wirePrint(); }
+    catch (err) { toast(err.message); }
+  });
+}
 
 const KNOWLEDGE_CATEGORIES = ["Bilgi Bankası", "Örnek Yazışmalar", "Yönetmelikler"];
 

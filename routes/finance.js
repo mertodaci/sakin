@@ -665,4 +665,67 @@ router.get("/reports/uye-detay", requireAuth, requireRole("yonetici"), async (re
   res.json({ columns: colKeys, rows: out });
 });
 
+/* ---------------- TAHSİLAT RAPORU + DETAYLI GİDER RAPORU (birlesik hareket loglari) ---------------- */
+// Yonetimcell karsilastirmasi: tum siteyi kapsayan, kasa/tarih/aciklama
+// filtreli tahsilat/odeme log sayfalari. "Uye Tahsilat" = Payment kayitlari,
+// "Harici Tahsilat" = bir Payment'a bagli olmayan gelir Transaction'lari
+// (orn. elle girilen bagis/kira geliri). Ayni mantik gider tarafinda
+// Firma/Personel Hareketleri (PartyPayment) + Gider Hareketleri (bagimsiz
+// gider Transaction'i) icin gecerli.
+
+router.get("/reports/tahsilat-raporu", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const { accountId, search, startDate, endDate } = req.query;
+  const start = startDate ? new Date(startDate) : null;
+  const end = endDate ? new Date(new Date(endDate).setHours(23, 59, 59, 999)) : null;
+  const unitById = new Map(data.units.map((u) => [u.id, u]));
+  const accountById = new Map(data.accounts.map((a) => [a.id, a]));
+  const linkedTxIds = new Set(data.payments.filter((p) => p.transactionId).map((p) => p.transactionId));
+
+  const rows = [];
+  data.payments.filter((p) => !p.cancelled).forEach((p) => {
+    const unit = unitById.get(p.unitId);
+    rows.push({ date: p.date, receiptNo: p.receiptNo, kasa: accountById.get(p.accountId)?.name || "-", accountId: p.accountId, aciklama: `${unit ? unit.block + "/" + unit.no : "-"} — ${p.note || "Tahsilat"}`, tutar: p.amount, paymentId: p.id });
+  });
+  data.transactions.filter((t) => t.type === "gelir" && !linkedTxIds.has(t.id)).forEach((t) => {
+    rows.push({ date: t.date, receiptNo: "-", kasa: accountById.get(t.accountId)?.name || "-", accountId: t.accountId, aciklama: `Harici Tahsilat — ${t.category}${t.description ? ": " + t.description : ""}`, tutar: t.amount, paymentId: null });
+  });
+
+  const filtered = rows
+    .filter((r) => !accountId || r.accountId === accountId)
+    .filter((r) => !start || new Date(r.date) >= start)
+    .filter((r) => !end || new Date(r.date) <= end)
+    .filter((r) => !search || r.aciklama.toLowerCase().includes(search.toLowerCase()) || r.receiptNo.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  res.json({ rows: filtered, total: filtered.reduce((s, r) => s + r.tutar, 0) });
+});
+
+router.get("/reports/gider-raporu", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const { accountId, search, startDate, endDate } = req.query;
+  const start = startDate ? new Date(startDate) : null;
+  const end = endDate ? new Date(new Date(endDate).setHours(23, 59, 59, 999)) : null;
+  const accountById = new Map(data.accounts.map((a) => [a.id, a]));
+  const vendorById = new Map(data.vendors.map((v) => [v.id, v]));
+  const personnelById = new Map(data.personnel.map((p) => [p.id, p]));
+  const linkedTxIds = new Set(data.partyPayments.filter((p) => p.transactionId).map((p) => p.transactionId));
+
+  const rows = [];
+  data.partyPayments.filter((p) => !p.cancelled).forEach((p) => {
+    const party = p.partyType === "firma" ? vendorById.get(p.partyId) : p.partyType === "personel" ? personnelById.get(p.partyId) : null;
+    rows.push({ date: p.date, receiptNo: p.receiptNo || "-", kasa: accountById.get(p.accountId)?.name || "-", accountId: p.accountId, aciklama: `${party?.name || "Genel Gider"} — ${p.description || "Ödeme"}`, tutar: p.amount });
+  });
+  data.transactions.filter((t) => t.type === "gider" && !linkedTxIds.has(t.id)).forEach((t) => {
+    rows.push({ date: t.date, receiptNo: "-", kasa: accountById.get(t.accountId)?.name || "-", accountId: t.accountId, aciklama: `${t.category}${t.description ? ": " + t.description : ""}`, tutar: t.amount });
+  });
+
+  const filtered = rows
+    .filter((r) => !accountId || r.accountId === accountId)
+    .filter((r) => !start || new Date(r.date) >= start)
+    .filter((r) => !end || new Date(r.date) <= end)
+    .filter((r) => !search || r.aciklama.toLowerCase().includes(search.toLowerCase()) || r.receiptNo.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  res.json({ rows: filtered, total: filtered.reduce((s, r) => s + r.tutar, 0) });
+});
+
 module.exports = router;

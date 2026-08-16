@@ -733,6 +733,17 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   veri eklemek yerine sadece gerçekten hesaplayabildiğimiz (güncel
   malik/kiracı) filtreler sunuldu. `test-uye-pivot.js` ile doğrulandı.
 
+- ✅ **Tahsilat Raporu + Detaylı Gider Raporu** (`/reports/tahsilat-raporu`,
+  `/reports/gider-raporu`) — tüm siteyi kapsayan, kasa/tarih/açıklama
+  filtreli hareket logları. Tahsilat = `Payment` kayıtları ("Üye
+  Tahsilat") + bir Payment'a bağlı OLMAYAN gelir `Transaction`'ları
+  ("Harici Tahsilat"); Gider = `PartyPayment` (Firma/Personel) + bağlı
+  olmayan gider `Transaction`'ları (Genel Gider). Tahsilat satırlarında
+  🖨️ butonu mevcut tekli makbuz PDF ucunu (`documents/receipt`)
+  kullanıyor; gider tarafında tekli fiş PDF'i olmadığından o buton
+  eklenmedi (uydurma buton yerine dürüst eksiklik). `test-hareket-
+  loglari.js` ile doğrulandı.
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı
