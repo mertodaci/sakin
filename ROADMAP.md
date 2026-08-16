@@ -562,6 +562,18 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   header'ı sadece Latin-1 kabul ettiği için) `ERR_INVALID_CHAR` ile
   500 veriyordu — dosya adı `trSafe()` ile ASCII'ye indirgenip
   düzeltildi.
+- ✅ **Rol-bazlı tam denetim** — Mert'in talebi üzerine ("bir site
+  yöneticisi olarak ve bir de apartman sakini gözüyle uygulamayı
+  incele") her üç rolün (yönetici/sakin/personel) TÜM sekmeleri
+  otomatik olarak tek tek gezildi, konsol/ağ hataları kontrol edildi.
+  **Bulunan tek gerçek hata**: `renderRehber`, `units` API çağrısını
+  koşula göre (sadece yönetici/personel için) diziye ekleyip sabit
+  pozisyonla destructure ediyordu — sakin rolünde dizi kısa kaldığı
+  için `personnel` değişkeni aslında `units`'in sonucunu alıyor,
+  gerçek personel verisi `undefined` kalıp sayfayı çökertiyordu
+  ("Cannot read properties of undefined"). Koşulsuz sabit pozisyonla
+  (`canSeeUnits` yoksa `Promise.resolve([])`) düzeltildi. Düzeltme
+  sonrası üç rolün de her sekmesi hatasız doğrulandı.
 
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
