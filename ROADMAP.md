@@ -702,6 +702,23 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   detail/patch/tip-doğrulama/geçersiz-tip-reddi) ve tarayıcıda görsel
   olarak doğrulandı.
 
+- ✅ **Taşınmaz Raporları'nın 3 pivotu** (`routes/finance.js`) — aynı
+  Charge/Payment verisinin 3 farklı kesiti, ortak `buildMatrix()`
+  yardımcı fonksiyonuyla:
+  - **Taşınmaz/Dönem Raporu** (`/reports/tasinmaz-donem`): satır=birim,
+    sütun=Devreden+12 ay.
+  - **Dönem/Detay Raporu** (`/reports/donem-detay`): satır=Devreden+12
+    ay, sütun=gider kategorisi.
+  - **Taşınmaz/Detay Raporu** (`/reports/tasinmaz-detay`): satır=birim,
+    sütun=gider kategorisi, tek bir ay için.
+  - "Seçim" filtresi 3 metrik sunuyor: Tahakkuk Eden / Tahsil Edilen /
+    Net Hareket — Yönetimcell'deki 8 metrik varyantının (gecikme
+    bedeli ayrımı dahil) tamamı yerine, gerçekten hesaplayabildiğimiz
+    ve anlamlı olan 3'ü seçildi (uydurma kolon eklememek için).
+    `test-tasinmaz-pivot.js` ile doğrulandı — ayrıca Taşınmaz/Dönem'in
+    yıl toplamı ile Taşınmaz/Detay'ın (ay filtresiz) toplamı çapraz
+    kontrol edilip birbirini tuttuğu doğrulandı.
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı

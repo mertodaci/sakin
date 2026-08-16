@@ -486,4 +486,134 @@ router.post("/budgets", requireAuth, requireRole("yonetici"), async (req, res) =
   res.status(201).json({ message: "Bütçe kalemi kaydedildi." });
 });
 
+/* ---------------- TASINMAZ RAPORLARI (3 pivot: birim x ay, ay x kategori, birim x kategori) ---------------- */
+// Yonetimcell karsilastirmasi: "Taşınmaz/Dönem Raporu", "Dönem/Detay Raporu",
+// "Taşınmaz/Detay Raporu" - ayni Charge/Payment verisinin uc farkli pivotu.
+// metric: "tahakkuk" (o donemde borclandirilan) | "tahsil" (o donemde tahsil
+// edilen) | "net" (tahakkuk - tahsil, donem ici net hareket). Devreden sutunu
+// secilen yildan ONCEKI tum hareketleri toplar.
+
+const MONTH_NAMES = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+const CHARGE_TYPE_LABEL = { aidat: "Aidat", sayac: "Sayaç", gecikme_faizi: "Gecikme Faizi", diger: "Diğer" };
+
+async function loadTasinmazPivotContext(req) {
+  const data = await db.load();
+  const categories = await prisma.expenseCategory.findMany();
+  const catById = new Map(categories.map((c) => [c.id, c]));
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const block = req.query.block;
+  const metric = ["tahakkuk", "tahsil", "net"].includes(req.query.metric) ? req.query.metric : "tahakkuk";
+
+  let units = data.units;
+  if (block) units = units.filter((u) => u.block === block);
+  const unitIds = new Set(units.map((u) => u.id));
+  const charges = data.charges.filter((c) => unitIds.has(c.unitId));
+  const chargeById = new Map(charges.map((c) => [c.id, c]));
+  const payments = data.payments.filter((p) => !p.cancelled && unitIds.has(p.unitId));
+
+  const catLabel = (c) => { const cat = catById.get(c.categoryId); return cat ? `${cat.group} / ${cat.name}` : (CHARGE_TYPE_LABEL[c.type] || c.type); };
+  // -1 = donemden once (Devreden), 0-11 = ay, null = yil disinda (yok sayilir)
+  const monthOf = (date) => { const d = new Date(date); if (d.getFullYear() < year) return -1; if (d.getFullYear() > year) return null; return d.getMonth(); };
+  const unitById = new Map(units.map((u) => [u.id, u]));
+
+  return { units, unitById, charges, chargeById, payments, year, block, metric, catLabel, monthOf };
+}
+
+// Genel amacli pivot olusturucu: rowKeyFn(charge)+colKeyFn(charge veya null=ay)
+// ikilisine gore tahakkuk/tahsil toplar, secilen metrige gore tek deger dondurur.
+function buildMatrix(ctx, rowKeyFn, colKeys, colOfFn) {
+  const rows = new Map(); // rowKey -> { [colKey]: { tahakkuk, tahsil } }
+  function cell(rowKey, colKey) {
+    if (!rows.has(rowKey)) rows.set(rowKey, {});
+    const row = rows.get(rowKey);
+    if (!row[colKey]) row[colKey] = { tahakkuk: 0, tahsil: 0 };
+    return row[colKey];
+  }
+  ctx.charges.forEach((c) => {
+    const colKey = colOfFn(c);
+    if (colKey === null || colKey === undefined) return;
+    cell(rowKeyFn(c), colKey).tahakkuk += c.amount;
+  });
+  ctx.payments.forEach((p) => {
+    (p.appliedTo || []).forEach((alloc) => {
+      const c = ctx.chargeById.get(alloc.chargeId);
+      if (!c) return;
+      const pMonth = ctx.monthOf(p.date);
+      // Tahsilat, odemenin kendi tarihine gore donem/aya yazilir (tahakkukun ayina degil).
+      const colKey = colOfFn(c, pMonth);
+      if (colKey === null || colKey === undefined) return;
+      cell(rowKeyFn(c), colKey).tahsil += alloc.amount;
+    });
+  });
+  const value = (v) => (ctx.metric === "tahakkuk" ? v.tahakkuk : ctx.metric === "tahsil" ? v.tahsil : v.tahakkuk - v.tahsil);
+  return Array.from(rows.entries()).map(([rowKey, row]) => {
+    const values = {};
+    let total = 0;
+    colKeys.forEach((k) => { const v = row[k] || { tahakkuk: 0, tahsil: 0 }; values[k] = value(v); total += values[k]; });
+    return { row: rowKey, values, total };
+  });
+}
+
+// 1) Taşınmaz/Dönem: satir=birim, sutun=Devreden+12 ay
+router.get("/reports/tasinmaz-donem", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const ctx = await loadTasinmazPivotContext(req);
+  const colKeys = ["devreden", ...MONTH_NAMES];
+  const colOf = (charge, paymentMonth) => {
+    const m = paymentMonth !== undefined ? paymentMonth : ctx.monthOf(charge.createdAt);
+    if (m === null) return null;
+    return m === -1 ? "devreden" : MONTH_NAMES[m];
+  };
+  const rows = buildMatrix(ctx, (c) => c.unitId, colKeys, colOf);
+  const out = rows.map((r) => { const u = ctx.unitById.get(r.row); return { block: u?.block || "-", no: u?.no || "-", ...r.values, total: r.total }; })
+    .sort((a, b) => a.block.localeCompare(b.block, "tr") || a.no.localeCompare(b.no, "tr", { numeric: true }));
+  res.json({ columns: colKeys, rows: out });
+});
+
+// 2) Dönem/Detay: satir=Devreden+12 ay, sutun=gider kategorisi
+router.get("/reports/donem-detay", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const ctx = await loadTasinmazPivotContext(req);
+  const colKeys = Array.from(new Set(ctx.charges.map((c) => ctx.catLabel(c)))).sort((a, b) => a.localeCompare(b, "tr"));
+  const rowOf = (charge, paymentMonth) => {
+    const m = paymentMonth !== undefined ? paymentMonth : ctx.monthOf(charge.createdAt);
+    if (m === null) return null;
+    return m === -1 ? "devreden" : MONTH_NAMES[m];
+  };
+  // buildMatrix rowKeyFn tek parametre alir (charge) - burada donem bilgisini
+  // colOfFn'e degil rowKeyFn'e tasimak icin ayri bir dongu yaziyoruz.
+  const rowLabels = ["devreden", ...MONTH_NAMES];
+  const rows = new Map();
+  function cell(rowKey, colKey) { if (!rows.has(rowKey)) rows.set(rowKey, {}); const row = rows.get(rowKey); if (!row[colKey]) row[colKey] = { tahakkuk: 0, tahsil: 0 }; return row[colKey]; }
+  ctx.charges.forEach((c) => { const rk = rowOf(c); if (rk === null) return; cell(rk, ctx.catLabel(c)).tahakkuk += c.amount; });
+  ctx.payments.forEach((p) => (p.appliedTo || []).forEach((alloc) => {
+    const c = ctx.chargeById.get(alloc.chargeId); if (!c) return;
+    const rk = rowOf(c, ctx.monthOf(p.date)); if (rk === null) return;
+    cell(rk, ctx.catLabel(c)).tahsil += alloc.amount;
+  }));
+  const value = (v) => (ctx.metric === "tahakkuk" ? v.tahakkuk : ctx.metric === "tahsil" ? v.tahsil : v.tahakkuk - v.tahsil);
+  const out = rowLabels.map((rk) => {
+    const row = rows.get(rk) || {};
+    const values = {}; let total = 0;
+    colKeys.forEach((k) => { const v = row[k] || { tahakkuk: 0, tahsil: 0 }; values[k] = value(v); total += values[k]; });
+    return { period: rk === "devreden" ? "Devreden" : `${ctx.year} ${rk}`, ...values, total };
+  });
+  res.json({ columns: colKeys, rows: out });
+});
+
+// 3) Taşınmaz/Detay: tek bir ay+yil icin satir=birim, sutun=gider kategorisi
+router.get("/reports/tasinmaz-detay", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const ctx = await loadTasinmazPivotContext(req);
+  const month = req.query.month !== undefined && req.query.month !== "" ? Number(req.query.month) : null; // 0-11, bos ise TUM yil
+  const colKeys = Array.from(new Set(ctx.charges.map((c) => ctx.catLabel(c)))).sort((a, b) => a.localeCompare(b, "tr"));
+  const colOf = (charge, paymentMonth) => {
+    const m = paymentMonth !== undefined ? paymentMonth : ctx.monthOf(charge.createdAt);
+    if (m === null || m === -1) return null; // devreden bu raporda gosterilmiyor
+    if (month !== null && m !== month) return null;
+    return ctx.catLabel(charge);
+  };
+  const rows = buildMatrix(ctx, (c) => c.unitId, colKeys, colOf);
+  const out = rows.map((r) => { const u = ctx.unitById.get(r.row); return { block: u?.block || "-", no: u?.no || "-", ...r.values, total: r.total }; })
+    .sort((a, b) => a.block.localeCompare(b.block, "tr") || a.no.localeCompare(b.no, "tr", { numeric: true }));
+  res.json({ columns: colKeys, rows: out });
+});
+
 module.exports = router;

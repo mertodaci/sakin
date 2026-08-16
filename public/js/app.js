@@ -297,7 +297,7 @@ const NAV_GROUPS = {
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
     { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"], ["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"]] },
-    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"], ["butce", "Bütçe"]] },
+    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"], ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
     { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"], ["bilgibankasi", "Bilgi Bankası"]] },
@@ -647,6 +647,9 @@ async function renderTab(tab) {
     else if (tab === "geneldurum") await renderGenelDurumRaporu(c);
     else if (tab === "denetimraporu") await renderOfficialReport(c, "denetim");
     else if (tab === "faaliyetraporu") await renderOfficialReport(c, "faaliyet");
+    else if (tab === "tasinmazdonem") await renderTasinmazPivot(c, "unit-month");
+    else if (tab === "donemdetay") await renderTasinmazPivot(c, "month-category");
+    else if (tab === "tasinmazdetay") await renderTasinmazPivot(c, "unit-category");
     else if (tab === "bilgibankasi") await renderBilgiBankasi(c);
     else if (tab === "toplusms") await renderTopluSms(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
@@ -2188,6 +2191,60 @@ async function renderOfficialReport(c, type) {
   }
   render();
 }
+
+// Yonetimcell karsilastirmasi: "Taşınmaz Raporları" - ayni Charge/Payment
+// verisinin 3 pivotu (unit-month/month-category/unit-category), ortak
+// backend'den (finance.js) beslenir. Ay filtresi sadece unit-category'de var
+// (Yonetimcell'de "Taşınmaz/Detay Raporu" tek aya bakar, digerleri tum yil).
+const PIVOT_META = {
+  "unit-month": { endpoint: "tasinmaz-donem", title: "Taşınmaz/Dönem Raporu", sub: "Her taşınmazın aylık borçlanma/tahsilat dökümü", rowLabel: (r) => `${r.block} / ${r.no}` },
+  "month-category": { endpoint: "donem-detay", title: "Dönem/Detay Raporu", sub: "Dönemlerin gider kategorisine göre dökümü", rowLabel: (r) => r.period },
+  "unit-category": { endpoint: "tasinmaz-detay", title: "Taşınmaz/Detay Raporu", sub: "Her taşınmazın gider kategorisine göre dökümü (seçilen ay)", rowLabel: (r) => `${r.block} / ${r.no}` },
+};
+const METRIC_LABEL = { tahakkuk: "Tahakkuk Eden Tutar", tahsil: "Tahsil Edilen Tutar", net: "Net Hareket (Tahakkuk − Tahsil)" };
+
+async function renderTasinmazPivot(c, pivotType) {
+  const meta = PIVOT_META[pivotType];
+  const now = new Date();
+  async function load(year, metric, month) {
+    const qs = new URLSearchParams({ year, metric });
+    if (pivotType === "unit-category" && month !== "" && month !== undefined) qs.set("month", month);
+    return api(`/reports/${meta.endpoint}?` + qs.toString());
+  }
+  let result = await load(now.getFullYear(), "tahakkuk", pivotType === "unit-category" ? String(now.getMonth()) : undefined);
+
+  function renderTable() {
+    const cols = result.columns;
+    return `
+      <div class="scroll-x"><div class="report-wrap"><table class="report">
+        <thead><tr><th></th>${cols.map((k) => `<th class="num">${esc(k === "devreden" ? "Devreden" : k)}</th>`).join("")}<th class="num">Toplam</th></tr></thead>
+        <tbody>
+          ${result.rows.map((r) => `<tr><td>${esc(meta.rowLabel(r))}</td>${cols.map((k) => `<td class="num f-num">${r[k] ? tl(r[k]) : "-"}</td>`).join("")}<td class="num f-num" style="font-weight:700;">${tl(r.total)}</td></tr>`).join("") || `<tr><td colspan="${cols.length + 2}" class="empty-row">Kayıt yok.</td></tr>`}
+        </tbody>
+      </table></div></div>`;
+  }
+
+  const monthOptions = MONTH_NAMES_TR.map((m, i) => `<option value="${i}" ${i === now.getMonth() ? "selected" : ""}>${m}</option>`).join("");
+  c.innerHTML = `
+    ${sectionTitle(meta.title, meta.sub)}
+    <div class="report-wrap">
+      <form id="pivotForm" class="report-filter-bar">
+        <div class="field"><label>Yıl</label><select name="year">${[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map((y) => `<option value="${y}">${y}</option>`).join("")}</select></div>
+        ${pivotType === "unit-category" ? `<div class="field"><label>Ay</label><select name="month">${monthOptions}</select></div>` : ""}
+        <div class="field"><label>Seçim</label><select name="metric">${Object.entries(METRIC_LABEL).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
+        <button class="btn btn-primary btn-sm" type="submit">Sorgula</button>
+      </form>
+    </div>
+    <div id="pivotResult">${renderTable()}</div>
+  `;
+  document.getElementById("pivotForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    try { result = await load(f.year, f.metric, f.month); document.getElementById("pivotResult").innerHTML = renderTable(); }
+    catch (err) { toast(err.message); }
+  });
+}
+const MONTH_NAMES_TR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 
 const KNOWLEDGE_CATEGORIES = ["Bilgi Bankası", "Örnek Yazışmalar", "Yönetmelikler"];
 
