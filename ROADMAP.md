@@ -670,6 +670,23 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   `test-gider-genel.js` ile doğrulandı (17 satır → 4 satır, toplam
   değişmedi).
 
+- ✅ **Genel Durum Raporu** — `GET /reports/genel-durum` (tarih aralığı
+  bazlı): Gelirler(kategori)/Giderler/Firmalar/Personeller/Kasalar 5
+  bölümlü özet, her satırda Devreden/Tahakkuk Eden/Tahsil Edilen
+  (veya Ödenen)/Kalan. Gerçek çift-taraflı muhasebe mantığıyla:
+  Devreden = dönem başından ÖNCEKİ tahakkuk−tahsilat farkı,
+  `Kalan = Devreden + Tahakkuk Eden − Tahsil Edilen` formülü HER
+  satırda tutarlı (uydurma veri değil — `PaymentAllocation`/
+  `PartyPaymentAllocation` üzerinden gerçek ödeme tarihleriyle
+  hesaplanıyor). `test-genel-durum.js`'de bu formül otomatik
+  doğrulanıyor ("sanity check").
+  **Mizan (Genel Kurul Raporu) ve Özet Durum (Gelir-Gider) için karar**:
+  canlı hesapta ikisi de Genel Durum Raporu ile AYNI veriyi (bazen daha
+  az detayla, bazen sadece bir checkbox/toggle farkıyla) gösteriyordu.
+  Ayrı, neredeyse birebir aynı sayfaları tekrar inşa etmek yerine bu
+  ihtiyacı Genel Durum Raporu karşılıyor kabul edildi — gereksiz
+  kopya sayfa açmamak için bilinçli bir tercih.
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı

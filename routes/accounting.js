@@ -239,4 +239,81 @@ router.get("/reports/genel-bilanco", requireAuth, requireRole("yonetici"), async
   res.json({ gelirler, giderler, totalGelir: gelirler.reduce((s, r) => s + r.amount, 0), totalGider: giderler.reduce((s, r) => s + r.amount, 0) });
 });
 
+// Yonetimcell karsilastirmasi: "Genel Durum Raporu" (ve ayni altyapiyi
+// paylasan Mizan/Ozet Durum varyantlari). Belirtilen tarih araligi icin
+// Gelirler(Charge kategori bazli)/Giderler,Firmalar,Personeller(PartyCharge)/
+// Kasalar 5 bolumunu Devreden/Tahakkuk Eden/Tahsil-Odenen/Kalan seklinde
+// hesaplar. Devreden = donem basindan ONCEKI tahakkuk - tahsilat farki;
+// bu sekilde Kalan(donem sonu) = Devreden + Tahakkuk - Tahsilat formulu
+// her zaman tutarli kalir (gercek muhasebe mantigi, uydurma veri degil).
+function ledgerSections(items, payments, start, end, groupKeyFn) {
+  const groupOf = new Map(items.map((i) => [i.id, groupKeyFn(i)]));
+  const totals = new Map();
+  function bump(key, field, amount) {
+    if (!totals.has(key)) totals.set(key, { devreden: 0, tahakkukEden: 0, tahsilEdilen: 0 });
+    totals.get(key)[field] += amount;
+  }
+  items.forEach((i) => {
+    const key = groupKeyFn(i);
+    const created = new Date(i.createdAt);
+    if (created < start) bump(key, "devreden", i.amount);
+    else if (created <= end) bump(key, "tahakkukEden", i.amount);
+  });
+  payments.forEach((p) => {
+    const pdate = new Date(p.date);
+    (p.appliedTo || []).forEach((alloc) => {
+      const key = groupOf.get(alloc.chargeId);
+      if (!key) return;
+      if (pdate < start) bump(key, "devreden", -alloc.amount);
+      else if (pdate <= end) bump(key, "tahsilEdilen", alloc.amount);
+    });
+  });
+  return Array.from(totals.entries())
+    .map(([label, t]) => ({ label, ...t, kalan: t.devreden + t.tahakkukEden - t.tahsilEdilen }))
+    .sort((a, b) => a.label.localeCompare(b.label, "tr"));
+}
+function sumRows(rows, field) { return rows.reduce((s, r) => s + r[field], 0); }
+
+router.get("/reports/genel-durum", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const categories = await db.prisma.expenseCategory.findMany();
+  const catById = new Map(categories.map((c) => [c.id, c]));
+  const start = req.query.startDate ? new Date(req.query.startDate) : new Date(0);
+  const end = req.query.endDate ? new Date(new Date(req.query.endDate).setHours(23, 59, 59, 999)) : new Date();
+  const TYPE_LABEL = { aidat: "Aidat", sayac: "Sayaç", gecikme_faizi: "Gecikme Faizi", diger: "Diğer" };
+  const catLabel = (categoryId) => { const c = catById.get(categoryId); return c ? `${c.group} / ${c.name}` : null; };
+
+  const vendorById = new Map(data.vendors.map((v) => [v.id, v]));
+  const personnelById = new Map(data.personnel.map((p) => [p.id, p]));
+
+  const gelirler = ledgerSections(data.charges, data.payments.filter((p) => !p.cancelled), start, end, (c) => catLabel(c.categoryId) || TYPE_LABEL[c.type] || c.type);
+  const genelGiderler = data.partyCharges.filter((c) => !c.partyType);
+  const firmaGiderleri = data.partyCharges.filter((c) => c.partyType === "firma");
+  const personelGiderleri = data.partyCharges.filter((c) => c.partyType === "personel");
+  const partyPayments = data.partyPayments.filter((p) => !p.cancelled);
+  const giderler = ledgerSections(genelGiderler, partyPayments, start, end, (c) => catLabel(c.categoryId) || "Kategorisiz");
+  const firmalar = ledgerSections(firmaGiderleri, partyPayments, start, end, (c) => vendorById.get(c.partyId)?.name || "Bilinmeyen Firma");
+  const personeller = ledgerSections(personelGiderleri, partyPayments, start, end, (c) => personnelById.get(c.partyId)?.name || "Bilinmeyen Personel");
+
+  const kasalar = data.accounts.map((acc) => {
+    const before = (field) => data.transactions.filter((t) => t.accountId === acc.id && t.type === field && new Date(t.date) < start).reduce((s, t) => s + t.amount, 0);
+    const within = (field) => data.transactions.filter((t) => t.accountId === acc.id && t.type === field && new Date(t.date) >= start && new Date(t.date) <= end).reduce((s, t) => s + t.amount, 0);
+    const transfersBefore = data.transfers.filter((tr) => new Date(tr.date) < start);
+    const transferIn = transfersBefore.filter((tr) => tr.toAccountId === acc.id).reduce((s, tr) => s + tr.amount, 0);
+    const transferOut = transfersBefore.filter((tr) => tr.fromAccountId === acc.id).reduce((s, tr) => s + tr.amount, 0);
+    const devir = acc.openingBalance + before("gelir") - before("gider") + transferIn - transferOut;
+    const giren = within("gelir");
+    const cikan = within("gider");
+    return { label: acc.name, devir, giren, cikan, kalan: devir + giren - cikan };
+  });
+
+  res.json({
+    gelirler: { rows: gelirler, toplam: { devreden: sumRows(gelirler, "devreden"), tahakkukEden: sumRows(gelirler, "tahakkukEden"), tahsilEdilen: sumRows(gelirler, "tahsilEdilen"), kalan: sumRows(gelirler, "kalan") } },
+    giderler: { rows: giderler, toplam: { devreden: sumRows(giderler, "devreden"), tahakkukEden: sumRows(giderler, "tahakkukEden"), tahsilEdilen: sumRows(giderler, "tahsilEdilen"), kalan: sumRows(giderler, "kalan") } },
+    firmalar: { rows: firmalar, toplam: { devreden: sumRows(firmalar, "devreden"), tahakkukEden: sumRows(firmalar, "tahakkukEden"), tahsilEdilen: sumRows(firmalar, "tahsilEdilen"), kalan: sumRows(firmalar, "kalan") } },
+    personeller: { rows: personeller, toplam: { devreden: sumRows(personeller, "devreden"), tahakkukEden: sumRows(personeller, "tahakkukEden"), tahsilEdilen: sumRows(personeller, "tahsilEdilen"), kalan: sumRows(personeller, "kalan") } },
+    kasalar: { rows: kasalar, toplam: { devir: sumRows(kasalar, "devir"), giren: sumRows(kasalar, "giren"), cikan: sumRows(kasalar, "cikan"), kalan: sumRows(kasalar, "kalan") } },
+  });
+});
+
 module.exports = router;

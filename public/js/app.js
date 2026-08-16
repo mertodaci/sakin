@@ -297,7 +297,7 @@ const NAV_GROUPS = {
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
     { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"], ["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"]] },
-    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["butce", "Bütçe"]] },
+    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
     { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"], ["bilgibankasi", "Bilgi Bankası"]] },
@@ -644,6 +644,7 @@ async function renderTab(tab) {
     else if (tab === "aylikozet") await renderAylikOzetBilanco(c);
     else if (tab === "gidergrubu") await renderGiderGrubuRaporu(c);
     else if (tab === "genelbilanco") await renderGenelBilanco(c);
+    else if (tab === "geneldurum") await renderGenelDurumRaporu(c);
     else if (tab === "bilgibankasi") await renderBilgiBankasi(c);
     else if (tab === "toplusms") await renderTopluSms(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
@@ -2012,6 +2013,65 @@ async function renderGenelBilanco(c) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
     try { result = await load(f.asOfDate); document.getElementById("genelBilancoResult").innerHTML = renderResult(); }
+    catch (err) { toast(err.message); }
+  });
+}
+
+// Yonetimcell karsilastirmasi: "Genel Durum Raporu" - tarih araligi bazli
+// Gelirler(kategori)/Giderler/Firmalar/Personeller/Kasalar 5 bolumlu ozet.
+// Mizan (Genel Kurul Raporu) ve Ozet Durum ayni veriyi paylasir.
+function genelDurumSectionTable(title, section, cols) {
+  const labelMap = { tahsilEdilen: cols.tahsilLabel || "Tahsil Edilen", kalan: cols.kalanLabel || "Kalan (Alacak)" };
+  return `
+    <div class="report-wrap"><table class="report">
+      <thead><tr><th colspan="${cols.showKalan === false ? 4 : 5}">${esc(title)}</th></tr>
+      <tr><th></th><th class="num">Devreden</th><th class="num">Tahakkuk Eden</th><th class="num">${esc(labelMap.tahsilEdilen)}</th><th class="num">${esc(labelMap.kalan)}</th></tr></thead>
+      <tbody>
+        ${section.rows.map((r) => `<tr><td>${esc(r.label)}</td><td class="num f-num">${tl(r.devreden)}</td><td class="num f-num">${tl(r.tahakkukEden)}</td><td class="num f-num">${tl(r.tahsilEdilen)}</td><td class="num f-num" style="font-weight:600;">${tl(r.kalan)}</td></tr>`).join("") || '<tr><td colspan="5" class="empty-row">Kayıt yok.</td></tr>'}
+      </tbody>
+      <tfoot><tr><td>TOPLAM</td><td class="num">${tl(section.toplam.devreden)}</td><td class="num">${tl(section.toplam.tahakkukEden)}</td><td class="num">${tl(section.toplam.tahsilEdilen)}</td><td class="num">${tl(section.toplam.kalan)}</td></tr></tfoot>
+    </table></div>`;
+}
+
+async function renderGenelDurumRaporu(c) {
+  async function load(startDate, endDate) {
+    const qs = new URLSearchParams();
+    if (startDate) qs.set("startDate", startDate);
+    if (endDate) qs.set("endDate", endDate);
+    return api("/reports/genel-durum?" + qs.toString());
+  }
+  let result = await load();
+
+  function renderResult() {
+    return `
+      ${genelDurumSectionTable("Gelirler (Alacaklar)", result.gelirler, { tahsilLabel: "Tahsil Edilen", kalanLabel: "Kalan (Alacak)" })}
+      ${genelDurumSectionTable("Giderler (Ödemeler)", result.giderler, { tahsilLabel: "Ödenen", kalanLabel: "Kalan (Borç)" })}
+      ${genelDurumSectionTable("Firmalar", result.firmalar, { tahsilLabel: "Ödenen", kalanLabel: "Kalan (Borç)" })}
+      ${genelDurumSectionTable("Personeller", result.personeller, { tahsilLabel: "Ödenen", kalanLabel: "Kalan (Borç)" })}
+      <div class="report-wrap"><table class="report">
+        <thead><tr><th colspan="4">Kasalar</th></tr><tr><th></th><th class="num">Devreden</th><th class="num">Giren</th><th class="num">Çıkan</th></tr></thead>
+        <tbody>
+          ${result.kasalar.rows.map((r) => `<tr><td>${esc(r.label)}</td><td class="num f-num">${tl(r.devir)}</td><td class="num f-num" style="color:var(--green);">${tl(r.giren)}</td><td class="num f-num" style="color:var(--red);">${tl(r.cikan)}</td></tr>`).join("")}
+        </tbody>
+        <tfoot><tr><td>TOPLAM (Kalan: ${tl(result.kasalar.toplam.kalan)})</td><td class="num">${tl(result.kasalar.toplam.devir)}</td><td class="num">${tl(result.kasalar.toplam.giren)}</td><td class="num">${tl(result.kasalar.toplam.cikan)}</td></tr></tfoot>
+      </table></div>`;
+  }
+
+  c.innerHTML = `
+    ${sectionTitle("Genel Durum Raporu", "Seçilen tarih aralığında Gelirler/Giderler/Firmalar/Personeller/Kasalar özeti")}
+    <div class="report-wrap">
+      <form id="genelDurumForm" class="report-filter-bar">
+        <div class="field"><label>Başlangıç</label><input name="startDate" type="date" /></div>
+        <div class="field"><label>Bitiş</label><input name="endDate" type="date" /></div>
+        <button class="btn btn-primary btn-sm" type="submit">Sorgula</button>
+      </form>
+    </div>
+    <div id="genelDurumResult">${renderResult()}</div>
+  `;
+  document.getElementById("genelDurumForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    try { result = await load(f.startDate, f.endDate); document.getElementById("genelDurumResult").innerHTML = renderResult(); }
     catch (err) { toast(err.message); }
   });
 }
