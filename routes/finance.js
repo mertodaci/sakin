@@ -149,13 +149,17 @@ router.get("/payments", requireAuth, async (req, res) => {
 // sonra hatasiz iptal edilebilir (kismi tahsilatlar da dahil). Borc guncelleme +
 // PaymentAllocation + Transaction + Notification hep birlikte tek $transaction
 // icinde yazilir - biri basarisiz olursa hicbiri kalici olmaz.
-async function applyPayment(tx, { unitId, amount, method, userId, userName, note, accountId }) {
+// chargeIds verilirse (Yonetimcell karsilastirmasi: Tahsilat Ekrani'nda
+// "Secerek tahsil etmek istiyorum" checkbox'i) odeme SADECE o kayitlara
+// uygulanir - saf FIFO yerine yoneticinin sectigi belirli borclar kapatilir.
+// Verilmezse eski davranis (tum acik borclar, en eski once) degismeden kalir.
+async function applyPayment(tx, { unitId, amount, method, userId, userName, note, accountId, chargeIds }) {
   const amt = new Prisma.Decimal(amount);
   let remaining = amt;
   const appliedTo = [];
 
   const openCharges = await tx.charge.findMany({
-    where: { unitId, status: { not: "paid" } },
+    where: chargeIds && chargeIds.length ? { unitId, id: { in: chargeIds }, status: { not: "paid" } } : { unitId, status: { not: "paid" } },
     orderBy: { dueDate: "asc" },
   });
 
@@ -218,7 +222,7 @@ async function applyPayment(tx, { unitId, amount, method, userId, userName, note
 // constraint, mukerrer istek Prisma P2002 hatasiyla yakalanip 409 donduruluyor).
 router.post("/payments/pay", requireAuth, async (req, res) => {
   const unitId = req.user.role === "sakin" ? req.user.unitId : req.body.unitId;
-  const { amount, method, requestId, accountId } = req.body || {};
+  const { amount, method, requestId, accountId, chargeIds } = req.body || {};
   if (!unitId || !amount || Number(amount) <= 0) return res.status(400).json({ error: "Geçerli bir daire ve tutar giriniz." });
 
   try {
@@ -233,7 +237,7 @@ router.post("/payments/pay", requireAuth, async (req, res) => {
           throw e;
         }
       }
-      return applyPayment(tx, { unitId, amount, method, userId: req.user.id, userName: req.user.name, accountId });
+      return applyPayment(tx, { unitId, amount, method, userId: req.user.id, userName: req.user.name, accountId, chargeIds });
     });
     res.status(201).json(toAppliedTo(payment));
   } catch (e) {

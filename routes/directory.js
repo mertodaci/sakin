@@ -18,11 +18,31 @@ router.get("/units", requireAuth, async (req, res) => {
   res.json(list);
 });
 
+// Yonetimcell karsilastirmasi: Tahsilat Ekrani'nda ayni kisi birden fazla
+// tasinmaza sahipse hepsini tek ekranda gostermek icin - malik ayri bir
+// User/Malik tablosu olarak modellenmedigi icin (Unit.ownerName/ownerPhone
+// serbest metin), "ayni kisi" eslestirmesi isim/telefon uzerinden yapilir.
+router.get("/units/:id/related", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const unit = data.units.find((u) => u.id === req.params.id);
+  if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
+  const name = (unit.ownerName || "").trim().toLowerCase();
+  const phone = (unit.ownerPhone || "").trim();
+  const related = data.units.filter((u) => {
+    if (u.id === unit.id) return false;
+    if (name && (u.ownerName || "").trim().toLowerCase() === name) return true;
+    if (phone && (u.ownerPhone || "").trim() === phone) return true;
+    return false;
+  });
+  res.json(related.map((u) => ({ ...u, debt: unitDebt(data, u.id) })));
+});
+
 router.post("/units", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();
   const { block, no, floor, ownerName, ownerPhone, tenantName, tenantPhone, occupancy, landShare, feeGroup } = req.body || {};
   if (!block || !no) return res.status(400).json({ error: "Blok ve daire no zorunludur." });
-  const unit = { id: db.uid(), block, no, floor: floor || null, ownerName: ownerName || "", ownerPhone: ownerPhone || "", tenantName: tenantName || "", tenantPhone: tenantPhone || "", occupancy: occupancy || "owner", landShare: landShare || null, feeGroup: feeGroup || null };
+  // floor semada zorunlu (Int, nullable degil) - deger verilmezse 0 varsayilir.
+  const unit = { id: db.uid(), block, no, floor: floor ? Number(floor) : 0, ownerName: ownerName || "", ownerPhone: ownerPhone || "", tenantName: tenantName || "", tenantPhone: tenantPhone || "", occupancy: occupancy || "owner", landShare: landShare || null, feeGroup: feeGroup || null };
   data.units.push(unit);
   db.logActivity(data, req.user, "unit.create", `${block} - Daire ${no} eklendi.`, unit.id);
   await db.save(data);

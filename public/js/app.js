@@ -1115,7 +1115,7 @@ async function renderBorcDokumuModal(unit) {
   const overlay = document.createElement("div");
   overlay.style.cssText = "position:fixed;inset:0;background:rgba(12,32,50,.35);z-index:70;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;";
   overlay.innerHTML = `
-    <div class="card pad" style="max-width:600px;width:100%;max-height:85vh;overflow-y:auto;">
+    <div class="card pad" style="max-width:680px;width:100%;max-height:85vh;overflow-y:auto;">
       <div class="flex-between" style="margin-bottom:2px;">
         <h3 class="f-display" style="margin:0;">${esc(unit.block)} - Daire ${esc(unit.no)}</h3>
         <button class="btn btn-ghost btn-sm" id="borcDokumuClose">Kapat</button>
@@ -1127,57 +1127,100 @@ async function renderBorcDokumuModal(unit) {
   overlay.querySelector("#borcDokumuClose").addEventListener("click", () => overlay.remove());
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
 
-  const [charges, accounts] = await Promise.all([api("/charges?unitId=" + unit.id), api("/accounts")]);
-  const open = charges.filter((c) => c.status !== "paid").sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-  const totalOpen = open.reduce((s, c) => s + (Number(c.amount) - Number(c.paidAmount)), 0);
-  const netTotal = totalOpen - (unit.creditBalance || 0);
+  // Yonetimcell karsilastirmasi: ayni malikin (isim/telefon eslesmesiyle,
+  // ayri bir Malik tablosu olmadigi icin) birden fazla tasinmazi varsa
+  // hepsinin acik borclarini TEK ekranda gosterip secerek (checkbox) tahsil
+  // edebilme. "unitsById" secili checkbox'lari daireye gore gruplamak icin.
+  const [charges, accounts, related] = await Promise.all([api("/charges?unitId=" + unit.id), api("/accounts"), api(`/units/${unit.id}/related`).catch(() => [])]);
+  const unitsById = new Map([[unit.id, unit], ...related.map((u) => [u.id, u])]);
+  const relatedCharges = await Promise.all(related.map((u) => api("/charges?unitId=" + u.id)));
+  const rows = [
+    ...charges.map((c) => ({ ...c, unitId: unit.id })),
+    ...relatedCharges.flatMap((list, i) => list.map((c) => ({ ...c, unitId: related[i].id }))),
+  ].filter((c) => c.status !== "paid").sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const isMultiProperty = related.length > 0;
+
+  function selectedTotal() {
+    const checked = [...overlay.querySelectorAll('[data-charge-check]:checked')].map((cb) => cb.dataset.chargeCheck);
+    return rows.filter((c) => checked.includes(c.id)).reduce((s, c) => s + (Number(c.amount) - Number(c.paidAmount)), 0);
+  }
+  function updateSelectedTotalUI() {
+    const el = overlay.querySelector("#bdSelectedTotal");
+    if (el) el.textContent = tl(selectedTotal());
+    const btn = overlay.querySelector("#bdCollectBtn");
+    if (btn) btn.disabled = selectedTotal() <= 0;
+  }
+
+  const totalOpen = rows.reduce((s, c) => s + (Number(c.amount) - Number(c.paidAmount)), 0);
+  const totalCredit = [...unitsById.values()].reduce((s, u) => s + (u.creditBalance || 0), 0);
+  const netTotal = totalOpen - totalCredit;
 
   const body = overlay.querySelector("#borcDokumuBody");
   body.innerHTML = `
+    ${isMultiProperty ? `<div class="small muted" style="margin-bottom:10px;">Bu malikin ${unitsById.size} taşınmazı bulundu, hepsinin açık borçları aşağıda birlikte listeleniyor.</div>` : ""}
     <div class="scroll-x">
       <table class="simple">
-        <thead><tr><th>Vade</th><th>Açıklama</th><th style="text-align:right;">Borç</th><th style="text-align:right;">Ödenen</th><th style="text-align:right;">Kalan</th></tr></thead>
-        <tbody>${open.map((c) => `
+        <thead><tr><th></th>${isMultiProperty ? "<th>Daire</th>" : ""}<th>Vade</th><th>Açıklama</th><th style="text-align:right;">Kalan</th></tr></thead>
+        <tbody>${rows.map((c) => {
+          const u = unitsById.get(c.unitId);
+          return `
           <tr>
+            <td><input type="checkbox" data-charge-check="${c.id}" checked /></td>
+            ${isMultiProperty ? `<td>${esc(u.block)} - ${esc(u.no)}</td>` : ""}
             <td>${dt(c.dueDate)}</td>
             <td>${esc(chargeTypeLabel(c))}${c.description ? " — " + esc(c.description) : ""}</td>
-            <td class="f-num" style="text-align:right;">${tl(c.amount)}</td>
-            <td class="f-num" style="text-align:right;">${tl(c.paidAmount)}</td>
             <td class="f-num" style="text-align:right;font-weight:600;">${tl(Number(c.amount) - Number(c.paidAmount))}</td>
-          </tr>`).join("") || '<tr><td colspan="5" class="empty-row">Açık borç kaydı yok.</td></tr>'}</tbody>
+          </tr>`;
+        }).join("") || `<tr><td colspan="${isMultiProperty ? 5 : 4}" class="empty-row">Açık borç kaydı yok.</td></tr>`}</tbody>
       </table>
     </div>
-    ${unit.creditBalance > 0 ? `<div class="small" style="margin-top:8px;color:var(--green);">Alacaklı bakiye: ${tl(unit.creditBalance)}</div>` : ""}
-    <div class="small muted" style="margin-top:8px;">Toplam net bakiye: <b style="color:${netTotal > 0 ? "var(--red)" : "var(--green)"};">${tl(netTotal)}</b></div>
+    ${totalCredit > 0 ? `<div class="small" style="margin-top:8px;color:var(--green);">Toplam alacaklı bakiye: ${tl(totalCredit)}</div>` : ""}
+    <div class="small muted" style="margin-top:8px;">Toplam net bakiye: <b style="color:${netTotal > 0 ? "var(--red)" : "var(--green)"};">${tl(netTotal)}</b> · Seçilenlerin toplamı: <b id="bdSelectedTotal">${tl(totalOpen)}</b></div>
     <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
-      ${netTotal > 0 ? `<button class="btn btn-primary btn-sm" id="bdCollectBtn">Tahsil Et</button>` : ""}
+      <button class="btn btn-primary btn-sm" id="bdCollectBtn" ${totalOpen <= 0 ? "disabled" : ""}>Seçilenleri Tahsil Et</button>
       <button class="btn btn-ghost btn-sm" id="bdSmsBtn">Sms Gönder</button>
       <button class="btn btn-ghost btn-sm" id="bdPrintBtn">Yazdır (PDF)</button>
     </div>
     <div id="bdCollectForm"></div>
   `;
+  // Checkbox'lar hepsi varsayilan "checked" ile geldigi icin ilk deger yukarida
+  // totalOpen'dan yazildi (selectedTotal() render aninda DOM'da henuz olusmamis
+  // checkbox'lari sorgulardi, hep 0 donerdi) - simdi DOM olustu, dogrulama icin senkronize et.
+  updateSelectedTotalUI();
 
-  if (netTotal > 0) {
-    body.querySelector("#bdCollectBtn").addEventListener("click", () => {
-      const box = body.querySelector("#bdCollectForm");
-      box.innerHTML = `
-        <form class="form-row" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
-          <div class="field"><label>Tutar (₺)</label><input name="amount" type="number" value="${netTotal}" min="0.01" step="0.01" required /></div>
-          <div class="field"><label>Hesap</label><select name="accountId">${accounts.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></div>
-          <button class="btn btn-primary btn-sm" type="submit">Kaydet</button>
-        </form>`;
-      box.querySelector("form").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const f = Object.fromEntries(new FormData(e.target));
-        try {
-          await api("/payments/pay", { method: "POST", body: { unitId: unit.id, method: "Elden", requestId: crypto.randomUUID(), ...f } });
-          toast("Tahsilat kaydedildi.");
-          overlay.remove();
-          renderTab(state.tab);
-        } catch (err) { toast(err.message); }
+  body.querySelectorAll("[data-charge-check]").forEach((cb) => cb.addEventListener("change", updateSelectedTotalUI));
+
+  body.querySelector("#bdCollectBtn").addEventListener("click", () => {
+    const box = body.querySelector("#bdCollectForm");
+    box.innerHTML = `
+      <form class="form-row" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
+        <div class="field"><label>Ödenecek Toplam (₺)</label><input value="${selectedTotal()}" disabled /></div>
+        <div class="field"><label>Hesap</label><select name="accountId">${accounts.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></div>
+        <button class="btn btn-primary btn-sm" type="submit">Kaydet</button>
+        ${isMultiProperty ? '<span class="small muted">Birden fazla daireden seçim yaptıysanız, her daire için ayrı bir tahsilat kaydı (ayrı makbuz) oluşturulur.</span>' : ""}
+      </form>`;
+    box.querySelector("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const accountId = new FormData(e.target).get("accountId");
+      const checked = [...overlay.querySelectorAll('[data-charge-check]:checked')].map((cb) => cb.dataset.chargeCheck);
+      const selectedRows = rows.filter((c) => checked.includes(c.id));
+      const byUnit = new Map();
+      selectedRows.forEach((c) => {
+        if (!byUnit.has(c.unitId)) byUnit.set(c.unitId, []);
+        byUnit.get(c.unitId).push(c);
       });
+      try {
+        for (const [uId, list] of byUnit) {
+          const amount = list.reduce((s, c) => s + (Number(c.amount) - Number(c.paidAmount)), 0);
+          if (amount <= 0) continue;
+          await api("/payments/pay", { method: "POST", body: { unitId: uId, amount, method: "Elden", accountId, requestId: crypto.randomUUID(), chargeIds: list.map((c) => c.id) } });
+        }
+        toast("Tahsilat kaydedildi.");
+        overlay.remove();
+        renderTab(state.tab);
+      } catch (err) { toast(err.message); }
     });
-  }
+  });
   body.querySelector("#bdSmsBtn").addEventListener("click", async () => {
     try { const r = await api(`/units/${unit.id}/borc-sms`, { method: "POST" }); toast(r.message); }
     catch (err) { toast(err.message); }

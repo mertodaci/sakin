@@ -455,37 +455,53 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   PDF indirme kısmı bu adıma dahil edilmedi, küçük bir sonraki adım
   olarak kalabilir.)
 
+- ✅ **Tahsilat Ekranı zenginleştirme** — aynı kişi (isim/telefon
+  eşleşmesiyle — ayrı bir Malik tablosu olmadığı için Unit.ownerName/
+  ownerPhone üzerinden, `GET /units/:id/related`) birden fazla
+  taşınmaza sahipse Borç Dökümü modalinde hepsinin açık borçları TEK
+  ekranda, satır bazlı checkbox'larla listeleniyor; "Seçilenleri Tahsil
+  Et" seçili kalemleri (birden fazla daireye yayılsa bile, her daire
+  için ayrı bir Payment/makbuz oluşturularak) kapatıyor.
+  `POST /payments/pay` artık opsiyonel `chargeIds` kabul ediyor — FIFO
+  yerine SADECE belirtilen kayıtlara uygulanıyor (`PartyCharge`'daki
+  `chargeId` tekil-hedef tasarımının genellenmiş hali).
+  **Yol boyunca bulunup düzeltilen 2 gerçek hata**: (1) `POST /units`
+  `floor` alanı verilmediğinde `null` gönderiyordu ama şemada zorunlu
+  (`Int`) — 500 hatası veriyordu, artık 0 varsayılıyor. (2) Borç
+  Dökümü modalinde "Seçilenlerin toplamı" her zaman ₺0 gösteriyordu
+  çünkü `selectedTotal()` DOM'a henüz eklenmemiş checkbox'ları
+  sorguluyordu (template string DOM'a yazılmadan önce hesaplanıyordu)
+  — artık ilk değer doğrudan hesaplanan `totalOpen`'dan geliyor.
+  `test-multiunit.js` ile regresyon testleri (malik eşleştirme,
+  izole çoklu-daire ödemesi, yanlış-pozitif eşleşme olmaması dahil)
+  geçiyor.
+
 **Sırada (henüz yapılmadı, bu sırayla ilerlenecek — menü denetiminden çıkan liste):**
-1. ⏳ **Tahsilat Ekranı zenginleştirme** — aynı kişi birden fazla
-   taşınmaza sahipse TÜM taşınmazlarındaki borçları tek ekranda
-   gösterip seçili borçları (checkbox ile, salt FIFO değil) tahsil
-   edebilme. Bizde tahsilat her zaman tek daire + saf FIFO. **Buradan
-   devam et.**
-2. ⏳ **Boş taşınmaz (vacant unit) durumu** — `Occupancy` enum'unda
+1. ⏳ **Boş taşınmaz (vacant unit) durumu** — `Occupancy` enum'unda
    sadece `owner`/`tenant` var, "boş/kimse oturmuyor" durumu yok.
    Yönetimcell'in "Boş/Dolu Taşınmaz Listesi" raporu bunu ayrı bir
-   durum olarak takip ediyor.
-3. ⏳ **Unit.squareMeters (m²) alanı** — "Detaylı Üye Listesi" rapor
+   durum olarak takip ediyor. **Buradan devam et.**
+2. ⏳ **Unit.squareMeters (m²) alanı** — "Detaylı Üye Listesi" rapor
    oluşturucusunda görüldü, arsa payının yanında dairenin metrekaresi
    de ayrı bir alan; bizde yok.
-4. ⏳ **Kullanıcıda ikinci telefon/e-posta** — rapor oluşturucuda
+3. ⏳ **Kullanıcıda ikinci telefon/e-posta** — rapor oluşturucuda
    "Cep Telefonu 1/2", "Eposta Adresi 1/2" ayrı alanlar; bizde
    kullanıcı başına tek telefon/tek e-posta var.
-5. ⏳ **Genel Kasa Durumu'na "Borçlar Toplamı" eklenmesi** — Yönetimcell'in
+4. ⏳ **Genel Kasa Durumu'na "Borçlar Toplamı" eklenmesi** — Yönetimcell'in
    genel kasa özetinde Alacaklar (üye borçları) ile yan yana bir de
    toplam "Borçlar" (firma/personel/genel gidere olan borç) kartı var,
    Ana Para/Gecikme kırılımıyla. Bizde dashboard/Kasalar'da sadece
    tahsilat tarafı (totalDebt/totalCredit) var, ödenecek (payables)
    toplamı hiç gösterilmiyor — artık Borç Listesi ile veri hazır, sadece
    toplam bir kart eklemek yeterli.
-6. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
+5. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
    Kebir Defteri, banka entegrasyonu — sadece iskelet/arayüz düzeyinde
    (gerçek banka API'si/mali müşavir entegrasyonu üçüncü taraf
    sözleşmesi gerektirir, Mert'in kararı). Menü denetiminde
    "Muhasebe Raporları" alt menüsü (Tahakkuk Fişleri/Özet Mizan/
    Yevmiye ve Kebir Defteri/Muhasebe Kodları/Firma Mutabakat Mektubu)
    bu maddenin kapsamını doğruladı.
-7. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
+6. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
    sayfasıydı, en düşük öncelik, atlanabilir).
 
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
