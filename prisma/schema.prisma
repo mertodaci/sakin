@@ -81,6 +81,9 @@ model Unit {
   tenantPhone String
   occupancy   Occupancy
   landShare   Decimal? @db.Decimal(7, 4)
+  // "Detayli Uye Listesi" rapor olusturucusunda arsa payinin yaninda ayri
+  // bir alan olarak goruldu (Yonetimcell karsilastirmasi).
+  squareMeters Decimal? @db.Decimal(8, 2)
   feeGroup    String?
   // Acik borclarin tamaminin odenmesinden sonra artan tutar buraya birikir
   // (alacakli bakiye). Otomatik hicbir borca uygulanmaz - yonetici "Krediyi
@@ -149,6 +152,11 @@ model User {
   name                String
   email               String    @unique
   phone               String
+  // Rapor olusturucuda "Cep Telefonu 1/2", "Eposta Adresi 1/2" olarak
+  // gorulen ikincil iletisim alanlari (Yonetimcell karsilastirmasi) -
+  // sadece bilgi amacli, email (giris icin kullanilan) gibi unique degil.
+  phone2              String?
+  email2              String?
   passwordHash        String
   role                Role
   unitId              String?

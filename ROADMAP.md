@@ -485,28 +485,32 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   Oturuyor/Boş) eklendi, Daireler listesinde boş dairelere "Boş"
   rozeti gösteriliyor. `test-vacant.js` ile regresyon testi geçiyor.
 
+- ✅ **Unit.squareMeters (m²) + kullanıcıda ikinci telefon/e-posta** —
+  "Detaylı Üye Listesi" rapor oluşturucusunda görülen alanlar:
+  `Unit.squareMeters` (arsa payının yanında ayrı bir metrekare alanı,
+  "Yeni Daire Ekle"/"Daire Düzenle" formlarına ve Daireler listesine
+  eklendi) + `User.phone2`/`email2` (Kullanıcı Düzenle modaline
+  "İkinci Telefon"/"İkinci E-posta" eklendi — `email2` login için
+  kullanılan `email` gibi unique değil, sadece bilgi amaçlı ikincil
+  iletişim alanı). `test-sqm-contact.js` ile regresyon testleri
+  (oluşturma, güncelleme, temizleme) geçiyor.
+
 **Sırada (henüz yapılmadı, bu sırayla ilerlenecek — menü denetiminden çıkan liste):**
-1. ⏳ **Unit.squareMeters (m²) alanı** — "Detaylı Üye Listesi" rapor
-   oluşturucusunda görüldü, arsa payının yanında dairenin metrekaresi
-   de ayrı bir alan; bizde yok. **Buradan devam et.**
-2. ⏳ **Kullanıcıda ikinci telefon/e-posta** — rapor oluşturucuda
-   "Cep Telefonu 1/2", "Eposta Adresi 1/2" ayrı alanlar; bizde
-   kullanıcı başına tek telefon/tek e-posta var.
-3. ⏳ **Genel Kasa Durumu'na "Borçlar Toplamı" eklenmesi** — Yönetimcell'in
+1. ⏳ **Genel Kasa Durumu'na "Borçlar Toplamı" eklenmesi** — Yönetimcell'in
    genel kasa özetinde Alacaklar (üye borçları) ile yan yana bir de
    toplam "Borçlar" (firma/personel/genel gidere olan borç) kartı var,
    Ana Para/Gecikme kırılımıyla. Bizde dashboard/Kasalar'da sadece
    tahsilat tarafı (totalDebt/totalCredit) var, ödenecek (payables)
    toplamı hiç gösterilmiyor — artık Borç Listesi ile veri hazır, sadece
-   toplam bir kart eklemek yeterli.
-4. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
+   toplam bir kart eklemek yeterli. **Buradan devam et.**
+2. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
    Kebir Defteri, banka entegrasyonu — sadece iskelet/arayüz düzeyinde
    (gerçek banka API'si/mali müşavir entegrasyonu üçüncü taraf
    sözleşmesi gerektirir, Mert'in kararı). Menü denetiminde
    "Muhasebe Raporları" alt menüsü (Tahakkuk Fişleri/Özet Mizan/
    Yevmiye ve Kebir Defteri/Muhasebe Kodları/Firma Mutabakat Mektubu)
    bu maddenin kapsamını doğruladı.
-5. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
+3. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
    sayfasıydı, en düşük öncelik, atlanabilir).
 
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama

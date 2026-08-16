@@ -39,10 +39,10 @@ router.get("/units/:id/related", requireAuth, requireRole("yonetici"), async (re
 
 router.post("/units", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();
-  const { block, no, floor, ownerName, ownerPhone, tenantName, tenantPhone, occupancy, landShare, feeGroup } = req.body || {};
+  const { block, no, floor, ownerName, ownerPhone, tenantName, tenantPhone, occupancy, landShare, squareMeters, feeGroup } = req.body || {};
   if (!block || !no) return res.status(400).json({ error: "Blok ve daire no zorunludur." });
   // floor semada zorunlu (Int, nullable degil) - deger verilmezse 0 varsayilir.
-  const unit = { id: db.uid(), block, no, floor: floor ? Number(floor) : 0, ownerName: ownerName || "", ownerPhone: ownerPhone || "", tenantName: tenantName || "", tenantPhone: tenantPhone || "", occupancy: occupancy || "owner", landShare: landShare || null, feeGroup: feeGroup || null };
+  const unit = { id: db.uid(), block, no, floor: floor ? Number(floor) : 0, ownerName: ownerName || "", ownerPhone: ownerPhone || "", tenantName: tenantName || "", tenantPhone: tenantPhone || "", occupancy: occupancy || "owner", landShare: landShare || null, squareMeters: squareMeters || null, feeGroup: feeGroup || null };
   data.units.push(unit);
   db.logActivity(data, req.user, "unit.create", `${block} - Daire ${no} eklendi.`, unit.id);
   await db.save(data);
@@ -104,24 +104,25 @@ router.get("/users", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();
   const list = data.users.map((u) => {
     const unit = u.unitId ? data.units.find((x) => x.id === u.unitId) : null;
-    return { id: u.id, name: u.name, email: u.email, phone: u.phone, role: u.role, unitId: u.unitId, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, department: u.department || null, nationalId: u.nationalId || null, isApproved: u.isApproved, isActive: u.isActive !== false, createdAt: u.createdAt, resetRequestedAt: u.resetRequestedAt || null };
+    return { id: u.id, name: u.name, email: u.email, email2: u.email2 || null, phone: u.phone, phone2: u.phone2 || null, role: u.role, unitId: u.unitId, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, department: u.department || null, nationalId: u.nationalId || null, isApproved: u.isApproved, isActive: u.isActive !== false, createdAt: u.createdAt, resetRequestedAt: u.resetRequestedAt || null };
   });
   res.json(list);
 });
 
 // Ad/telefon/TC kimlik no gibi temel profil alanlarini duzenler (Yonetimcell
-// karsilastirmasindan: "Detayli Uye Listesi" alan seti - bu oturumda sadece
-// TC kimlik no eklendi, digerleri sonraki bir oturuma birakildi).
+// karsilastirmasindan: "Detayli Uye Listesi" alan seti).
 router.patch("/users/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
-  const { name, phone, nationalId } = req.body || {};
+  const { name, phone, phone2, email2, nationalId } = req.body || {};
   const data = {};
   if (name !== undefined) data.name = name;
   if (phone !== undefined) data.phone = phone;
+  if (phone2 !== undefined) data.phone2 = phone2 || null;
+  if (email2 !== undefined) data.email2 = email2 || null;
   if (nationalId !== undefined) data.nationalId = nationalId || null;
   const updated = await prisma.user.update({ where: { id: user.id }, data });
-  res.json({ id: updated.id, name: updated.name, phone: updated.phone, nationalId: updated.nationalId });
+  res.json({ id: updated.id, name: updated.name, phone: updated.phone, phone2: updated.phone2, email2: updated.email2, nationalId: updated.nationalId });
 });
 
 /* ---------------- ARAÇ PLAKALARI ---------------- */
