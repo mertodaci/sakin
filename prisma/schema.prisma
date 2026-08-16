@@ -75,7 +75,7 @@ model Settings {
 // ---------------- Daire / Kullanici ----------------
 
 model Unit {
-  id          String @id @default(uuid())
+  id          String   @id @default(uuid())
   block       String
   no          String
   floor       Int
@@ -84,16 +84,46 @@ model Unit {
   tenantName  String
   tenantPhone String
   occupancy   Occupancy
+  landShare   Decimal? @db.Decimal(7, 4)
+  feeGroup    String?
 
-  users         User[]
-  charges       Charge[]
-  payments      Payment[]
-  reservations  Reservation[]
-  tickets       Ticket[]
-  meters        Meter[]
-  packages      Package[]
-  activityLogs  ActivityLog[]
-  internalTasks InternalTask[]
+  users            User[]
+  charges          Charge[]
+  payments         Payment[]
+  reservations     Reservation[]
+  tickets          Ticket[]
+  meters           Meter[]
+  packages         Package[]
+  activityLogs     ActivityLog[]
+  internalTasks    InternalTask[]
+  householdMembers HouseholdMember[]
+}
+
+// Yonetimcell karsilastirmasindan: "Ikamet Edenler Listesi" - o dairede
+// fiilen kim yasiyor sorusunu yakinlik derecesiyle cevaplar (malik disinda
+// es/cocuk/kiracidan misafire kadar). isCurrent=false olanlar "eski sakin"
+// gecmisini tutar, silinmez.
+model HouseholdMember {
+  id           String    @id @default(uuid())
+  unitId       String
+  unit         Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  name         String
+  relationship String
+  phone        String
+  isCurrent    Boolean   @default(true)
+  movedInAt    DateTime  @default(now())
+  movedOutAt   DateTime?
+}
+
+// Uye bazli serbest not - CRM tarzi, islem kaydi degil (orn. "asansor
+// anahtarini komsuya birakti" gibi yoneticinin hatirlamak istedigi bir sey).
+model UserNote {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  authorId  String
+  text      String
+  createdAt DateTime @default(now())
 }
 
 model User {
@@ -128,6 +158,7 @@ model User {
   agendaItems      AgendaItem[]
   sentMessages     Message[]       @relation("MessageSender")
   receivedMessages Message[]       @relation("MessageRecipient")
+  notes            UserNote[]
 }
 
 // Yonetimcell karsilastirmasindan: guvenlik/kapi gorevlisinin gozle

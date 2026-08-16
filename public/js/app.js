@@ -371,6 +371,12 @@ async function renderUserEditModal(u) {
         <div class="field" style="flex:1 1 100px;"><label>Renk</label><input name="color" /></div>
         <button class="btn btn-ghost btn-sm" type="submit">Ekle</button>
       </form>
+      <div class="ledger-title" style="padding-top:18px;">Notlar</div>
+      <div id="noteList" class="small muted">Yükleniyor…</div>
+      <form id="noteForm" class="form-row" style="margin-top:10px;">
+        <div class="field" style="flex:1 1 220px;"><label>Yeni Not</label><input name="text" required placeholder="Örn. anahtarı komşuya bıraktı" /></div>
+        <button class="btn btn-ghost btn-sm" type="submit">Ekle</button>
+      </form>
     </div>`;
   document.body.appendChild(overlay);
   overlay.querySelector("#userEditCancel").addEventListener("click", () => overlay.remove());
@@ -404,6 +410,28 @@ async function renderUserEditModal(u) {
       await api("/users/" + u.id + "/vehicles", { method: "POST", body: Object.fromEntries(f) });
       e.target.reset();
       loadVehicles();
+    } catch (err) { toast(err.message); }
+  });
+
+  async function loadNotes() {
+    const notes = await api("/users/" + u.id + "/notes");
+    const box = overlay.querySelector("#noteList");
+    box.innerHTML = notes.length
+      ? notes.map((n) => `<div class="ledger-row" style="padding:6px 0;flex-wrap:wrap;"><div><div style="font-size:13px;">${esc(n.text)}</div><div class="small muted">${dt(n.createdAt)}</div></div><button class="btn-danger" data-delnote="${n.id}">Sil</button></div>`).join("")
+      : '<div class="empty-row" style="padding:4px 0;">Kayıtlı not yok.</div>';
+    box.querySelectorAll("[data-delnote]").forEach((b) => b.addEventListener("click", async () => {
+      try { await api("/notes/" + b.dataset.delnote, { method: "DELETE" }); loadNotes(); } catch (err) { toast(err.message); }
+    }));
+  }
+  loadNotes();
+
+  overlay.querySelector("#noteForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    try {
+      await api("/users/" + u.id + "/notes", { method: "POST", body: Object.fromEntries(f) });
+      e.target.reset();
+      loadNotes();
     } catch (err) { toast(err.message); }
   });
 }
@@ -991,13 +1019,15 @@ async function renderDaireler(c) {
         <div class="field"><label>Kat</label><input name="floor" type="number" /></div>
         <div class="field"><label>Malik Adı</label><input name="ownerName" /></div>
         <div class="field"><label>Malik Telefon</label><input name="ownerPhone" /></div>
+        <div class="field"><label>Arsa Payı</label><input name="landShare" type="number" step="0.0001" placeholder="Örn. 0.0125" /></div>
+        <div class="field"><label>Aidat Grubu</label><input name="feeGroup" placeholder="Örn. 2+1, Villa…" /></div>
         <button class="btn btn-primary" type="submit">Ekle</button>
       </form>
     </div>
     <div class="card tight">
       ${list.map((u) => `
-        <div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}${u.tenantName ? " (Kiracı: " + esc(u.tenantName) + ")" : ""}</div></div>
-        <div style="display:flex;align-items:center;gap:10px;"><div class="f-num" style="color:${u.debt > 0 ? "var(--red)" : "var(--green)"};font-weight:600;">${tl(u.debt)}</div><button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button></div></div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+        <div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}${u.tenantName ? " (Kiracı: " + esc(u.tenantName) + ")" : ""}${u.feeGroup ? " · " + esc(u.feeGroup) : ""}${u.landShare ? " · Arsa Payı: " + esc(String(u.landShare)) : ""}</div></div>
+        <div style="display:flex;align-items:center;gap:10px;"><div class="f-num" style="color:${u.debt > 0 ? "var(--red)" : "var(--green)"};font-weight:600;">${tl(u.debt)}</div><button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button><button class="btn btn-ghost btn-sm" data-editunit="${u.id}">Düzenle</button></div></div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
   `;
   document.getElementById("unitForm").addEventListener("submit", async (e) => {
@@ -1010,6 +1040,78 @@ async function renderDaireler(c) {
     const u = list.find((x) => x.id === b.dataset.ozet);
     if (u) renderHesapOzetiModal(u);
   }));
+  c.querySelectorAll("[data-editunit]").forEach((b) => b.addEventListener("click", () => {
+    const u = list.find((x) => x.id === b.dataset.editunit);
+    if (u) renderUnitEditModal(u);
+  }));
+}
+
+const HOUSEHOLD_RELATIONSHIPS = ["Kendisi", "Eş", "Çocuk", "Anne", "Baba", "Kardeş", "Kiracı", "Ev Arkadaşı", "Misafir", "Diğer"];
+
+async function renderUnitEditModal(u) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(12,32,50,.35);z-index:70;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;";
+  overlay.innerHTML = `
+    <div class="card pad" style="max-width:460px;width:100%;">
+      <h3 class="f-display" style="margin:0 0 12px;">${esc(u.block)} - Daire ${esc(u.no)}</h3>
+      <form id="unitEditForm" class="form-row">
+        <div class="field" style="flex:1 1 140px;"><label>Malik Adı</label><input name="ownerName" value="${esc(u.ownerName || "")}" /></div>
+        <div class="field" style="flex:1 1 140px;"><label>Malik Telefon</label><input name="ownerPhone" value="${esc(u.ownerPhone || "")}" /></div>
+        <div class="field" style="flex:1 1 140px;"><label>Kiracı Adı</label><input name="tenantName" value="${esc(u.tenantName || "")}" /></div>
+        <div class="field" style="flex:1 1 140px;"><label>Kiracı Telefon</label><input name="tenantPhone" value="${esc(u.tenantPhone || "")}" /></div>
+        <div class="field" style="flex:1 1 140px;"><label>Arsa Payı</label><input name="landShare" type="number" step="0.0001" value="${u.landShare != null ? esc(String(u.landShare)) : ""}" /></div>
+        <div class="field" style="flex:1 1 140px;"><label>Aidat Grubu</label><input name="feeGroup" value="${esc(u.feeGroup || "")}" /></div>
+        <div style="display:flex;gap:8px;margin-top:4px;width:100%;">
+          <button type="button" class="btn btn-ghost" id="unitEditCancel" style="flex:1;">Kapat</button>
+          <button type="submit" class="btn btn-primary" style="flex:1;">Kaydet</button>
+        </div>
+      </form>
+      <div class="ledger-title" style="padding-top:18px;">İkamet Edenler</div>
+      <div id="householdList" class="small muted">Yükleniyor…</div>
+      <form id="householdForm" class="form-row" style="margin-top:10px;">
+        <div class="field" style="flex:1 1 120px;"><label>Ad Soyad</label><input name="name" required /></div>
+        <div class="field" style="flex:1 1 100px;"><label>Yakınlık</label><select name="relationship">${HOUSEHOLD_RELATIONSHIPS.map((r) => `<option value="${r}">${r}</option>`).join("")}</select></div>
+        <div class="field" style="flex:1 1 100px;"><label>Telefon</label><input name="phone" /></div>
+        <button class="btn btn-ghost btn-sm" type="submit">Ekle</button>
+      </form>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#unitEditCancel").addEventListener("click", () => overlay.remove());
+  overlay.querySelector("#unitEditForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    try {
+      await api("/units/" + u.id, { method: "PATCH", body: Object.fromEntries(f) });
+      toast("Daire bilgileri güncellendi.");
+      overlay.remove();
+      renderTab("daireler");
+    } catch (err) { toast(err.message); }
+  });
+
+  async function loadHousehold() {
+    const members = await api("/units/" + u.id + "/household");
+    const box = overlay.querySelector("#householdList");
+    box.innerHTML = members.length
+      ? members.map((m) => `<div class="ledger-row" style="padding:6px 0;${m.isCurrent ? "" : "opacity:.5;"}"><div><div style="font-size:13px;font-weight:600;">${esc(m.name)} ${m.isCurrent ? "" : "(Eski Sakin)"}</div><div class="small muted">${esc(m.relationship)}${m.phone ? " · " + esc(m.phone) : ""}</div></div><div style="display:flex;gap:6px;">${m.isCurrent ? `<button class="btn btn-ghost btn-sm" data-moveout="${m.id}">Taşındı</button>` : ""}<button class="btn-danger" data-delhousehold="${m.id}">Sil</button></div></div>`).join("")
+      : '<div class="empty-row" style="padding:4px 0;">Kayıtlı ikamet eden yok.</div>';
+    box.querySelectorAll("[data-moveout]").forEach((b) => b.addEventListener("click", async () => {
+      try { await api("/household/" + b.dataset.moveout + "/move-out", { method: "PATCH" }); loadHousehold(); } catch (err) { toast(err.message); }
+    }));
+    box.querySelectorAll("[data-delhousehold]").forEach((b) => b.addEventListener("click", async () => {
+      try { await api("/household/" + b.dataset.delhousehold, { method: "DELETE" }); loadHousehold(); } catch (err) { toast(err.message); }
+    }));
+  }
+  loadHousehold();
+
+  overlay.querySelector("#householdForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    try {
+      await api("/units/" + u.id + "/household", { method: "POST", body: Object.fromEntries(f) });
+      e.target.reset();
+      loadHousehold();
+    } catch (err) { toast(err.message); }
+  });
 }
 
 async function renderTahsilat(c) {

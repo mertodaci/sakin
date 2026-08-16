@@ -22,9 +22,9 @@ router.get("/units", requireAuth, async (req, res) => {
 
 router.post("/units", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();
-  const { block, no, floor, ownerName, ownerPhone, tenantName, tenantPhone, occupancy } = req.body || {};
+  const { block, no, floor, ownerName, ownerPhone, tenantName, tenantPhone, occupancy, landShare, feeGroup } = req.body || {};
   if (!block || !no) return res.status(400).json({ error: "Blok ve daire no zorunludur." });
-  const unit = { id: db.uid(), block, no, floor: floor || null, ownerName: ownerName || "", ownerPhone: ownerPhone || "", tenantName: tenantName || "", tenantPhone: tenantPhone || "", occupancy: occupancy || "owner" };
+  const unit = { id: db.uid(), block, no, floor: floor || null, ownerName: ownerName || "", ownerPhone: ownerPhone || "", tenantName: tenantName || "", tenantPhone: tenantPhone || "", occupancy: occupancy || "owner", landShare: landShare || null, feeGroup: feeGroup || null };
   data.units.push(unit);
   db.logActivity(data, req.user, "unit.create", `${block} - Daire ${no} eklendi.`, unit.id);
   await db.save(data);
@@ -47,6 +47,37 @@ router.delete("/units/:id", requireAuth, requireRole("yonetici"), async (req, re
   data.units = data.units.filter((u) => u.id !== req.params.id);
   await db.save(data);
   res.json({ message: "Daire silindi." });
+});
+
+/* ---------------- İKAMET EDENLER (Yakınlık Derecesiyle) ---------------- */
+// Yonetimcell karsilastirmasindan: bir dairede malik disinda fiilen kim
+// yasiyor sorusunu yakinlik derecesiyle cevaplar. isCurrent=false olanlar
+// "eski sakin" gecmisi olarak korunur, silinmez.
+
+router.get("/units/:id/household", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const members = await prisma.householdMember.findMany({ where: { unitId: req.params.id }, orderBy: { movedInAt: "desc" } });
+  res.json(members);
+});
+
+router.post("/units/:id/household", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const unit = await prisma.unit.findUnique({ where: { id: req.params.id } });
+  if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
+  const { name, relationship, phone } = req.body || {};
+  if (!name || !relationship) return res.status(400).json({ error: "Ad ve yakınlık derecesi zorunludur." });
+  const member = await prisma.householdMember.create({ data: { unitId: unit.id, name, relationship, phone: phone || "" } });
+  res.status(201).json(member);
+});
+
+// "Tasindi" isaretler - kaydi silmez, isCurrent=false + movedOutAt ile gecmise tasir.
+router.patch("/household/:id/move-out", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const updated = await prisma.householdMember.updateMany({ where: { id: req.params.id }, data: { isCurrent: false, movedOutAt: new Date() } });
+  if (!updated.count) return res.status(404).json({ error: "Kayıt bulunamadı." });
+  res.json({ message: "Sakin geçmişe taşındı." });
+});
+
+router.delete("/household/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  await prisma.householdMember.deleteMany({ where: { id: req.params.id } });
+  res.json({ message: "Kayıt silindi." });
 });
 
 /* ---------------- USERS (Sakinler / Onay / Personel) ---------------- */
@@ -94,6 +125,27 @@ router.post("/users/:id/vehicles", requireAuth, requireRole("yonetici"), async (
 router.delete("/vehicles/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
   await prisma.vehicle.deleteMany({ where: { id: req.params.id } });
   res.json({ message: "Plaka kaydı silindi." });
+});
+
+/* ---------------- ÜYE NOTLARI (CRM Tarzı Serbest Not) ---------------- */
+
+router.get("/users/:id/notes", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const notes = await prisma.userNote.findMany({ where: { userId: req.params.id }, orderBy: { createdAt: "desc" } });
+  res.json(notes);
+});
+
+router.post("/users/:id/notes", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
+  const { text } = req.body || {};
+  if (!text) return res.status(400).json({ error: "Not metni zorunludur." });
+  const note = await prisma.userNote.create({ data: { userId: user.id, authorId: req.user.id, text } });
+  res.status(201).json(note);
+});
+
+router.delete("/notes/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  await prisma.userNote.deleteMany({ where: { id: req.params.id } });
+  res.json({ message: "Not silindi." });
 });
 
 router.patch("/users/:id/approve", requireAuth, requireRole("yonetici"), async (req, res) => {
