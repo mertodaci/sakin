@@ -302,6 +302,27 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   parametresi; gerçek sağlayıcı olmadığı için sadece önizler ve
   konsola loglar, README'nin "demo" desenine uygun) + **Toplu Hesap
   Özeti Dökümü** (tüm dairelerin ekstresi tek PDF'te).
+- ✅ **Sidebar/menü görsel yeniden tasarımı** (Mert'in "arayüz amatör,
+  yeni nesil albenisi yok" geri bildirimine karşılık) — sidebar artık
+  düz lacivert degrade yerine koyu "slate" zemin + indigo/mor vurgu
+  rengiyle (`--accent`/`--accent-2`, `#6366F1`→`#8B5CF6`) çağdaş bir
+  SaaS ürün kimliğinde; markanın yanına gradyanlı monogram
+  (`brand-mark`) eklendi. Her nav öğesine, role göre 6-28 arası,
+  elle çizilmiş satır-ikon (inline SVG, `NAV_ICON` haritası, dış
+  bağımlılık yok) eklendi — önceden sadece düz metin listesiydi.
+  Kullanıcı adı/çıkış artık üstte metin buton değil, sidebar altında
+  baş harfli avatarlı bir "kullanıcı kartı" (Yönetimcell ve benzeri
+  modern panellerdeki yerleşime daha yakın); açılır menüsü (şifre
+  değiştir/tüm oturumları kapat/çıkış) kartın üstünde beliriyor.
+  Topbar sadeleşti: sağda sadece bildirim zili, solda o an açık
+  sekmenin başlığı (`tabLabel()`). Genel kart/istatistik kutucuklarına
+  hafif radial-glow + büyütülmüş köşe yarıçapı (14px→16px) eklendi.
+  Üç rolde de (sakin/yönetici/personel) tüm nav öğelerinin ikonu
+  eksiksiz render ediliyor, tarayıcıda DOM/console üzerinden
+  doğrulandı (ekran görüntüsü bu oturumda mevcut değildi - headless
+  önizleme). **Bu, "amatör görünüm" şikayetine ilk ciddi yanıt; genel
+  içerik alanı (formlar/tablolar) hâlâ önceki tasarımda - istenirse
+  bir sonraki adım olarak ele alınabilir.**
 - ✅ **Alacaklı bakiye + serbest kategori modeli** — `Charge.type` artık
   serbest metin (eski `ChargeType` enum'u kaldırıldı, veri kaybı
   olmadan `ALTER COLUMN ... USING` ile migrate edildi); Tahsilat
