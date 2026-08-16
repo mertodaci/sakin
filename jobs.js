@@ -18,7 +18,18 @@ async function applyLateFees(settings) {
   const period = currentPeriod();
   let applied = 0;
 
-  const charges = await prisma.charge.findMany({ where: { type: "aidat", status: { not: "paid" } } });
+  const charges = await prisma.charge.findMany({ where: { type: "aidat", status: { not: "paid" } }, orderBy: { dueDate: "asc" } });
+
+  // Dairenin uygulanmamis alacak bakiyesi bir borcu karsiliyorsa gecikme faizi
+  // uygulanmaz (yonetici henuz "krediyi borca uygula" dememis olsa da, para
+  // zaten sitede duruyor). Butun daireleri tek seferde onceden cekip, bu
+  // calisma icinde "hala iddia edilebilir" kredi miktarini burada azaltarak
+  // takip ediyoruz - aksi halde ayni kredi, o dairenin birden fazla acik
+  // borcunu ayni anda "karsiliyor" sanilip hepsinde faiz atlanabilirdi.
+  const unitIds = [...new Set(charges.map((c) => c.unitId))];
+  const units = await prisma.unit.findMany({ where: { id: { in: unitIds } } });
+  const remainingCreditByUnit = new Map(units.map((u) => [u.id, u.creditBalance]));
+
   for (const c of charges) {
     if ((c.lateFeeAppliedPeriods || []).includes(period)) continue;
     const dueTime = new Date(c.dueDate).getTime() + lateFeeGraceDays * 86400000;
@@ -26,6 +37,13 @@ async function applyLateFees(settings) {
 
     const remaining = c.amount.minus(c.paidAmount);
     if (remaining.lte(0)) continue;
+
+    const availableCredit = remainingCreditByUnit.get(c.unitId) || new Prisma.Decimal(0);
+    if (availableCredit.gte(remaining)) {
+      remainingCreditByUnit.set(c.unitId, availableCredit.minus(remaining));
+      continue;
+    }
+
     const feeAmount = remaining.times(lateFeeRate).dividedBy(100).toDecimalPlaces(2);
     if (feeAmount.lte(0)) continue;
 

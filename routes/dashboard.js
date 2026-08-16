@@ -10,7 +10,7 @@ router.get("/dashboard", requireAuth, async (req, res) => {
 
   if (req.user.role === "sakin") {
     const unitId = req.user.unitId;
-    const debt = data.charges.filter((c) => c.unitId === unitId && c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0);
+    const debt = db.netDebt(data, unitId);
     const myTickets = data.tickets.filter((t) => t.userId === req.user.id);
     const myReservations = data.reservations.filter((r) => r.userId === req.user.id && new Date(r.date) >= new Date());
     const unread = data.notifications.filter((n) => n.userId === req.user.id && !n.read).length;
@@ -24,7 +24,19 @@ router.get("/dashboard", requireAuth, async (req, res) => {
   }
 
   // yonetici / personel
-  const totalDebt = data.charges.filter((c) => c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0);
+  // Alacak toplami: her dairenin net bakiyesi (acik borc - alacakli bakiye)
+  // ayri hesaplanip sadece pozitif (gercekten borclu) olanlar toplanir - bir
+  // dairenin alacakli bakiyesi baska bir dairenin borcunu "kapatmaz". Tek
+  // gecisli (O(units+charges)) hesaplaniyor - her daire icin ayri ayri tum
+  // charges dizisini taramak yerine.
+  const openSumByUnit = new Map();
+  data.charges.forEach((c) => {
+    if (c.status === "paid") return;
+    openSumByUnit.set(c.unitId, (openSumByUnit.get(c.unitId) || 0) + (c.amount - c.paidAmount));
+  });
+  const unitNetDebts = data.units.map((u) => (openSumByUnit.get(u.id) || 0) - (u.creditBalance || 0));
+  const totalDebt = unitNetDebts.reduce((s, d) => s + Math.max(0, d), 0);
+  const totalCredit = unitNetDebts.reduce((s, d) => s + Math.max(0, -d), 0);
   const income = data.transactions.filter((t) => t.type === "gelir").reduce((s, t) => s + t.amount, 0);
   const expense = data.transactions.filter((t) => t.type === "gider").reduce((s, t) => s + t.amount, 0);
   // Genel kasa durumu: tum hesaplarin (banka/nakit/pos) toplam bakiyesi (acilis bakiyeleri dahil)
@@ -37,6 +49,7 @@ router.get("/dashboard", requireAuth, async (req, res) => {
   res.json({
     kasa,
     totalDebt,
+    totalCredit,
     income,
     expense,
     openTickets,
@@ -44,7 +57,10 @@ router.get("/dashboard", requireAuth, async (req, res) => {
     overdueEquipment,
     unreadNotifications: unread,
     unitCount: data.units.length,
-    paidUnits: data.units.filter((u) => data.charges.filter((c) => c.unitId === u.id).every((c) => c.status === "paid")).length,
+    // "Odendi" sayisi artik net bakiyeye gore (acik borc, varsa alacakli
+    // bakiyeyle karsilanmis olabilir) - tek tek her Charge satirinin
+    // status'una degil, boylece bu sayi totalDebt/totalCredit ile tutarli.
+    paidUnits: unitNetDebts.filter((d) => d <= 0).length,
   });
 });
 

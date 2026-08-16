@@ -253,6 +253,19 @@ async function save(data) {
   );
 }
 
+// Net bakiye: acik borclarin toplami - dairenin alacakli bakiyesi (Unit.
+// creditBalance). Pozitifse borclu, negatifse alacakli. `data` load()'un
+// dondurdugu sekil (data.charges + data.units) - hala legacy shim uzerinden
+// okuyan tum route'lar (directory, dashboard, documents, comms) bunu
+// paylasir, boylece netleme kurali tek yerde degisir.
+function netDebt(data, unitId) {
+  const openSum = data.charges
+    .filter((c) => c.unitId === unitId && c.status !== "paid")
+    .reduce((sum, c) => sum + (c.amount - c.paidAmount), 0);
+  const unit = data.units.find((u) => u.id === unitId);
+  return openSum - (unit?.creditBalance || 0);
+}
+
 // Legacy route'larda kullanilan senkron desen: data.activityLog dizisine
 // mutasyon yapar, gercek yazma save() cagrisinda gerceklesir. Prisma'ya
 // tasinmis route'lar bunun yerine dogrudan prisma.activityLog.create(...)
@@ -269,4 +282,4 @@ function logActivity(data, actor, action, detail, scopeUnitId = null) {
   });
 }
 
-module.exports = { load, save, uid, logActivity, prisma };
+module.exports = { load, save, uid, logActivity, netDebt, prisma };

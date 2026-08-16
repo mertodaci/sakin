@@ -158,8 +158,7 @@ router.post("/bulk-messages/preview", requireAuth, requireRole("yonetici"), asyn
   const { channel, template, block, minDebt } = req.body || {};
   if (!template) return res.status(400).json({ error: "Mesaj şablonu zorunludur." });
 
-  const debtOf = (unitId) => data.charges.filter((c) => c.unitId === unitId && c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0);
-  let units = data.units.map((u) => ({ ...u, debt: debtOf(u.id) }));
+  let units = data.units.map((u) => ({ ...u, debt: db.netDebt(data, u.id) }));
   if (block) units = units.filter((u) => u.block === block);
   if (minDebt) units = units.filter((u) => u.debt >= Number(minDebt));
 

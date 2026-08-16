@@ -20,6 +20,9 @@ function fmtTL(n) {
   return new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 }).format(n) + " TL";
 }
 
+// Net bakiye hesabi db.js'te paylasilan tek yerde (db.netDebt).
+const netDebt = db.netDebt;
+
 async function buildDocument({ heading, lines, footerNote }) {
   const doc = await PDFDocument.create();
   const page = doc.addPage([595, 842]); // A4
@@ -60,7 +63,7 @@ router.get("/documents/debt-letter", requireAuth, async (req, res) => {
   if (req.user.role !== "sakin") return res.status(403).json({ error: "Bu belge yalnızca sakinler için üretilir." });
   const unit = data.units.find((u) => u.id === req.user.unitId);
   if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
-  const debt = data.charges.filter((c) => c.unitId === unit.id && c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0);
+  const debt = netDebt(data, unit.id);
   if (debt > 0) {
     return res.status(409).json({ error: `Bu belge yalnızca borcu bulunmayan daireler için üretilebilir. Güncel bakiyeniz: ${fmtTL(debt)}` });
   }
@@ -120,7 +123,7 @@ router.get("/documents/receipt/:paymentId", requireAuth, async (req, res) => {
 router.get("/documents/debt-list", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();
   const rows = data.units
-    .map((u) => ({ label: `${u.block} - Daire ${u.no}`, debt: data.charges.filter((c) => c.unitId === u.id && c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0) }))
+    .map((u) => ({ label: `${u.block} - Daire ${u.no}`, debt: netDebt(data, u.id) }))
     .sort((a, b) => a.label.localeCompare(b.label, "tr"));
 
   const doc = await PDFDocument.create();
@@ -147,7 +150,7 @@ router.get("/documents/debt-list", requireAuth, requireRole("yonetici"), async (
   rows.forEach((r) => {
     if (y < 80) { y = 780; }
     page.drawText(trSafe(r.label), { x: 50, y, size: 11, font, color: rgb(0.06, 0.11, 0.15) });
-    const text = r.debt > 0 ? `${r.debt.toFixed(0)} TL borclu` : "Odendi";
+    const text = r.debt > 0 ? `${r.debt.toFixed(0)} TL borclu` : r.debt < 0 ? `${Math.abs(r.debt).toFixed(0)} TL alacakli` : "Odendi";
     page.drawText(trSafe(text), { x: 420, y, size: 11, font: bold, color: r.debt > 0 ? red : green });
     y -= 20;
   });
@@ -175,7 +178,7 @@ router.get("/documents/debt-list.csv", requireAuth, requireRole("yonetici"), asy
       block: u.block,
       no: u.no,
       owner: u.ownerName || "",
-      debt: data.charges.filter((c) => c.unitId === u.id && c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0),
+      debt: netDebt(data, u.id),
     }))
     .sort((a, b) => `${a.block}${a.no}`.localeCompare(`${b.block}${b.no}`, "tr"));
 
@@ -205,7 +208,7 @@ router.get("/documents/tebligat/:unitId", requireAuth, requireRole("yonetici"), 
   const data = await db.load();
   const unit = data.units.find((u) => u.id === req.params.unitId);
   if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
-  const debt = data.charges.filter((c) => c.unitId === unit.id && c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0);
+  const debt = netDebt(data, unit.id);
   const tier = req.query.tier === "ihtarname" ? "ihtarname" : "call";
 
   const lines = tier === "ihtarname"

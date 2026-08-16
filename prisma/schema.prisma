@@ -35,13 +35,6 @@ enum TransactionType {
   gider
 }
 
-enum ChargeType {
-  aidat
-  sayac
-  diger
-  gecikme_faizi
-}
-
 enum ChargeStatus {
   unpaid
   partial
@@ -86,6 +79,10 @@ model Unit {
   occupancy   Occupancy
   landShare   Decimal? @db.Decimal(7, 4)
   feeGroup    String?
+  // Acik borclarin tamaminin odenmesinden sonra artan tutar buraya birikir
+  // (alacakli bakiye). Otomatik hicbir borca uygulanmaz - yonetici "Krediyi
+  // Borca Uygula" ile bilincli olarak tetikler (bkz. CreditApplication).
+  creditBalance Decimal @db.Decimal(12, 2) @default(0)
 
   users            User[]
   charges          Charge[]
@@ -96,6 +93,7 @@ model Unit {
   packages         Package[]
   activityLogs     ActivityLog[]
   internalTasks    InternalTask[]
+  creditApplications CreditApplication[]
   householdMembers HouseholdMember[]
   legalCases       LegalCase[]
 }
@@ -222,11 +220,15 @@ model Transfer {
 
 // ---------------- Aidat / Odeme / Muhasebe ----------------
 
+// type: bilerek enum degil String - yonetici serbestce yeni kategori
+// tanimlayabilsin diye (Yonetimcell karsilastirmasi: Idari Ceza, Kidem
+// Tazminati Fonu gibi site'ye ozel kategoriler). Uygulama katmaninda
+// tutarlilik icin mevcut kategoriler bir datalist ile onerilir.
 model Charge {
   id                    String       @id @default(uuid())
   unitId                String
   unit                  Unit         @relation(fields: [unitId], references: [id], onDelete: Restrict)
-  type                  ChargeType
+  type                  String
   period                String
   amount                Decimal      @db.Decimal(12, 2)
   dueDate               DateTime
@@ -236,8 +238,9 @@ model Charge {
   description           String
   createdAt             DateTime     @default(now())
 
-  allocations   PaymentAllocation[]
-  meterReadings MeterReading[]
+  allocations       PaymentAllocation[]
+  meterReadings     MeterReading[]
+  creditApplications CreditApplication[]
 
   @@index([unitId])
 }
@@ -260,10 +263,34 @@ model Payment {
   cancelled     Boolean      @default(false)
   cancelledAt   DateTime?
   cancelledBy   String?
+  // Odeme, acik borclarin tamamini kapattiktan sonra artan tutar - metne
+  // gomulmek yerine Unit.creditBalance'a eklenir, bu alan ne kadarinin
+  // eklendigini kaydeder (iptal edilirse dogru miktari geri dusebilmek icin).
+  creditAmount  Decimal      @db.Decimal(12, 2) @default(0)
+  // creditAmount'in ne kadari HALA havuzda duruyor (apply-credit ile baska
+  // bir borca harcanmamis). Iptal sirasinda SADECE bu kadari geri alinir -
+  // boylece bu odemenin katkisi baska bir odemenin katkisiyla karismaz
+  // (havuz paylasilan tek bir sayi oldugu icin, hangi odemenin ne kadar
+  // "hala orada" oldugunu ayrica izlemek gerekiyor).
+  creditRemaining Decimal    @db.Decimal(12, 2) @default(0)
 
   allocations PaymentAllocation[]
 
   @@index([unitId])
+}
+
+// Bir dairenin fazla odemesinin bir sonraki/acik borca yonetici tarafindan
+// bilincli, tek tikla uygulanmasinin kaydi (otomatik/sessiz degil - Sakin'in
+// "her sey gorunur ve izlenebilir olsun" ilkesine uygun).
+model CreditApplication {
+  id        String   @id @default(uuid())
+  unitId    String
+  unit      Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  chargeId  String
+  charge    Charge   @relation(fields: [chargeId], references: [id], onDelete: Restrict)
+  amount    Decimal  @db.Decimal(12, 2)
+  date      DateTime @default(now())
+  createdBy String
 }
 
 model PaymentAllocation {

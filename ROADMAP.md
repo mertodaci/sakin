@@ -302,18 +302,30 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   parametresi; gerçek sağlayıcı olmadığı için sadece önizler ve
   konsola loglar, README'nin "demo" desenine uygun) + **Toplu Hesap
   Özeti Dökümü** (tüm dairelerin ekstresi tek PDF'te).
+- ✅ **Alacaklı bakiye + serbest kategori modeli** — `Charge.type` artık
+  serbest metin (eski `ChargeType` enum'u kaldırıldı, veri kaybı
+  olmadan `ALTER COLUMN ... USING` ile migrate edildi); Tahsilat
+  ekranına "Özel Borçlandırma" formu (`GET /charge-categories` ile
+  otomatik tamamlanan kategori listesi) eklendi. Fazla ödeme artık
+  `Unit.creditBalance`'a düşüyor (yeni borç otomatik tüketmiyor,
+  `POST /units/:id/apply-credit` ile FIFO manuel uygulanıyor,
+  `CreditApplication` tablosunda denetlenebilir). Ödeme iptalinde
+  havuz-sızıntısı riskini önlemek için her `Payment` kendi
+  `creditRemaining`'ini takip ediyor — iptal sadece O ödemenin henüz
+  harcanmamış kısmını geri alıyor, paylaşılan havuzdaki başka
+  ödemelerin kredisine dokunmuyor (code review ile bulunup düzeltilen
+  gerçek veri bütünlüğü hatası). `jobs.js`'teki gecikme faizi de aynı
+  krediyi bir çalışmada birden fazla borca uygulamayacak şekilde
+  düzeltildi. `db.netDebt()` ortak fonksiyonu 4 tekrar eden
+  hesaplamayı birleştirdi. `test-credit.js` ile regresyon testleri
+  (havuz-sızıntısı senaryosu dahil) geçiyor.
 
 **Sırada (henüz yapılmadı, bu sırayla ilerlenecek):**
-1. ⏳ **[Önce plan modu gerekir]** Alacaklı bakiye + serbest kategori
-   modeli — para mantığının merkezine dokunuyor
-   (`Charge`/`Payment`/`ChargeType` birlikte değişir). En yüksek
-   etkili madde ama en riskli; rastgele başlanmayacak. **Buradan
-   devam et.**
-2. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
+1. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
    Kebir Defteri, banka entegrasyonu — sadece iskelet/arayüz düzeyinde
    (gerçek banka API'si/mali müşavir entegrasyonu üçüncü taraf
-   sözleşmesi gerektirir, Mert'in kararı).
-3. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
+   sözleşmesi gerektirir, Mert'in kararı). **Buradan devam et.**
+2. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
    sayfasıydı, en düşük öncelik, atlanabilir).
 
 **Birebir kopyalanamayacaklar** (README'nin "Neler Gerçek, Neler

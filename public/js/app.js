@@ -31,8 +31,16 @@ function sectionTitle(title, sub) { return `<div class="section-title"><h2>${esc
 function ledgerRow(title, sub, right, color) {
   return `<div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${title}</div><div class="small muted">${sub}</div></div><div class="f-num" style="font-size:14px;font-weight:600;${color ? `color:${color};` : ""}">${right}</div></div>`;
 }
-const PILL_MAP = { "Ödendi": "green", "Borçlu": "red", "Açık": "red", "İşlemde": "amber", "Çözüldü": "green", "Onaylandı": "green", "depoda": "grey", "zimmetli": "amber", "Teslim Alındı": "amber", "Teslim Edildi": "green", "Güncel": "green", "Bakım Gecikti": "red", "Pasif": "grey" };
-function chargeTypeLabel(ch) { return ch.type === "aidat" ? "Aidat" : ch.type === "sayac" ? "Sayaç" : ch.type === "gecikme_faizi" ? "⚠ Gecikme Faizi" : "Diğer"; }
+const PILL_MAP = { "Ödendi": "green", "Borçlu": "red", "Alacaklı": "green", "Açık": "red", "İşlemde": "amber", "Çözüldü": "green", "Onaylandı": "green", "depoda": "grey", "zimmetli": "amber", "Teslim Alındı": "amber", "Teslim Edildi": "green", "Güncel": "green", "Bakım Gecikti": "red", "Pasif": "grey" };
+// Net bakiye (borc - alacakli bakiye) uc durumlu: pozitif=borclu (kirmizi),
+// negatif=alacakli (yesil), sifir=odendi (yesil).
+function debtStatusLabel(debt) { return debt > 0 ? "Borçlu" : debt < 0 ? "Alacaklı" : "Ödendi"; }
+function debtColor(debt) { return debt > 0 ? "var(--red)" : "var(--green)"; }
+// type artik serbest metin (sabit enum degil) - bilinen 4 tip icin daha
+// once kullanilan Turkce etiketler korunur, baska bir kategori girilmisse
+// (orn. "Idari Ceza") oldugu gibi gosterilir.
+const CHARGE_TYPE_LABELS = { aidat: "Aidat", sayac: "Sayaç", gecikme_faizi: "⚠ Gecikme Faizi", diger: "Diğer" };
+function chargeTypeLabel(ch) { return CHARGE_TYPE_LABELS[ch.type] || ch.type; }
 function pill(status) { const cls = PILL_MAP[status] || "grey"; return `<span class="pill ${cls}"><span class="dot"></span>${esc(status)}</span>`; }
 function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2600); }
 
@@ -558,8 +566,8 @@ async function renderResidentOzet(c) {
     ${sectionTitle("Merhaba, " + state.user.name.split(" ")[0], state.user.unitLabel || "")}
     <div class="card pad mb-16 clickable" data-goto="aidat">
       <div class="flex-between">
-        <div><div class="stat-label">GÜNCEL BAKİYE</div><div class="f-num stat-value" style="color:${dash.debt > 0 ? "var(--red)" : "var(--green)"}">${tl(dash.debt)}</div></div>
-        ${pill(dash.debt > 0 ? "Borçlu" : "Ödendi")}
+        <div><div class="stat-label">GÜNCEL BAKİYE</div><div class="f-num stat-value" style="color:${debtColor(dash.debt)}">${tl(Math.abs(dash.debt))}</div></div>
+        ${pill(debtStatusLabel(dash.debt))}
       </div>
     </div>
     <div class="grid cols-3 mb-16">
@@ -576,12 +584,12 @@ async function renderResidentOzet(c) {
 }
 
 async function renderResidentAidat(c) {
-  const [charges, payments] = await Promise.all([api("/charges"), api("/payments")]);
-  const debt = charges.filter((x) => x.status !== "paid").reduce((s, x) => s + (x.amount - x.paidAmount), 0);
+  const [charges, payments, dash] = await Promise.all([api("/charges"), api("/payments"), api("/dashboard")]);
+  const debt = dash.debt;
   c.innerHTML = `
     ${sectionTitle("Aidatım", "Hesap özeti banka ekstresi mantığıyla listelenir")}
     <div class="card pad mb-16 flex-between">
-      <div><div class="stat-label">ÖDENECEK TUTAR</div><div class="f-num stat-value" style="color:${debt > 0 ? "var(--red)" : "var(--green)"}">${tl(debt)}</div></div>
+      <div><div class="stat-label">${debt < 0 ? "ALACAKLI BAKİYE" : "ÖDENECEK TUTAR"}</div><div class="f-num stat-value" style="color:${debtColor(debt)}">${tl(Math.abs(debt))}</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${debt <= 0 ? '<button class="btn btn-ghost" id="debtLetterBtn">📄 Borcu Yoktur Belgesi</button>' : ""}
         <button class="btn btn-primary" id="payBtn" ${debt <= 0 ? "disabled" : ""}>${debt > 0 ? "Ödeme Yap" : "Borç Yok"}</button>
@@ -927,13 +935,18 @@ async function renderHesapOzetiModal(unit) {
   overlay.querySelector("#hesapOzetiClose").addEventListener("click", () => overlay.remove());
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
 
-  const [charges, payments] = await Promise.all([api("/charges?unitId=" + unit.id), api("/payments?unitId=" + unit.id)]);
+  const [charges, payments, creditApps] = await Promise.all([api("/charges?unitId=" + unit.id), api("/payments?unitId=" + unit.id), api("/credit-applications?unitId=" + unit.id)]);
   const entries = [];
   charges.forEach((ch) => entries.push({ date: ch.dueDate, label: `${chargeTypeLabel(ch)} — ${ch.description || ""}`, amount: Number(ch.amount) }));
   payments.filter((p) => !p.cancelled).forEach((p) => entries.push({ date: p.date, label: `Tahsilat (${p.method}) — Makbuz ${p.receiptNo}`, amount: -Number(p.amount) }));
+  // Not: alacak uygulamasi (CreditApplication) kosan bakiyeye AYRICA etki
+  // etmez - o tutar zaten fazla odemenin yapildigi anda (Payment satirinda)
+  // bakiyeyi dusurmustu. Burada sadece "hangi borc ne zaman krediyle
+  // kapatildi" seffafligi icin sifir-etkili bilgi satiri olarak gosterilir.
+  creditApps.forEach((ca) => entries.push({ date: ca.date, label: "Alacak Bakiyesi Uygulandı (bilgi amaçlı, bakiyeyi değiştirmez)", amount: 0, info: true }));
   entries.sort((a, b) => new Date(a.date) - new Date(b.date));
   let running = 0;
-  entries.forEach((e) => { running += e.amount; e.balance = running; });
+  entries.forEach((e) => { if (!e.info) running += e.amount; e.balance = running; });
 
   const body = overlay.querySelector("#hesapOzetiBody");
   if (!entries.length) { body.innerHTML = '<div class="empty-row">Hareket kaydı yok.</div>'; return; }
@@ -942,15 +955,15 @@ async function renderHesapOzetiModal(unit) {
       <table class="simple">
         <thead><tr><th>Tarih</th><th>Açıklama</th><th style="text-align:right;">Tutar</th><th style="text-align:right;">Bakiye</th></tr></thead>
         <tbody>${entries.slice().reverse().map((e) => `
-          <tr>
+          <tr style="${e.info ? "opacity:.6;" : ""}">
             <td>${dt(e.date)}</td>
             <td>${esc(e.label)}</td>
-            <td class="f-num" style="text-align:right;color:${e.amount > 0 ? "var(--red)" : "var(--green)"};">${e.amount > 0 ? "+" : ""}${tl(e.amount)}</td>
+            <td class="f-num" style="text-align:right;color:${e.info ? "var(--mist)" : e.amount > 0 ? "var(--red)" : "var(--green)"};">${e.info ? "—" : (e.amount > 0 ? "+" : "") + tl(e.amount)}</td>
             <td class="f-num" style="text-align:right;font-weight:600;">${tl(e.balance)}</td>
           </tr>`).join("")}</tbody>
       </table>
     </div>
-    <div class="small muted" style="margin-top:12px;">Güncel bakiye: <b style="color:${running > 0 ? "var(--red)" : "var(--green)"};">${tl(running)}</b>${running > 0 ? " (borçlu)" : " (borcu yok)"}</div>
+    <div class="small muted" style="margin-top:12px;">Güncel bakiye: <b style="color:${running > 0 ? "var(--red)" : "var(--green)"};">${tl(running)}</b>${running > 0 ? " (borçlu)" : running < 0 ? " (alacaklı)" : " (borcu yok)"}</div>
   `;
 }
 
@@ -1030,7 +1043,7 @@ async function renderDaireler(c) {
     <div class="card tight">
       ${list.map((u) => `
         <div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}${u.tenantName ? " (Kiracı: " + esc(u.tenantName) + ")" : ""}${u.feeGroup ? " · " + esc(u.feeGroup) : ""}${u.landShare ? " · Arsa Payı: " + esc(String(u.landShare)) : ""}</div></div>
-        <div style="display:flex;align-items:center;gap:10px;"><div class="f-num" style="color:${u.debt > 0 ? "var(--red)" : "var(--green)"};font-weight:600;">${tl(u.debt)}</div><button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button><button class="btn btn-ghost btn-sm" data-editunit="${u.id}">Düzenle</button></div></div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+        <div style="display:flex;align-items:center;gap:10px;"><div class="f-num" style="color:${debtColor(u.debt)};font-weight:600;">${tl(Math.abs(u.debt))}</div>${pill(debtStatusLabel(u.debt))}<button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button><button class="btn btn-ghost btn-sm" data-editunit="${u.id}">Düzenle</button></div></div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
   `;
   document.getElementById("unitForm").addEventListener("submit", async (e) => {
@@ -1118,7 +1131,7 @@ async function renderUnitEditModal(u) {
 }
 
 async function renderTahsilat(c) {
-  const [units, accounts, payments] = await Promise.all([api("/units"), api("/accounts"), api("/payments")]);
+  const [units, accounts, payments, categories] = await Promise.all([api("/units"), api("/accounts"), api("/payments"), api("/charge-categories")]);
   c.innerHTML = `
     <div class="flex-between">${sectionTitle("Aidat Takibi")}<div style="display:flex;gap:8px;margin-bottom:16px;"><button class="btn btn-ghost btn-sm" id="printListBtn">🖨️ Borç Listesi Yazdır (PDF)</button><button class="btn btn-ghost btn-sm" id="csvListBtn">📊 Excel'e Aktar (CSV)</button></div></div>
     <div class="card form-card">
@@ -1127,6 +1140,17 @@ async function renderTahsilat(c) {
         <div class="field"><label>Dönem (YYYY-AA)</label><input name="period" placeholder="2026-09" required /></div>
         <div class="field"><label>Tutar (₺)</label><input name="amount" type="number" required /></div>
         <button class="btn btn-primary" type="submit">Tüm Dairelere Uygula</button>
+      </form>
+    </div>
+    <div class="card form-card">
+      <div class="ledger-title" style="padding:0 0 10px;">Özel Borçlandırma (tek daire, serbest kategori)</div>
+      <div class="small muted" style="margin-top:-4px;margin-bottom:10px;">Kategori serbest metin — İdari Ceza, Kıdem Tazminatı Fonu gibi siteye özel kalemler tanımlayabilirsiniz.</div>
+      <form id="manualChargeForm" class="form-row">
+        <div class="field" style="flex:1 1 200px;"><label>Daire</label><select name="unitId">${units.map((u) => `<option value="${u.id}">${esc(u.block)} - Daire ${esc(u.no)}</option>`).join("")}</select></div>
+        <div class="field" style="flex:1 1 160px;"><label>Kategori</label><input name="type" list="chargeCategoryList" required placeholder="aidat, sosyal tesis…" /><datalist id="chargeCategoryList">${categories.map((cat) => `<option value="${esc(cat)}"></option>`).join("")}</datalist></div>
+        <div class="field" style="flex:0 0 140px;"><label>Tutar (₺)</label><input name="amount" type="number" min="0.01" step="0.01" required /></div>
+        <div class="field" style="flex:1 1 220px;"><label>Açıklama</label><input name="description" /></div>
+        <button class="btn btn-ghost btn-sm" type="submit">Borçlandır</button>
       </form>
     </div>
     <div class="card pad mb-16" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
@@ -1163,6 +1187,12 @@ async function renderTahsilat(c) {
     try { const r = await api("/charges/generate-month", { method: "POST", body: Object.fromEntries(f) }); toast(r.message); renderTab("tahsilat"); }
     catch (err) { toast(err.message); }
   });
+  document.getElementById("manualChargeForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    try { await api("/charges", { method: "POST", body: Object.fromEntries(f) }); toast("Borçlandırma eklendi."); renderTab("tahsilat"); }
+    catch (err) { toast(err.message); }
+  });
 
   // Yönetimcell karşılaştırmasından: borç eşiği filtresi (birçok ekranda
   // tekrar eden bir kalıp - "1.000 ₺ ve daha fazla borcu olan" gibi).
@@ -1173,12 +1203,16 @@ async function renderTahsilat(c) {
     box.innerHTML = filtered.map((u) => `
         <div class="ledger-row" style="flex-wrap:wrap;">
           <div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}</div></div>
-          <div style="display:flex;align-items:center;gap:10px;"><span class="f-num" style="font-weight:600;color:${u.debt > 0 ? "var(--red)" : "var(--green)"};">${tl(u.debt)}</span>${pill(u.debt > 0 ? "Borçlu" : "Ödendi")}<button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button>${u.debt > 0 ? `<button class="btn btn-ghost btn-sm" data-collect="${u.id}">Tahsil Et</button>` : ""}</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span class="f-num" style="font-weight:600;color:${debtColor(u.debt)};">${tl(Math.abs(u.debt))}</span>${pill(debtStatusLabel(u.debt))}<button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button>${u.creditBalance > 0 ? `<button class="btn btn-ghost btn-sm" data-applycredit="${u.id}" title="Alacaklı bakiyeyi (${tl(u.creditBalance)}) açık borca uygula">💳 Krediyi Uygula</button>` : ""}${u.debt > 0 ? `<button class="btn btn-ghost btn-sm" data-collect="${u.id}">Tahsil Et</button>` : ""}</div>
           <div style="width:100%;" id="collect-form-${u.id}"></div>
         </div>`).join("") || '<div class="empty-row">Bu filtreye uyan daire yok.</div>';
     box.querySelectorAll("[data-ozet]").forEach((b) => b.addEventListener("click", () => {
       const u = units.find((x) => x.id === b.dataset.ozet);
       if (u) renderHesapOzetiModal(u);
+    }));
+    box.querySelectorAll("[data-applycredit]").forEach((b) => b.addEventListener("click", async () => {
+      try { const r = await api("/units/" + b.dataset.applycredit + "/apply-credit", { method: "POST" }); toast(r.message); renderTab("tahsilat"); }
+      catch (err) { toast(err.message); }
     }));
     box.querySelectorAll("[data-collect]").forEach((b) => b.addEventListener("click", () => {
       const unitId = b.dataset.collect;

@@ -6,11 +6,9 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 const router = express.Router();
 const prisma = db.prisma;
 
-function unitDebt(data, unitId) {
-  return data.charges
-    .filter((c) => c.unitId === unitId && c.status !== "paid")
-    .reduce((sum, c) => sum + (c.amount - c.paidAmount), 0);
-}
+// Net bakiye hesabi db.js'te paylasilan tek yerde (db.netDebt) - burada,
+// dashboard.js, documents.js ve comms.js hepsi ayni fonksiyonu kullanir.
+const unitDebt = db.netDebt;
 
 /* ---------------- UNITS (Daireler) ---------------- */
 

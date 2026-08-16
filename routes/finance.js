@@ -61,7 +61,7 @@ router.post("/charges/generate-month", requireAuth, requireRole("yonetici"), asy
 
 router.post("/charges", requireAuth, requireRole("yonetici"), async (req, res) => {
   const { unitId, type, period, amount, dueDate, description } = req.body || {};
-  if (!unitId || !amount) return res.status(400).json({ error: "Daire ve tutar zorunludur." });
+  if (!unitId || !amount || Number(amount) <= 0) return res.status(400).json({ error: "Daire ve pozitif bir tutar zorunludur." });
   const charge = await prisma.charge.create({
     data: {
       unitId,
@@ -165,6 +165,11 @@ async function applyPayment(tx, { unitId, amount, method, userId, userName, note
     data: { type: "gelir", category: "Aidat Tahsilatı", amount: amt, accountId: resolvedAccountId, description: `Tahsilat - ${receiptNo}`, createdBy: userId || "sistem" },
   });
 
+  // Acik borclarin tumu kapandiktan sonra kalan tutar (varsa) metne gomulmez,
+  // dairenin alacakli bakiyesine (Unit.creditBalance) eklenir - yonetici daha
+  // sonra "Krediyi Borca Uygula" ile bilincli olarak bir sonraki borca aktarir.
+  const creditAmount = remaining.gt(0) ? remaining : new Prisma.Decimal(0);
+
   const payment = await tx.payment.create({
     data: {
       unitId,
@@ -172,20 +177,24 @@ async function applyPayment(tx, { unitId, amount, method, userId, userName, note
       amount: amt,
       method: method || "Elden",
       accountId: resolvedAccountId,
-      note: note || (remaining.gt(0) ? `${remaining.toString()}₺ borç kalmadığı için avans olarak işlendi` : ""),
+      note: note || (creditAmount.gt(0) ? `${creditAmount.toString()}₺ borç kalmadığı için alacak bakiyesine eklendi` : ""),
       receiptNo,
       transactionId: transaction.id,
+      creditAmount,
+      creditRemaining: creditAmount,
       allocations: { create: appliedTo.map((a) => ({ chargeId: a.chargeId, amount: a.amount })) },
     },
     include: { allocations: true },
   });
 
-  const unit = await tx.unit.findUnique({ where: { id: unitId } });
+  const unit = creditAmount.gt(0)
+    ? await tx.unit.update({ where: { id: unitId }, data: { creditBalance: { increment: creditAmount } } })
+    : await tx.unit.findUnique({ where: { id: unitId } });
   await tx.notification.create({
     data: { userId: "admin1", message: `${unit ? unit.block + " D:" + unit.no : "Bir daire"} ödeme yaptı: ${amount}₺`, read: false, link: "#/tahsilat" },
   });
   await tx.activityLog.create({
-    data: { actorId: userId || "sistem", actorName: userName || "Sistem", action: "payment.create", detail: `${unit ? `${unit.block} - Daire ${unit.no}` : "Bir daire"} için ${amount}₺ ödeme kaydedildi (${payment.method}, makbuz ${payment.receiptNo}).`, scopeUnitId: unitId },
+    data: { actorId: userId || "sistem", actorName: userName || "Sistem", action: "payment.create", detail: `${unit ? `${unit.block} - Daire ${unit.no}` : "Bir daire"} için ${amount}₺ ödeme kaydedildi (${payment.method}, makbuz ${payment.receiptNo})${creditAmount.gt(0) ? `, ${creditAmount}₺ alacak bakiyesine eklendi` : ""}.`, scopeUnitId: unitId },
   });
 
   return payment;
@@ -254,9 +263,26 @@ router.post("/payments/:id/cancel", requireAuth, requireRole("yonetici"), async 
         data: { cancelled: true, cancelledAt: new Date(), cancelledBy: req.user.id, transactionId: null },
       });
 
+      // Bu odemenin katkisindan HALA havuzda duran kismini (creditRemaining)
+      // geri duser - baska bir odemenin katkisina asla dokunmaz, cunku
+      // creditRemaining bu odemeye ozel, ayri izlenen bir sayidir (havuzun
+      // paylasilan toplami Unit.creditBalance degil). Eger bu odemenin
+      // katkisi apply-credit ile zaten baska bir borca harcanmissa
+      // (creditRemaining=0), geri alinacak bir sey yoktur - o borc uzerindeki
+      // etki kalir, sadece bu odemenin kendisi "iptal" olarak isaretlenir.
+      let creditReversed = new Prisma.Decimal(0);
+      if (payment.creditRemaining && payment.creditRemaining.gt(0)) {
+        creditReversed = payment.creditRemaining;
+        await tx.unit.update({ where: { id: payment.unitId }, data: { creditBalance: { decrement: creditReversed } } });
+        await tx.payment.update({ where: { id: payment.id }, data: { creditRemaining: 0 } });
+      }
+
       const unit = await tx.unit.findUnique({ where: { id: payment.unitId } });
+      const creditNote = payment.creditAmount && payment.creditAmount.gt(0) && creditReversed.lt(payment.creditAmount)
+        ? ` (bu ödemenin oluşturduğu ${payment.creditAmount}₺ alacağın ${payment.creditAmount.minus(creditReversed)}₺'si zaten başka bir borca uygulanmış olduğu için geri alınamadı)`
+        : "";
       await tx.activityLog.create({
-        data: { actorId: req.user.id, actorName: req.user.name, action: "payment.cancel", detail: `${unit ? `${unit.block} - Daire ${unit.no}` : "Bir daire"} için ${payment.amount}₺ tutarındaki ödeme (makbuz ${payment.receiptNo}) iptal edildi.`, scopeUnitId: payment.unitId },
+        data: { actorId: req.user.id, actorName: req.user.name, action: "payment.cancel", detail: `${unit ? `${unit.block} - Daire ${unit.no}` : "Bir daire"} için ${payment.amount}₺ tutarındaki ödeme (makbuz ${payment.receiptNo}) iptal edildi${creditNote}.`, scopeUnitId: payment.unitId },
       });
     });
     res.json({ message: "Ödeme iptal edildi, ilgili borç yeniden açıldı." });
@@ -264,6 +290,86 @@ router.post("/payments/:id/cancel", requireAuth, requireRole("yonetici"), async 
     if (e.httpStatus) return res.status(e.httpStatus).json({ error: e.msg });
     throw e;
   }
+});
+
+/* ---------------- ALACAKLI BAKİYE (Kredi) ---------------- */
+// Yonetimcell karsilastirmasindan: fazla odeme otomatik olarak Unit.creditBalance'a
+// eklenir (applyPayment icinde) ama hicbir borca OTOMATIK uygulanmaz - burada
+// yonetici bilincli, tek tikla, ayni FIFO mantigiyla (en eski acik borctan
+// baslayarak) krediyi borca aktarir. Her aktarim CreditApplication olarak
+// izlenebilir sekilde kaydedilir.
+// Havuzdan bir tutar "harcanirken" (borca uygulanirken), o tutarin hangi
+// odeme(ler)in katkisindan geldigini de FIFO (en eski katki once) olarak
+// isaretler - Payment.creditRemaining'i dusurur. Boylece bir odeme daha
+// sonra iptal edildiginde SADECE kendi hala harcanmamis katkisi geri
+// alinabilir, baska bir odemenin katkisina dokunulmaz.
+async function consumeCreditFromPayments(tx, unitId, amount) {
+  let toConsume = amount;
+  const contributingPayments = await tx.payment.findMany({
+    where: { unitId, cancelled: false, creditRemaining: { gt: 0 } },
+    orderBy: { date: "asc" },
+  });
+  for (const p of contributingPayments) {
+    if (toConsume.lte(0)) break;
+    const take = Prisma.Decimal.min(p.creditRemaining, toConsume);
+    await tx.payment.update({ where: { id: p.id }, data: { creditRemaining: p.creditRemaining.minus(take) } });
+    toConsume = toConsume.minus(take);
+  }
+}
+
+router.post("/units/:id/apply-credit", requireAuth, requireRole("yonetici"), async (req, res) => {
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const unit = await tx.unit.findUnique({ where: { id: req.params.id } });
+      if (!unit) throw Object.assign(new Error("NOT_FOUND"), { httpStatus: 404, msg: "Daire bulunamadı." });
+      if (unit.creditBalance.lte(0)) throw Object.assign(new Error("NO_CREDIT"), { httpStatus: 400, msg: "Bu dairenin uygulanabilir bir alacak bakiyesi yok." });
+
+      let remaining = unit.creditBalance;
+      const openCharges = await tx.charge.findMany({ where: { unitId: unit.id, status: { not: "paid" } }, orderBy: { dueDate: "asc" } });
+
+      let totalApplied = new Prisma.Decimal(0);
+      for (const c of openCharges) {
+        if (remaining.lte(0)) break;
+        const owed = c.amount.minus(c.paidAmount);
+        const applied = Prisma.Decimal.min(owed, remaining);
+        if (applied.lte(0)) continue;
+        const newPaid = c.paidAmount.plus(applied);
+        await tx.charge.update({ where: { id: c.id }, data: { paidAmount: newPaid, status: newPaid.gte(c.amount) ? "paid" : "partial" } });
+        await tx.creditApplication.create({ data: { unitId: unit.id, chargeId: c.id, amount: applied, createdBy: req.user.id } });
+        remaining = remaining.minus(applied);
+        totalApplied = totalApplied.plus(applied);
+      }
+
+      if (totalApplied.lte(0)) throw Object.assign(new Error("NO_OPEN_CHARGE"), { httpStatus: 400, msg: "Bu dairenin krediyi uygulayabileceğiniz açık bir borcu yok." });
+
+      await tx.unit.update({ where: { id: unit.id }, data: { creditBalance: { decrement: totalApplied } } });
+      await consumeCreditFromPayments(tx, unit.id, totalApplied);
+      await tx.activityLog.create({
+        data: { actorId: req.user.id, actorName: req.user.name, action: "credit.apply", detail: `${unit.block} - Daire ${unit.no} için ${totalApplied}₺ alacak bakiyesi açık borca uygulandı.`, scopeUnitId: unit.id },
+      });
+      return totalApplied;
+    });
+    res.json({ message: `${result}₺ alacak bakiyesi borca uygulandı.` });
+  } catch (e) {
+    if (e.httpStatus) return res.status(e.httpStatus).json({ error: e.msg });
+    throw e;
+  }
+});
+
+// Hesap Ozeti ekstresinde odemelerle birlikte gosterebilmek icin.
+router.get("/credit-applications", requireAuth, async (req, res) => {
+  const unitFilter = req.query.unitId || scopedUnitId(req);
+  const apps = await prisma.creditApplication.findMany({ where: unitFilter ? { unitId: unitFilter } : undefined, orderBy: { date: "desc" } });
+  res.json(apps);
+});
+
+// Serbest kategori alani icin tutarlilik yardimcisi: mevcut kategorileri
+// oneri listesi olarak dondurur (yeni kategori yazmak da serbest).
+router.get("/charge-categories", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const rows = await prisma.charge.findMany({ distinct: ["type"], select: { type: true }, orderBy: { type: "asc" } });
+  const defaults = ["aidat", "sayac", "diger", "gecikme_faizi"];
+  const categories = [...new Set([...defaults, ...rows.map((r) => r.type)])];
+  res.json(categories);
 });
 
 /* ---------------- TRANSACTIONS (Muhasebe: gelir/gider) ---------------- */
