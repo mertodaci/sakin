@@ -123,12 +123,20 @@ async function loadUsedPaymentRequestIds() {
 
 const simple = (model) => async () => (await prisma[model].findMany()).map(toPlain);
 
+// Postgres'te orderBy verilmeden gelen sira kararli degildir (fiziksel satir
+// sirasina bagli, UPDATE sonrasi degisebilir) - daire listesi her ekranda
+// (Daireler, Aidat Takibi, dropdown'lar) blok/no'ya gore tutarli sirada
+// gorunsun diye acikca sirali okunuyor.
+async function loadUnits() {
+  return (await prisma.unit.findMany({ orderBy: [{ block: "asc" }, { no: "asc" }] })).map(toPlain);
+}
+
 // LEGACY_COLLECTIONS: henuz kendi route'unda Prisma'ya tasinmamis her
 // koleksiyon icin { load, save, order } tanimlar. `order` upsert sirasini
 // belirler (parent'lar once); save() sirasinda silinmesi gereken satirlar
 // TERS sirada silinir (child'lar once) - boylece FK kisitlari ihlal edilmez.
 const LEGACY_COLLECTIONS = [
-  { name: "units", model: "unit", load: simple("unit") },
+  { name: "units", model: "unit", load: loadUnits },
   { name: "accounts", model: "account", load: simple("account") },
   { name: "facilities", model: "facility", load: simple("facility") },
   { name: "vendors", model: "vendor", load: simple("vendor") },

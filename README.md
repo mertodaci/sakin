@@ -1,15 +1,18 @@
 # Sakin — Site / Apartman Yönetim Uygulaması
 
 Bağımsız, kendi sunucunuzda çalıştırabileceğiniz bir site/apartman yönetim uygulaması.
-Node.js + Express backend, dosya tabanlı JSON veritabanı, JWT ile gerçek kimlik
-doğrulama ve kayıt/onay akışı. Bina/apartman ölçeğinde (birkaç yüz daireye kadar)
-gerçek kullanım için tasarlanmıştır.
+Node.js + Express backend, **PostgreSQL veritabanı (Prisma ORM)**, JWT ile gerçek
+kimlik doğrulama ve kayıt/onay akışı. Bina/apartman ölçeğinde (birkaç yüz daireye
+kadar) gerçek kullanım için tasarlanmıştır.
 
 ## Hızlı Başlangıç
 
 ```bash
 npm install
-cp .env.example .env      # ve JWT_SECRET'ı mutlaka değiştirin
+cp .env.example .env      # JWT_SECRET'ı ve Postgres bilgilerini kendinize göre düzenleyin
+docker compose up -d      # local PostgreSQL'i ayağa kaldırır (Docker gerekir)
+npx prisma migrate deploy # tabloları oluşturur
+npx prisma db seed        # örnek demo veriyi yükler (isteğe bağlı, ilk kurulumda önerilir)
 npm start
 ```
 
@@ -19,8 +22,8 @@ Tarayıcıda `http://localhost:3000` adresini açın.
 - E-posta: `yonetici@site.com`
 - Şifre: `Degistir123!`
 
-İlk çalıştırmada `data/db.json` yoksa örnek verilerle (6 daire, birkaç sakin,
-2 personel, geçmiş aidat/ödeme kayıtları) otomatik oluşturulur. Kendi binanız için
+`npx prisma db seed` çalıştırıldıysa örnek verilerle (6 daire, birkaç sakin,
+2 personel, geçmiş aidat/ödeme kayıtları) veritabanı doldurulur. Kendi binanız için
 kullanmadan önce **yönetici hesabının şifresini değiştirin** ve örnek daire/sakin
 kayıtlarını "Daireler" ve "Kullanıcılar" sekmelerinden silip kendi verilerinizi girin.
 
@@ -72,10 +75,11 @@ de Türkiye'deki apartman/site yönetiminin günlük rutininde olmazsa olmaz öz
   borç oluşturulur; yöneticinin her ay elle "borçlandır" tıklaması gerekmez.
 - **Telefon rehberi** — Kapıcı, asansör firması, tesisatçı gibi faydalı numaralar +
   personel + daire malik/kiracı telefonları, aranabilir tek ekranda.
-- **Yazdırılabilir aidat borç listesi (PDF)** — İlan panosuna asılabilecek, tüm
-  dairelerin güncel borç durumunu gösteren resmi liste.
+- **Yazdırılabilir aidat borç listesi (PDF ve Excel/CSV)** — İlan panosuna
+  asılabilecek PDF liste, ayrıca muhasebeciyle paylaşmak veya kendi tabloya
+  aktarmak için Excel uyumlu CSV indirme.
 
-Bu dört özellik "Ayarlar" ve "Rehber" sekmelerinden yönetilir.
+Bu özellikler "Ayarlar" ve "Rehber" sekmelerinden yönetilir.
 
 ## Yönetimcell Karşılaştırması ile Eklenenler
 
@@ -133,48 +137,50 @@ Gerçek kullanımda "yanlış girdim, geri alayım" ihtiyacı sürekli çıkar. 
   zaman "Tüm Oturumları Kapat" ile bunu manuel tetikleyebilir (sağ üstteki
   kullanıcı menüsünden)
 
-**Henüz yapılmayan, bilerek ertelenen büyük iş:** JSON dosya tabanlı veritabanından
-gerçek bir veritabanına (PostgreSQL) geçiş. Bu, her route dosyasının veri erişim
-katmanını değiştirecek büyük bir mimari iş olduğu için ayrı, dikkatli bir
-çalışma gerektiriyor — mevcut sürüm küçük/orta ölçekli tek bina için günlük
-kullanıma uygun, ancak yüksek eşzamanlı yazma trafiğinde (örn. çok sayıda
-yönetim şirketi aynı anda kullanırsa) veri tutarlılığı riski taşır.
+**PostgreSQL geçişi:** Veritabanı katmanı JSON dosyasından PostgreSQL/Prisma'ya
+taşındı. En riskli/parasal modüller (kimlik doğrulama, kişi rehberi, aidat/ödeme/
+muhasebe — ödeme ve iptal akışı `prisma.$transaction` ile atomik) gerçek Prisma
+sorgularına geçirildi ve test edildi. Geri kalan modüller (rezervasyon, arıza/
+talep, duyuru/anket, kargo, demirbaş, anahtar, firma/personel cari hesabının iş
+mantığı, ayarlar) hâlâ Postgres'e okuyan/yazan bir uyumluluk katmanı (`db.js`
+içindeki shim) üzerinden çalışıyor — fonksiyonel olarak doğru, sadece henüz
+"native" Prisma sorgusu değil. Detay ve devam planı için `ROADMAP.md`'ye bakın.
 
 ## Mimarî
 
 ```
 server.js          → Express giriş noktası, statik dosyalar + /api
-db.js               → data/db.json dosyasına okuma/yazma (harici veritabanı gerekmez)
+db.js               → Postgres/Prisma uzerinden calisan, henuz native Prisma'ya
+                      tasinmamis route'lar icin eski JSON-sekilli okuma/yazma shim'i
+prisma/schema.prisma → veritabani semasi (tum tablolar)
 middleware/auth.js  → JWT doğrulama + rol bazlı yetkilendirme
 routes/
-  auth.js           → kayıt, giriş, oturum
-  directory.js      → daireler, kullanıcılar, personel hesabı oluşturma
-  finance.js        → borçlandırma (aidat/sayaç/diğer), ödeme, muhasebe hareketleri
+  auth.js           → kayıt, giriş, oturum (native Prisma)
+  directory.js      → daireler, kullanıcılar, personel hesabı oluşturma (kullanıcı mutasyonları native Prisma)
+  finance.js        → borçlandırma (aidat/sayaç/diğer), ödeme, muhasebe hareketleri (native Prisma, atomik $transaction)
+  contacts.js       → telefon rehberi (native Prisma)
   comms.js          → duyuru, anket, site panosu, bildirimler
   ops.js            → rezervasyon, arıza/talep, personel, demirbaş, sayaç, kargo, karar defteri, anahtar
   dashboard.js      → özet istatistikler
 public/             → saf HTML/CSS/JS arayüz (derleme adımı gerekmez)
 ```
 
-**Neden dosya tabanlı veritabanı?** Tek bina/apartman ölçeğinde (onlarca-yüzlerce
-daire) performans sorunu yaratmaz, yedeklemesi tek dosyayı kopyalamak kadar
-basittir ve harici bir veritabanı sunucusu kurmanızı gerektirmez. Birden fazla
-binayı/şirketi yönetecekseniz (yönetim şirketi senaryosu) `db.js`'i PostgreSQL
-gibi gerçek bir veritabanına taşımak isteyebilirsiniz — şema `db.js` içindeki
-`buildSeed()` fonksiyonunda net biçimde tanımlı.
-
 ## Kendi Sunucunuzda Yayına Alma
 
-- Basit bir VPS (örn. 1 GB RAM yeterli) üzerinde `pm2` ile çalıştırabilirsiniz:
+- Basit bir VPS (örn. 1-2 GB RAM yeterli) üzerinde `pm2` ile çalıştırabilirsiniz:
   `npm i -g pm2 && pm2 start server.js --name sakin`
+- PostgreSQL'i de aynı sunucuda Docker Compose ile (`docker compose up -d`) veya
+  yönetilen bir veritabanı servisinde (RDS, Supabase, Neon vb.) çalıştırabilirsiniz.
 - HTTPS için önüne Nginx/Caddy reverse proxy koymanız önerilir.
-- `data/` klasörünü düzenli olarak yedekleyin (tek dosya: `data/db.json`).
+- Veritabanını düzenli yedekleyin: `pg_dump` ile, veya "Ayarlar" ekranındaki
+  tüm veriyi JSON dışa aktarma özelliğiyle ek bir kopya alın.
 - `.env` dosyasındaki `JWT_SECRET`'ı mutlaka uzun ve rastgele bir değerle değiştirin.
 
 ## Bilinen Sınırlar
 
 - Aynı anda çok sayıda binayı yöneten büyük ölçekli bir yönetim şirketi için bu
   sürüm tek-bina varsayımıyla yazıldı (çoklu bina desteği eklenebilir).
-- Dosya tabanlı veritabanı tek process içindir; yük dengeleme/çoklu sunucu
-  gerekiyorsa gerçek bir veritabanına geçiş gerekir.
 - E-posta doğrulama yoktur; kayıt olan kullanıcıyı yönetici manuel onaylar.
+- Bazı route dosyaları henüz native Prisma'ya taşınmadı (bkz. yukarıdaki
+  "PostgreSQL geçişi" notu) — fonksiyonel olarak doğru çalışıyor, ileride
+  temizlenebilir bir teknik borç.

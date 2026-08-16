@@ -885,7 +885,7 @@ async function renderDaireler(c) {
 async function renderTahsilat(c) {
   const [units, accounts, payments] = await Promise.all([api("/units"), api("/accounts"), api("/payments")]);
   c.innerHTML = `
-    <div class="flex-between">${sectionTitle("Aidat Takibi")}<button class="btn btn-ghost btn-sm" id="printListBtn" style="margin-bottom:16px;">🖨️ Borç Listesi Yazdır (PDF)</button></div>
+    <div class="flex-between">${sectionTitle("Aidat Takibi")}<div style="display:flex;gap:8px;margin-bottom:16px;"><button class="btn btn-ghost btn-sm" id="printListBtn">🖨️ Borç Listesi Yazdır (PDF)</button><button class="btn btn-ghost btn-sm" id="csvListBtn">📊 Excel'e Aktar (CSV)</button></div></div>
     <div class="card form-card">
       <div class="ledger-title" style="padding:0 0 10px;">Aylık Aidat Borçlandır</div>
       <form id="genForm" class="form-row">
@@ -918,6 +918,7 @@ async function renderTahsilat(c) {
     </div>
   `;
   document.getElementById("printListBtn").addEventListener("click", () => downloadFile("/documents/debt-list", "aidat-borc-listesi.pdf"));
+  document.getElementById("csvListBtn").addEventListener("click", () => downloadFile("/documents/debt-list.csv", "aidat-borc-listesi.csv"));
   document.getElementById("genForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
@@ -1324,6 +1325,7 @@ const ACTION_LABEL = {
   "budget.set": "📊 Bütçe Güncelleme",
   "document.debt-letter": "📄 Belge İndirme",
   "document.debt-list": "🖨️ Borç Listesi Yazdırma",
+  "document.debt-list-csv": "📊 Borç Listesi Excel İndirme",
   "latefee.apply": "⚠ Gecikme Faizi",
   "charge.autogenerate": "🔁 Otomatik Borçlandırma",
   "settings.update": "⚙️ Ayar Değişikliği",

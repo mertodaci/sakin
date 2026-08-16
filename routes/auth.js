@@ -30,7 +30,7 @@ function findByEmail(email) {
 
 // Kayit icin bos/musait daire listesi (auth gerektirmez, kayit formunda kullanilir)
 router.get("/units-for-signup", async (req, res) => {
-  const units = await prisma.unit.findMany();
+  const units = await prisma.unit.findMany({ orderBy: [{ block: "asc" }, { no: "asc" }] });
   res.json(units.map((u) => ({ id: u.id, label: `${u.block} - Daire ${u.no}` })));
 });
 

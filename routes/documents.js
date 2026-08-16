@@ -165,4 +165,34 @@ router.get("/documents/debt-list", requireAuth, requireRole("yonetici"), async (
   res.send(Buffer.from(bytes));
 });
 
+// Ayni borc listesinin CSV (Excel) hali - muhasebeciyle paylasmak veya kendi
+// tabloya aktarmak icin. tr-TR Excel noktali virgul ayiraci bekler (virgul
+// ondalik ayiraci oldugundan) ve BOM, Turkce karakterlerin dogru acilmasi icindir.
+router.get("/documents/debt-list.csv", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const rows = data.units
+    .map((u) => ({
+      block: u.block,
+      no: u.no,
+      owner: u.ownerName || "",
+      debt: data.charges.filter((c) => c.unitId === u.id && c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0),
+    }))
+    .sort((a, b) => `${a.block}${a.no}`.localeCompare(`${b.block}${b.no}`, "tr"));
+
+  const escapeCsv = (v) => {
+    const s = String(v ?? "");
+    return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const header = ["Blok", "Daire No", "Malik", "Borç (TL)"];
+  const lines = [header.join(";"), ...rows.map((r) => [r.block, r.no, r.owner, r.debt.toFixed(2)].map(escapeCsv).join(";"))];
+  const csv = "﻿" + lines.join("\r\n");
+
+  db.logActivity(data, req.user, "document.debt-list-csv", "Aidat borç listesi CSV/Excel olarak indirildi.", null);
+  await db.save(data);
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="aidat-borc-listesi.csv"`);
+  res.send(csv);
+});
+
 module.exports = router;

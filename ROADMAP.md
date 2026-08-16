@@ -194,13 +194,68 @@ edilecek şekilde planlandı. Sıra değiştirilebilir ama bağımlılıklara di
 9. **Toplu SMS/e-posta arayüzü** — gerçek gönderim için SMS/e-posta
    gateway aboneliği gerekiyor (bkz. README "Neler Gerçek, Neler Demo"),
    ama arayüz/seçim mekanizması şimdiden kurulabilir.
-10. **Excel/CSV liste dışa aktarma** — şu an sadece tüm veriyi JSON olarak
-    dışa aktarma var; tekil liste (örn. sadece borçlu üyeler) için
-    Excel/CSV export.
+10. ~~**Excel/CSV liste dışa aktarma**~~ — **tamamlandı (2026-08-16):** Aidat
+    Takibi ekranına "Excel'e Aktar (CSV)" butonu eklendi
+    (`GET /api/documents/debt-list.csv`), tr-TR Excel uyumlu (noktalı virgül
+    ayıraç, UTF-8 BOM). Diğer tekil listeler (örn. tüm ödemeler, tüm
+    hareketler) için aynı desen kolayca tekrarlanabilir.
 11. **Yardım/SSS bölümü** — uygulama içi, en düşük öncelik.
 12. **Hukuki modül** — tebligat gönderme, icra takibi, genel kurul çağrısı,
     vekaletname örneği, hazirun cetveli, antetli evrak, adres etiket
     yazdırma. En özel/düşük frekanslı modül olduğu için en sona bırakıldı.
+
+---
+
+## 🔍 Üretim-Hazırlığı Değerlendirmesi (2026-08-16)
+
+PostgreSQL geçişinden sonra, uygulamayı "gerçek sakinlere verilebilir mi"
+sorusuyla değerlendirdim. Yönetimcell'e bu oturumda tarayıcıdan erişilemedi
+(otomatik/zamanlanmış çalıştığı için) — değerlendirme README'deki mevcut
+Yönetimcell karşılaştırma notlarına ve genel Türkiye apartman yönetimi UX
+pratiklerine dayanıyor.
+
+**Bu oturumda uygulanan düşük riskli/yüksek değerli düzeltmeler:**
+- **Excel/CSV borç listesi export'u** (yukarıda #10) — muhasebeciyle veya
+  denetçiyle paylaşmak için PDF'in yanında düz veri formatı, gerçek
+  kullanımda sıkça istenen bir şey.
+- **Daire listesi sıralaması düzeltildi** — Postgres'e geçişten sonra
+  `ORDER BY` verilmeyen sorgular kararsız/rastgele sırada dönüyordu (her
+  istekte değişebilirdi); artık her yerde (Daireler, Aidat Takibi, kayıt
+  formu dropdown'u) blok/no'ya göre tutarlı sıralı. Küçük ama günlük
+  kullanımda fark eden bir cila.
+- **README güncellendi** — hâlâ "JSON dosya veritabanı" diyen, artık yanlış
+  olan mimari açıklaması PostgreSQL/Prisma'yı yansıtacak şekilde düzeltildi.
+  Yanlış dokümantasyon, gerçek bir teslim için güven kırıcıdır.
+
+**Önceliklendirilmiş, henüz yapılmayan eksikler** (yukarıdaki "Bekleyen
+Roadmap Maddeleri" listesiyle aynı, sadece üretime-hazırlık merceğinden
+önceliklendirildi — küçük/orta riskli olanlar önce, mimari kararı senden
+gelmesi gerekenler ayrı işaretli):
+1. **Alacaklı/kredi bakiyesi** (madde 2) — bir sakin fazla ödeme yaptığında
+   şu an "avans" notuyla metne gömülüyor ama ayrı bir bakiye olarak
+   görünmüyor; sonraki dönem borcundan otomatik düşülmüyor. Gerçek
+   kullanımda (özellikle yıl sonu/blok değişimi) sık karşılaşılan bir
+   durum. Orta risklidir (para mantığına dokunuyor) — kendi başına bir
+   oturumda, plan modu ile ele alınmalı.
+2. **İleri tarihli borçlandırma** (madde 3) — düşük risk, `Charge.dueDate`
+   zaten gelecek bir tarih olabiliyor, esas eksik gelecek tarihli
+   borçların "henüz görünmesin/bildirim gitmesin" mantığı. Küçük bir
+   oturumda yapılabilir.
+3. **Dosya arşivi** (madde 8) — **karar senden gelmeli** (yerel disk mi S3
+   mi, dosya boyutu limiti) — bu yüzden otomatik uygulanmadı.
+4. **Raporlar modülü, İş Takibi, Ajanda, Gelen Mesajlar, Toplu SMS/e-posta,
+   Hukuki modül** — hepsi orta/büyük kapsamlı yeni özellikler, tek
+   başlarına birer oturumu hak ediyor; bu oturumda otomatik uygulanmadı.
+
+**Bu değerlendirmede yeni bulunan, roadmap'te olmayan küçük gözlemler**
+(değer/risk oranı düşük olduğu için bu oturumda uygulanmadı, ileride
+değerlendirilebilir):
+- Kullanıcı kayıt formunda telefon numarası formatı doğrulanmıyor (serbest
+  metin) — SMS altyapısı eklendiğinde önem kazanır.
+- "Bekleyen kullanıcı onayı" bildirimleri hep `admin1` id'sine gidiyor
+  (birden fazla yönetici varsa diğerleri bildirim almıyor) — şu an tek
+  yönetici senaryosunda sorun değil, çoklu yönetici desteklenirse (roadmap
+  dışı, gelecekte istenirse) gözden geçirilmeli.
 
 ---
 
