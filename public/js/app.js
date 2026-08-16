@@ -241,7 +241,7 @@ const NAV_GROUPS = {
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
     { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"]] },
     { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["butce", "Bütçe"]] },
-    { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"]] },
+    { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
     { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"]] },
     { group: "Sistem", items: [["seffaflik", "Şeffaflık"], ["ayarlar", "Ayarlar"]] },
@@ -543,6 +543,7 @@ async function renderTab(tab) {
     else if (tab === "mesajlar") await renderMesajlar(c);
     else if (tab === "icra") await renderIcraTakibi(c);
     else if (tab === "belgeler") await renderBelgeSablonlari(c);
+    else if (tab === "toplusms") await renderTopluSms(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
   } catch (err) {
     c.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
@@ -1628,6 +1629,57 @@ async function renderMesajlar(c) {
   }));
 }
 
+/* ================= TOPLU SMS/E-POSTA ================= */
+/* Yönetimcell karşılaştırmasından: şablon + <adsoyad>/<borc>/<daire> gibi
+   kişiselleştirme parametresi + blok/borç filtresi. Gerçek sağlayıcı
+   bağlanana kadar sadece önizleme üretir, konsola loglar (bkz. README). */
+
+async function renderTopluSms(c) {
+  const units = await api("/units");
+  const blocks = [...new Set(units.map((u) => u.block))].sort();
+  c.innerHTML = `
+    ${sectionTitle("Toplu SMS/E-posta", "Gerçek gönderim için sağlayıcı entegrasyonu gerekir — bu ekran şablon + alıcı listesini önizler")}
+    <div class="card form-card">
+      <form id="bulkForm" class="form-row">
+        <div class="field" style="flex:0 0 140px;"><label>Kanal</label><select name="channel"><option value="sms">SMS</option><option value="eposta">E-posta</option></select></div>
+        <div class="field" style="flex:0 0 140px;"><label>Blok</label><select name="block"><option value="">Tüm Bloklar</option>${blocks.map((b) => `<option value="${esc(b)}">${esc(b)}</option>`).join("")}</select></div>
+        <div class="field" style="flex:0 0 200px;"><label>Borç Eşiği</label>
+          <select name="minDebt">
+            <option value="">Tümü</option>
+            <option value="1">Borcu olanlar</option>
+            <option value="500">500 ₺ ve fazla borcu olanlar</option>
+            <option value="1000">1.000 ₺ ve fazla borcu olanlar</option>
+          </select>
+        </div>
+        <div class="field" style="flex:1 1 320px;"><label>Mesaj Şablonu</label><input name="template" required placeholder="Sayın <adsoyad>, <daire> için güncel borcunuz <borc> ₺'dir." /></div>
+        <button class="btn btn-primary" type="submit">Alıcıları Önizle</button>
+      </form>
+      <div class="small muted" style="margin-top:8px;">Kullanılabilecek parametreler: <code>&lt;adsoyad&gt;</code> <code>&lt;daire&gt;</code> <code>&lt;borc&gt;</code></div>
+    </div>
+    <div id="bulkPreview"></div>
+  `;
+  document.getElementById("bulkForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    try {
+      const r = await api("/bulk-messages/preview", { method: "POST", body: f });
+      const box = document.getElementById("bulkPreview");
+      box.innerHTML = `
+        <div class="card tight mb-16">
+          <div class="flex-between"><div class="ledger-title">Önizleme — ${r.count} alıcı</div>${r.count ? `<button class="btn btn-primary btn-sm" id="bulkSendBtn" style="margin:8px 0;">Gönder (taslak modu)</button>` : ""}</div>
+          ${r.recipients.map((rec) => `<div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(rec.name)} — ${esc(rec.unitLabel)}</div><div class="small muted">${esc(rec.contact)}</div><div class="small muted" style="margin-top:2px;">${esc(rec.text)}</div></div></div>`).join("") || '<div class="empty-row">Bu filtreye uyan, iletişim bilgisi kayıtlı alıcı yok.</div>'}
+        </div>`;
+      const sendBtn = document.getElementById("bulkSendBtn");
+      sendBtn && sendBtn.addEventListener("click", async () => {
+        try {
+          const sr = await api("/bulk-messages/send", { method: "POST", body: { channel: f.channel, recipients: r.recipients } });
+          toast(sr.message);
+        } catch (err) { toast(err.message); }
+      });
+    } catch (err) { toast(err.message); }
+  });
+}
+
 /* ================= HUKUKİ: İCRA TAKİBİ / BELGE ŞABLONLARI ================= */
 
 async function renderIcraTakibi(c) {
@@ -1686,6 +1738,7 @@ async function renderBelgeSablonlari(c) {
       <button class="card pad clickable" id="btnHazirun" style="text-align:left;border:none;"><div style="font-weight:700;">📋 Hazirun Cetveli</div><div class="small muted">Tüm daireler, arsa payı, imza alanı</div></button>
       <button class="card pad clickable" id="btnAntetli" style="text-align:left;border:none;"><div style="font-weight:700;">📃 Antetli Evrak</div><div class="small muted">Boş, markalı resmi yazı kağıdı</div></button>
       <button class="card pad clickable" id="btnEtiket" style="text-align:left;border:none;"><div style="font-weight:700;">🏷️ Adres Etiketleri</div><div class="small muted">Tüm daireler için zarf etiketi listesi</div></button>
+      <button class="card pad clickable" id="btnTopluOzet" style="text-align:left;border:none;"><div style="font-weight:700;">📚 Toplu Hesap Özeti</div><div class="small muted">Tüm dairelerin ekstresi tek PDF'te</div></button>
     </div>
     <div class="card tight">
       <div class="ledger-title">Borçlu Dairelere Tebligat (Ödeme Çağrısı / İhtarname)</div>
@@ -1708,6 +1761,7 @@ async function renderBelgeSablonlari(c) {
   document.getElementById("btnHazirun").addEventListener("click", () => downloadFile("/documents/hazirun-cetveli", "hazirun-cetveli.pdf"));
   document.getElementById("btnAntetli").addEventListener("click", () => downloadFile("/documents/antetli-evrak", "antetli-evrak.pdf"));
   document.getElementById("btnEtiket").addEventListener("click", () => downloadFile("/documents/adres-etiketleri", "adres-etiketleri.pdf"));
+  document.getElementById("btnTopluOzet").addEventListener("click", () => downloadFile("/documents/toplu-hesap-ozeti", "toplu-hesap-ozeti.pdf"));
   c.querySelectorAll("[data-tebligat]").forEach((b) => b.addEventListener("click", () => {
     downloadFile(`/documents/tebligat/${b.dataset.tebligat}?tier=${b.dataset.tier}`, `${b.dataset.tier}.pdf`);
   }));

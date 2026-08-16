@@ -385,4 +385,66 @@ router.get("/documents/adres-etiketleri", requireAuth, requireRole("yonetici"), 
   res.send(Buffer.from(bytes));
 });
 
+// Toplu Hesap Ozeti Dokumu: her dairenin borc+tahsilat hareketlerini kosan
+// bakiyeli ekstre olarak, hepsini tek PDF icinde art arda uretir (Yonetimcell'in
+// "Toplu Hesap Ozeti Dokumu" raporunun karsiligi - bkz. Uye Raporlari).
+router.get("/documents/toplu-hesap-ozeti", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const units = data.units.slice().sort((a, b) => `${a.block}${a.no}`.localeCompare(`${b.block}${b.no}`, "tr"));
+
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const navy = rgb(0.078, 0.188, 0.29);
+  const grey = rgb(0.43, 0.5, 0.56);
+  const red = rgb(0.75, 0.28, 0.25);
+  const green = rgb(0.12, 0.56, 0.37);
+
+  units.forEach((unit) => {
+    const entries = [];
+    data.charges.filter((ch) => ch.unitId === unit.id).forEach((ch) => entries.push({ date: ch.dueDate, label: `${ch.type} - ${ch.description || ""}`, amount: ch.amount }));
+    data.payments.filter((p) => p.unitId === unit.id && !p.cancelled).forEach((p) => entries.push({ date: p.date, label: `Tahsilat (${p.method}) - Makbuz ${p.receiptNo}`, amount: -p.amount }));
+    entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+    let running = 0;
+    entries.forEach((e) => { running += e.amount; e.balance = running; });
+
+    const page = doc.addPage([595, 842]);
+    let y = 780;
+    page.drawText(trSafe("SAKIN"), { x: 50, y, size: 20, font: bold, color: navy });
+    page.drawText(trSafe(`${unit.block} - Daire ${unit.no} — Hesap Özeti`), { x: 50, y: y - 18, size: 11, font, color: grey });
+    page.drawText(trSafe(unit.ownerName || "-"), { x: 50, y: y - 32, size: 10, font, color: grey });
+    page.drawLine({ start: { x: 50, y: y - 44 }, end: { x: 545, y: y - 44 }, thickness: 1, color: rgb(0.87, 0.9, 0.93) });
+
+    y -= 70;
+    page.drawText(trSafe("Tarih"), { x: 50, y, size: 9, font: bold, color: grey });
+    page.drawText(trSafe("Açıklama"), { x: 130, y, size: 9, font: bold, color: grey });
+    page.drawText(trSafe("Tutar"), { x: 400, y, size: 9, font: bold, color: grey });
+    page.drawText(trSafe("Bakiye"), { x: 480, y, size: 9, font: bold, color: grey });
+    y -= 14;
+    page.drawLine({ start: { x: 50, y }, end: { x: 545, y }, thickness: 1, color: rgb(0.87, 0.9, 0.93) });
+    y -= 16;
+
+    entries.slice().reverse().forEach((e) => {
+      if (y < 60) return; // tek sayfa - cok uzun ekstreler kirpilir (toplu dokum ozeti icin yeterli)
+      page.drawText(trSafe(fmtDateTr(e.date)), { x: 50, y, size: 9, font, color: rgb(0.06, 0.11, 0.15) });
+      page.drawText(trSafe(e.label).slice(0, 45), { x: 130, y, size: 9, font, color: rgb(0.06, 0.11, 0.15) });
+      page.drawText(trSafe((e.amount > 0 ? "+" : "") + e.amount.toFixed(0)), { x: 400, y, size: 9, font, color: e.amount > 0 ? red : green });
+      page.drawText(trSafe(e.balance.toFixed(0)), { x: 480, y, size: 9, font: bold, color: rgb(0.06, 0.11, 0.15) });
+      y -= 15;
+    });
+
+    y = Math.max(y, 60) - 14;
+    page.drawLine({ start: { x: 50, y }, end: { x: 545, y }, thickness: 1, color: rgb(0.87, 0.9, 0.93) });
+    page.drawText(trSafe(`Güncel Bakiye: ${running.toFixed(0)} TL ${running > 0 ? "(Borçlu)" : "(Borcu Yok)"}`), { x: 50, y: y - 16, size: 10, font: bold, color: running > 0 ? red : green });
+  });
+
+  const bytes = await doc.save();
+  db.logActivity(data, req.user, "document.toplu-hesap-ozeti", `Toplu hesap özeti dökümü indirildi (${units.length} daire).`, null);
+  await db.save(data);
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="toplu-hesap-ozeti.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
 module.exports = router;

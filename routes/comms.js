@@ -142,5 +142,48 @@ function sendSms(phone, message) {
   // TODO: Netgsm / Iletimerkezi vb. saglayici API cagrisi buraya eklenmelidir.
   console.log(`[SMS - GONDERILMEDI, entegrasyon eksik] -> ${phone}: ${message}`);
 }
+function sendEmail(email, message) {
+  // TODO: SMTP / SendGrid vb. saglayici entegrasyonu buraya eklenmelidir.
+  console.log(`[E-POSTA - GONDERILMEDI, entegrasyon eksik] -> ${email}: ${message}`);
+}
+
+/* ---------------- TOPLU SMS/E-POSTA (Yonetimcell karsilastirmasindan) ---------------- */
+// Gercek bir SMS/e-posta saglayicisi baglanana kadar (bkz. README "Neler
+// Gercek, Neler Demo") bu uc GONDERMEZ - sadece kime, ne metniyle
+// gonderilecegini kisisellestirip onizler ve konsola loglar (sendSms/
+// sendEmail stub'lari uzerinden). Boylece arayuz+filtre+sablon mekanizmasi
+// gercek saglayici baglanir baglanmaz kullanima hazir.
+router.post("/bulk-messages/preview", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const { channel, template, block, minDebt } = req.body || {};
+  if (!template) return res.status(400).json({ error: "Mesaj şablonu zorunludur." });
+
+  const debtOf = (unitId) => data.charges.filter((c) => c.unitId === unitId && c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0);
+  let units = data.units.map((u) => ({ ...u, debt: debtOf(u.id) }));
+  if (block) units = units.filter((u) => u.block === block);
+  if (minDebt) units = units.filter((u) => u.debt >= Number(minDebt));
+
+  const recipients = units.map((u) => {
+    const resident = data.users.find((usr) => usr.unitId === u.id && usr.role === "sakin");
+    const text = template
+      .split("<adsoyad>").join(u.ownerName || resident?.name || "-")
+      .split("<borc>").join(String(u.debt))
+      .split("<daire>").join(`${u.block} - Daire ${u.no}`);
+    const contact = channel === "eposta" ? resident?.email || "" : resident?.phone || u.ownerPhone || "";
+    return { unitLabel: `${u.block} - Daire ${u.no}`, name: u.ownerName || resident?.name || "-", contact, text };
+  }).filter((r) => r.contact);
+
+  res.json({ count: recipients.length, recipients });
+});
+
+router.post("/bulk-messages/send", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const { channel, recipients } = req.body || {};
+  if (!Array.isArray(recipients) || !recipients.length) return res.status(400).json({ error: "Alıcı listesi boş." });
+  recipients.forEach((r) => (channel === "eposta" ? sendEmail(r.contact, r.text) : sendSms(r.contact, r.text)));
+  const data = await db.load();
+  db.logActivity(data, req.user, "bulk-message.send", `${recipients.length} kişiye toplu ${channel === "eposta" ? "e-posta" : "SMS"} gönderim denemesi yapıldı (sağlayıcı entegrasyonu eksik, bkz. sunucu logu).`, null);
+  await db.save(data);
+  res.status(202).json({ message: `${recipients.length} alıcı için gönderim denendi. Gerçek sağlayıcı bağlanmadığı için mesajlar konsola loglandı, fiilen iletilmedi (bkz. README "Neler Gerçek, Neler Demo").` });
+});
 
 module.exports = router;
