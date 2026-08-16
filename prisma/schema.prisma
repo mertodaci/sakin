@@ -85,6 +85,7 @@ model Unit {
   // bir alan olarak goruldu (Yonetimcell karsilastirmasi).
   squareMeters Decimal? @db.Decimal(8, 2)
   feeGroup    String?
+  accountingCode String?
   // Acik borclarin tamaminin odenmesinden sonra artan tutar buraya birikir
   // (alacakli bakiye). Otomatik hicbir borca uygulanmaz - yonetici "Krediyi
   // Borca Uygula" ile bilincli olarak tetikler (bkz. CreditApplication).
@@ -208,6 +209,11 @@ model Account {
   iban           String
   openingBalance Decimal     @db.Decimal(12, 2)
   createdAt      DateTime    @default(now())
+  // Yonetimcell karsilastirmasi: "Muhasebe Kodu Tanimlari" - Tekduzen Hesap
+  // Plani'na gore kullanicinin kendi mali musavirine referans icin atadigi
+  // serbest metin kod (orn. "102.01"). Gercek bir hesap plani hiyerarsisi
+  // degil, sadece raporlama/eslestirme etiketi.
+  accountingCode String?
 
   transactions      Transaction[]
   payments          Payment[]
@@ -369,6 +375,7 @@ model Vendor {
   taxNumber   String
   iban        String
   notes       String
+  accountingCode String?
   createdAt   DateTime @default(now())
 }
 
@@ -377,6 +384,7 @@ model Vendor {
 // baglanabilir, taraf zorunlu degil).
 model ExpenseCategory {
   id        String   @id @default(uuid())
+  accountingCode String?
   group     String
   name      String
   createdAt DateTime @default(now())
@@ -480,6 +488,7 @@ model Personnel {
   userId        String?  @unique
   user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   monthlySalary Decimal? @db.Decimal(12, 2)
+  accountingCode String?
 
   equipmentResponsible Equipment[]
   ticketsAssigned      Ticket[]

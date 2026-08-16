@@ -487,4 +487,139 @@ router.get("/documents/toplu-hesap-ozeti", requireAuth, requireRole("yonetici"),
   res.send(Buffer.from(bytes));
 });
 
+// ---------------- Muhasebe Raporlari (Yonetimcell karsilastirmasi) ----------------
+// Yevmiye/Kebir Defteri + Kapanis Mizani + Firma Mutabakat Mektubu - canli
+// hesapta incelenince ortaya cikti ki bunlar ayri bir cift-tarafli defter
+// degil, mevcut Charge/Payment/PartyCharge/PartyPayment verisinin yil bazinda
+// PDF'e dokumu. buildDocument tek sayfa cizdigi icin uzun listeler ilk N
+// satirla sinirlanir (tam liste icin ekrandaki Tahakkuk Fisleri sorgulanabilir).
+
+router.get("/documents/yevmiye-defteri", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const inYear = (d) => new Date(d).getFullYear() === year;
+  const unitById = new Map(data.units.map((u) => [u.id, u]));
+
+  const entries = [];
+  data.charges.filter((c) => inYear(c.createdAt)).forEach((c) => {
+    const u = unitById.get(c.unitId);
+    entries.push({ date: c.createdAt, text: `${u ? u.block + "/" + u.no : "-"} ${c.type} — Borç ${fmtTL(c.amount)}` });
+  });
+  data.payments.filter((p) => !p.cancelled && inYear(p.date)).forEach((p) => {
+    const u = unitById.get(p.unitId);
+    entries.push({ date: p.date, text: `${u ? u.block + "/" + u.no : "-"} Tahsilat (${p.receiptNo}) — Alacak ${fmtTL(p.amount)}` });
+  });
+  entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const bytes = await buildDocument({
+    heading: `${year} YEVMİYE DEFTERİ`,
+    lines: [
+      `Toplam kayıt: ${entries.length}`,
+      "",
+      ...entries.slice(0, 38).map((e) => `${fmtDateTr(e.date)} — ${e.text}`),
+      entries.length > 38 ? `… ve ${entries.length - 38} kayıt daha (tam liste için Tahakkuk Fişleri ekranı)` : "",
+    ].filter((l) => l !== undefined),
+    footerNote: "Bu döküm mevcut borç/tahsilat kayıtlarından otomatik oluşturulmuştur.",
+  });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="yevmiye-defteri-${year}.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
+router.get("/documents/kebir-defteri", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const inYear = (d) => new Date(d).getFullYear() === year;
+  const unitById = new Map(data.units.map((u) => [u.id, u]));
+
+  const totals = new Map();
+  function add(key, borc, alacak) {
+    const cur = totals.get(key) || { borc: 0, alacak: 0 };
+    cur.borc += borc; cur.alacak += alacak;
+    totals.set(key, cur);
+  }
+  data.charges.filter((c) => inYear(c.createdAt)).forEach((c) => {
+    const u = unitById.get(c.unitId);
+    add(u ? `${u.block}/${u.no} ${u.ownerName || "-"}` : "Bilinmeyen Daire", c.amount, 0);
+  });
+  data.payments.filter((p) => !p.cancelled && inYear(p.date)).forEach((p) => {
+    const u = unitById.get(p.unitId);
+    add(u ? `${u.block}/${u.no} ${u.ownerName || "-"}` : "Bilinmeyen Daire", 0, p.amount);
+  });
+
+  const rows = [...totals.entries()].sort((a, b) => a[0].localeCompare(b[0], "tr"));
+  const bytes = await buildDocument({
+    heading: `${year} KEBİR DEFTERİ (ÖZET)`,
+    lines: [
+      `Hesap sayısı: ${rows.length}`,
+      "",
+      ...rows.slice(0, 38).map(([label, t]) => `${label} — Borç: ${fmtTL(t.borc)} · Alacak: ${fmtTL(t.alacak)} · Bakiye: ${fmtTL(t.borc - t.alacak)}`),
+      rows.length > 38 ? `… ve ${rows.length - 38} hesap daha` : "",
+    ].filter((l) => l !== undefined),
+    footerNote: "Bu döküm mevcut borç/tahsilat kayıtlarından otomatik oluşturulmuştur.",
+  });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="kebir-defteri-${year}.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
+router.get("/documents/kapanis-mizani", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const cutoff = new Date(`${year}-12-31T23:59:59`);
+
+  const rows = data.units.map((u) => {
+    const charges = data.charges.filter((c) => c.unitId === u.id && new Date(c.createdAt) <= cutoff);
+    const paid = data.payments.filter((p) => p.unitId === u.id && !p.cancelled && new Date(p.date) <= cutoff).reduce((s, p) => s + p.amount, 0);
+    const borc = charges.reduce((s, c) => s + c.amount, 0);
+    const net = borc - paid;
+    return { label: `${u.block}/${u.no} ${u.ownerName || "-"}`, net };
+  }).filter((r) => Math.abs(r.net) > 0.01);
+
+  const totalBorc = rows.reduce((s, r) => s + Math.max(0, r.net), 0);
+  const totalAlacak = rows.reduce((s, r) => s + Math.max(0, -r.net), 0);
+  const bytes = await buildDocument({
+    heading: `${year} YIL SONU KAPANIŞ MİZANI`,
+    lines: [
+      `${year}-12-31 itibarıyla üye bakiyeleri`,
+      "",
+      ...rows.slice(0, 34).map((r) => `${r.label} — ${r.net > 0 ? "Borçlu" : "Alacaklı"}: ${fmtTL(Math.abs(r.net))}`),
+      rows.length > 34 ? `… ve ${rows.length - 34} daire daha` : "",
+      "",
+      `TOPLAM BORÇ BAKİYESİ: ${fmtTL(totalBorc)}`,
+      `TOPLAM ALACAK BAKİYESİ: ${fmtTL(totalAlacak)}`,
+    ].filter((l) => l !== undefined),
+    footerNote: "Bu döküm mevcut borç/tahsilat kayıtlarından otomatik oluşturulmuştur, resmi mali müşavir onayı yerine geçmez.",
+  });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="kapanis-mizani-${year}.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
+router.get("/documents/firma-mutabakat/:vendorId", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const vendor = data.vendors.find((v) => v.id === req.params.vendorId);
+  if (!vendor) return res.status(404).json({ error: "Firma bulunamadı." });
+  const charges = data.partyCharges.filter((c) => c.partyType === "firma" && c.partyId === vendor.id && c.status !== "paid");
+  const balance = charges.reduce((s, c) => s + (c.amount - c.paidAmount), 0);
+
+  const bytes = await buildDocument({
+    heading: "MUTABAKAT MEKTUBU",
+    lines: [
+      `Sayın ${vendor.name},`,
+      "",
+      `${fmtDateTr(new Date())} tarihi itibarıyla kayıtlarımıza göre güncel bakiyeniz ${fmtTL(balance)} olarak görünmektedir.`,
+      "Bu bakiye ile mutabık olup olmadığınızı bildirmenizi rica ederiz.",
+      "",
+      `${data.meta.buildingName || "Site Yönetimi"}`,
+    ],
+    footerNote: "Bu mektup site yönetim sistemi tarafından otomatik oluşturulmuştur.",
+  });
+  db.logActivity(data, req.user, "document.firma-mutabakat", `${vendor.name} için mutabakat mektubu indirildi.`, null);
+  await db.save(data);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="mutabakat-${vendor.name}.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
 module.exports = router;

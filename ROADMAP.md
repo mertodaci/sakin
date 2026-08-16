@@ -509,16 +509,45 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   `Charge.type` olarak var, istenirse ayrıca hesaplanabilir).
   `test-payables-card.js` ile regresyon testi geçiyor.
 
-**Sırada (henüz yapılmadı, bu sırayla ilerlenecek — menü denetiminden çıkan liste):**
-1. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
-   Kebir Defteri, banka entegrasyonu — sadece iskelet/arayüz düzeyinde
-   (gerçek banka API'si/mali müşavir entegrasyonu üçüncü taraf
-   sözleşmesi gerektirir, Mert'in kararı). Menü denetiminde
-   "Muhasebe Raporları" alt menüsü (Tahakkuk Fişleri/Özet Mizan/
-   Yevmiye ve Kebir Defteri/Muhasebe Kodları/Firma Mutabakat Mektubu)
-   bu maddenin kapsamını doğruladı. **Buradan devam et.**
-2. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
-   sayfasıydı, en düşük öncelik, atlanabilir).
+- ✅ **Muhasebe kodu + Mizan + Tahakkuk Fişleri + Yevmiye/Kebir/Mutabakat**
+  — Mert'in talebi üzerine ("yönetimcell de nasılsa ikisini de öyle
+  yapalım") canlı hesapta "Muhasebe Raporları" menüsünün 5 alt sayfası
+  tek tek incelendi. Ortaya çıkan gerçek: bu GERÇEK çift-taraflı bir
+  muhasebe defteri değil — mevcut verilerimizin (Account/Unit/Vendor/
+  Personnel/ExpenseCategory) üzerine kullanıcının kendi mali müşavirine
+  referans için atadığı serbest metin bir **Hesap Kodu** etiketi + bu
+  kodlarla birleştirilmiş raporlar.
+  - `accountingCode String?` eklendi: Account, Unit, Vendor, Personnel,
+    ExpenseCategory. Yeni **Muhasebe Kodları** ekranı (`GET/PATCH
+    /accounting/codes`) + "Kodu Olmayanlara Otomatik Kod Oluştur"
+    (`POST /accounting/codes/auto-assign` — Tekdüzen Hesap Planı grup
+    kodlarından esinlenen varsayılan ön-ekler: 100=Kasa, 120=Alıcılar/
+    Üyeler, 320=Satıcılar/Firmalar, 335=Personele Borçlar, 770=Genel
+    Yönetim Giderleri — kullanıcı sonradan değiştirebilir).
+  - Yeni **Mizan Raporu** ekranı (`GET /accounting/mizan`) — her varlık
+    türü için Toplam Borç/Toplam Alacak/Borç Bakiye/Alacak Bakiye
+    kırılımı, kod filtresiyle.
+  - Yeni **Muhasebe Tahakkuk Fişleri** ekranı (`GET /accounting/fisler`)
+    — tarih aralığında oluşan her borç/tahsilat olayını (Charge/Payment/
+    PartyCharge/PartyPayment) Fiş No + Hesap Kodu + Açıklama + Borç/
+    Alacak şeklinde kronolojik listeler.
+  - Yevmiye Defteri / Kebir Defteri / Kapanış Mizanı — yıl bazlı PDF
+    dökümü (`buildDocument` helper'ı ile, mevcut belge şablonu
+    desenine uygun).
+  - Firma Mutabakat Mektubu — "Firma & Personel" ekranındaki her firma
+    kartına "✉️ Mutabakat" butonu, güncel bakiyeyi içeren PDF üretir.
+  - `test-accounting.js` ile regresyon testleri (kod atama/otomatik
+    kod/mizan/fişler/4 PDF export) geçiyor.
+  - **Bilinçli sadeleştirme**: banka entegrasyonu ve gerçek mali
+    müşavir/e-defter API bağlantısı hâlâ üçüncü taraf sözleşmesi
+    gerektiriyor (README'nin "Neler Gerçek, Neler Demo" ayrımı) —
+    burada üretilen PDF'ler kullanıcının kendi mali müşavirine
+    iletmesi için, resmi e-defter beyanı yerine geçmez.
+**Sırada:**
+1. ⏳ Bilgi Bankası — Mert'in talebi üzerine ("ikisini de öyle yapalım")
+   Yönetimcell'deki gerçek haliyle incelenip aynı şekilde ele alınacak
+   (daha önce "düşük öncelik, atlanabilir" olarak not edilmişti, ama
+   şimdi açıkça isteniyor). **Buradan devam et.**
 
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar

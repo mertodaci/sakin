@@ -277,6 +277,9 @@ const NAV_ICON = {
   borclistesi: '<path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="5" y="4" width="14" height="17" rx="2"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="16" y2="15"/>',
   tekrarlayan: '<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>',
   arsiv: '<path d="M2 4h20v4H2z"/><path d="M4 8v12h16V8"/><line x1="10" y1="13" x2="14" y2="13"/>',
+  muhasebekod: '<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="12" y2="11"/><line x1="8" y1="15" x2="14" y2="15"/>',
+  mizan: '<path d="M12 3v18"/><path d="M5 8l-3 5a3 3 0 0 0 6 0z"/><path d="M19 8l-3 5a3 3 0 0 0 6 0z"/><path d="M5 8h14"/><path d="M8 21h8"/>',
+  fisler: '<path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="5" y="4" width="14" height="17" rx="2"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/>',
   ayarlar: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/>',
 };
 function navIcon(id) { return svgIcon(NAV_ICON[id] || NAV_ICON.ozet); }
@@ -293,7 +296,7 @@ const NAV_GROUPS = {
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
     { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"]] },
-    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["butce", "Bütçe"]] },
+    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
     { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"]] },
@@ -629,6 +632,9 @@ async function renderTab(tab) {
     else if (tab === "icra") await renderIcraTakibi(c);
     else if (tab === "belgeler") await renderBelgeSablonlari(c);
     else if (tab === "arsiv") await renderDosyaArsivi(c);
+    else if (tab === "muhasebekod") await renderMuhasebeKodlari(c);
+    else if (tab === "mizan") await renderMizanRaporu(c);
+    else if (tab === "fisler") await renderTahakkukFisleri(c);
     else if (tab === "toplusms") await renderTopluSms(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
   } catch (err) {
@@ -1586,6 +1592,168 @@ async function renderMuhasebe(c) {
   c.querySelectorAll("[data-deltxn]").forEach((b) => b.addEventListener("click", async () => { if (!confirm("Silinsin mi?")) return; try { await api("/transactions/" + b.dataset.deltxn, { method: "DELETE" }); renderTab("muhasebe"); } catch (err) { toast(err.message); } }));
 }
 
+// Yonetimcell karsilastirmasi: "Muhasebe Kodu Tanimlari" - canli hesapta
+// incelenince ortaya cikti ki gercek bir hesap plani hiyerarsisi degil,
+// her varlik turune (kasa/uye/firma/personel/gider kategorisi) atanan
+// serbest metin bir kod. Kullanicinin kendi mali musavirine referans icin.
+async function renderMuhasebeKodlari(c) {
+  const codes = await api("/accounting/codes");
+  const sections = [
+    ["kasalar", "Kasalar / Bankalar"],
+    ["uyeler", "Üyeler (Daireler)"],
+    ["firmalar", "Firmalar"],
+    ["personel", "Personel"],
+    ["giderler", "Gider Kategorileri"],
+  ];
+  const typeByKey = { kasalar: "account", uyeler: "unit", firmalar: "vendor", personel: "personnel", giderler: "category" };
+  c.innerHTML = `
+    <div class="flex-between">${sectionTitle("Muhasebe Kodları", "Tekdüzen Hesap Planı'na göre kendi mali müşavirinize referans için kod atayın")}<button class="btn btn-ghost btn-sm" id="autoAssignBtn" style="margin-bottom:16px;">Kodu Olmayanlara Otomatik Kod Oluştur</button></div>
+    ${sections.map(([key, label]) => `
+      <div class="card tight mb-16">
+        <div class="ledger-title">${esc(label)}</div>
+        ${codes[key].map((row) => `
+          <div class="ledger-row">
+            <div style="font-size:14px;">${esc(row.label)}</div>
+            <input data-code-input="${typeByKey[key]}|${row.id}" value="${esc(row.code || "")}" placeholder="Kod girin…" style="width:140px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);font-size:13px;" />
+          </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+      </div>`).join("")}
+  `;
+  document.getElementById("autoAssignBtn").addEventListener("click", async () => {
+    try { const r = await api("/accounting/codes/auto-assign", { method: "POST" }); toast(r.message); renderTab("muhasebekod"); }
+    catch (err) { toast(err.message); }
+  });
+  c.querySelectorAll("[data-code-input]").forEach((input) => {
+    input.addEventListener("change", async () => {
+      const [type, id] = input.dataset.codeInput.split("|");
+      try { await api("/accounting/codes", { method: "PATCH", body: { type, id, code: input.value } }); toast("Kod kaydedildi."); }
+      catch (err) { toast(err.message); }
+    });
+  });
+}
+
+// Yonetimcell karsilastirmasi: "Ozet Mizan" - her varlik turunun Toplam Borc/
+// Toplam Alacak/Borc Bakiye/Alacak Bakiye kirilimini tek tabloda gosterir.
+async function renderMizanRaporu(c) {
+  async function load(code) {
+    const qs = code ? "?code=" + encodeURIComponent(code) : "";
+    return api("/accounting/mizan" + qs);
+  }
+  let rows = await load();
+  const year = new Date().getFullYear();
+
+  function renderTable() {
+    const totalBorc = rows.reduce((s, r) => s + r.borcBakiye, 0);
+    const totalAlacak = rows.reduce((s, r) => s + r.alacakBakiye, 0);
+    return `
+      <div class="scroll-x">
+        <table class="simple">
+          <thead><tr><th>Hesap Kodu</th><th>Tanım</th><th>Grup</th><th style="text-align:right;">Toplam Borç</th><th style="text-align:right;">Toplam Alacak</th><th style="text-align:right;">Borç Bakiye</th><th style="text-align:right;">Alacak Bakiye</th></tr></thead>
+          <tbody>
+            ${rows.map((r) => `
+              <tr>
+                <td>${esc(r.code || "-")}</td>
+                <td>${esc(r.label)}</td>
+                <td class="small muted">${esc(r.group)}</td>
+                <td class="f-num" style="text-align:right;">${tl(r.toplamBorc)}</td>
+                <td class="f-num" style="text-align:right;">${tl(r.toplamAlacak)}</td>
+                <td class="f-num" style="text-align:right;color:var(--red);">${r.borcBakiye ? tl(r.borcBakiye) : "-"}</td>
+                <td class="f-num" style="text-align:right;color:var(--green);">${r.alacakBakiye ? tl(r.alacakBakiye) : "-"}</td>
+              </tr>`).join("") || '<tr><td colspan="7" class="empty-row">Kayıt yok.</td></tr>'}
+            <tr style="font-weight:700;border-top:2px solid var(--line);">
+              <td colspan="5">TOPLAM</td>
+              <td class="f-num" style="text-align:right;">${tl(totalBorc)}</td>
+              <td class="f-num" style="text-align:right;">${tl(totalAlacak)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  c.innerHTML = `
+    <div class="flex-between">${sectionTitle("Mizan Raporu", "Tüm hesapların borç/alacak bakiye kırılımı")}
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button class="btn btn-ghost btn-sm" id="yevmiyeBtn">📖 Yevmiye Defteri (${year})</button>
+        <button class="btn btn-ghost btn-sm" id="kebirBtn">📗 Kebir Defteri (${year})</button>
+        <button class="btn btn-ghost btn-sm" id="kapanisBtn">📕 Kapanış Mizanı (${year})</button>
+      </div>
+    </div>
+    <div class="card tight mb-16" style="padding:14px;">
+      <form id="mizanFilterForm" class="form-row">
+        <div class="field" style="flex:1 1 200px;"><label>Hesap Kodu Filtrele</label><input name="code" placeholder="Örn. 120" /></div>
+        <button class="btn btn-ghost btn-sm" type="submit">Filtrele</button>
+      </form>
+    </div>
+    <div id="mizanTable">${renderTable()}</div>
+  `;
+  document.getElementById("mizanFilterForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const code = new FormData(e.target).get("code");
+    rows = await load(code);
+    document.getElementById("mizanTable").innerHTML = renderTable();
+  });
+  document.getElementById("yevmiyeBtn").addEventListener("click", () => downloadFile(`/documents/yevmiye-defteri?year=${year}`, `yevmiye-defteri-${year}.pdf`));
+  document.getElementById("kebirBtn").addEventListener("click", () => downloadFile(`/documents/kebir-defteri?year=${year}`, `kebir-defteri-${year}.pdf`));
+  document.getElementById("kapanisBtn").addEventListener("click", () => downloadFile(`/documents/kapanis-mizani?year=${year}`, `kapanis-mizani-${year}.pdf`));
+}
+
+// Yonetimcell karsilastirmasi: "Muhasebe Tahakkuk Fisleri" - verilen tarih
+// araliginda olusan her borc/tahsilat olayini Fis No + Hesap Kodu + Aciklama
+// + Borc/Alacak seklinde kronolojik listeler.
+async function renderTahakkukFisleri(c) {
+  async function load(from, to) {
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    return api("/accounting/fisler?" + qs.toString());
+  }
+  let fisler = await load();
+
+  function renderTable() {
+    const totalBorc = fisler.reduce((s, f) => s + f.borc, 0);
+    const totalAlacak = fisler.reduce((s, f) => s + f.alacak, 0);
+    return `
+      <div class="scroll-x">
+        <table class="simple">
+          <thead><tr><th>Fiş No</th><th>Tarih</th><th>Hesap Kodu</th><th>Açıklama</th><th style="text-align:right;">Borç</th><th style="text-align:right;">Alacak</th></tr></thead>
+          <tbody>
+            ${fisler.map((f) => `
+              <tr>
+                <td>${f.fisNo}</td>
+                <td>${dt(f.date)}</td>
+                <td>${esc(f.code || "-")}</td>
+                <td>${esc(f.description)}</td>
+                <td class="f-num" style="text-align:right;">${f.borc ? tl(f.borc) : "-"}</td>
+                <td class="f-num" style="text-align:right;">${f.alacak ? tl(f.alacak) : "-"}</td>
+              </tr>`).join("") || '<tr><td colspan="6" class="empty-row">Bu aralıkta kayıt yok.</td></tr>'}
+            <tr style="font-weight:700;border-top:2px solid var(--line);">
+              <td colspan="4">TOPLAM</td>
+              <td class="f-num" style="text-align:right;">${tl(totalBorc)}</td>
+              <td class="f-num" style="text-align:right;">${tl(totalAlacak)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  c.innerHTML = `
+    ${sectionTitle("Muhasebe Tahakkuk Fişleri", "Seçilen tarih aralığındaki tüm borç/tahsilat hareketleri")}
+    <div class="card tight mb-16" style="padding:14px;">
+      <form id="fisFilterForm" class="form-row">
+        <div class="field"><label>Başlangıç</label><input name="from" type="date" /></div>
+        <div class="field"><label>Bitiş</label><input name="to" type="date" /></div>
+        <button class="btn btn-ghost btn-sm" type="submit">Sorgula</button>
+      </form>
+    </div>
+    <div id="fisTable">${renderTable()}</div>
+  `;
+  document.getElementById("fisFilterForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    fisler = await load(f.from, f.to);
+    document.getElementById("fisTable").innerHTML = renderTable();
+  });
+}
+
 async function renderKasalar(c) {
   const [accounts, dash] = await Promise.all([api("/accounts"), api("/dashboard")]);
   const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
@@ -1685,6 +1853,7 @@ async function renderCari(c) {
           <button class="btn btn-ghost btn-sm" data-charge="${partyType}|${partyId}">+ Borçlandır</button>
           ${debt > 0 ? `<button class="btn btn-ghost btn-sm" data-pay="${partyType}|${partyId}|${debt}">Öde</button>` : ""}
           <button class="btn btn-ghost btn-sm" data-hesap="${partyType}|${partyId}" title="Hesap Hareketleri">📄 Hesap Hareketleri</button>
+          ${partyType === "firma" ? `<button class="btn btn-ghost btn-sm" data-mutabakat="${partyId}" title="Mutabakat Mektubu">✉️ Mutabakat</button>` : ""}
         </div>
         <div id="cari-action-${partyType}-${partyId}"></div>
       </div>`;
@@ -1754,6 +1923,9 @@ async function renderCari(c) {
   c.querySelectorAll("[data-hesap]").forEach((b) => b.addEventListener("click", () => {
     const [partyType, partyId] = b.dataset.hesap.split("|");
     renderPartyHesapHareketleriModal(partyType, partyId, partyNameMap.get(`${partyType}|${partyId}`) || "Hesap Hareketleri");
+  }));
+  c.querySelectorAll("[data-mutabakat]").forEach((b) => b.addEventListener("click", () => {
+    downloadFile(`/documents/firma-mutabakat/${b.dataset.mutabakat}`, "mutabakat-mektubu.pdf");
   }));
 }
 

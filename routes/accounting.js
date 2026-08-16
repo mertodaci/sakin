@@ -1,0 +1,183 @@
+const express = require("express");
+const db = require("../db");
+const { requireAuth, requireRole } = require("../middleware/auth");
+
+const router = express.Router();
+
+// Yonetimcell karsilastirmasi: "Muhasebe Raporlari" modulu. Canlı hesapta
+// incelendiginde ortaya cikti ki bu GERCEK cift-tarafli bir muhasebe defteri
+// degil - mevcut verilerimizin (Account/Unit/Vendor/Personnel/ExpenseCategory)
+// uzerine, kullanicinin kendi mali musavirine referans icin atadigi serbest
+// metin bir "Hesap Kodu" etiketi + bu kodlarla birlikte sunulan raporlar
+// (Mizan, Tahakkuk Fisleri, Yevmiye/Kebir Defteri, Firma Mutabakat Mektubu).
+// Asagidaki varsayilan kod on-ekleri (100/102/120/320/335/770) Tekduzen Hesap
+// Plani grup kodlarindan esinlenmistir (Kasa/Banka/Alicilar/Saticilar/
+// Personele Borclar/Genel Yonetim Giderleri) - kullanici sonradan degistirebilir.
+
+const TYPE_TO_MODEL = { account: "account", unit: "unit", vendor: "vendor", personnel: "personnel", category: "expenseCategory" };
+
+router.get("/accounting/codes", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const categories = await db.prisma.expenseCategory.findMany({ orderBy: [{ group: "asc" }, { name: "asc" }] });
+  res.json({
+    kasalar: data.accounts.map((a) => ({ id: a.id, label: a.name, code: a.accountingCode || null })),
+    uyeler: data.units.map((u) => ({ id: u.id, label: `(${u.block}/${u.no}) ${u.ownerName || "-"}`, code: u.accountingCode || null })),
+    firmalar: data.vendors.map((v) => ({ id: v.id, label: v.name, code: v.accountingCode || null })),
+    personel: data.personnel.map((p) => ({ id: p.id, label: p.name, code: p.accountingCode || null })),
+    giderler: categories.map((c) => ({ id: c.id, label: `${c.group} / ${c.name}`, code: c.accountingCode || null })),
+  });
+});
+
+router.patch("/accounting/codes", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const { type, id, code } = req.body || {};
+  const model = TYPE_TO_MODEL[type];
+  if (!model || !id) return res.status(400).json({ error: "Geçersiz tür veya kayıt." });
+
+  if (model === "expenseCategory") {
+    const updated = await db.prisma.expenseCategory.update({ where: { id }, data: { accountingCode: code || null } }).catch(() => null);
+    if (!updated) return res.status(404).json({ error: "Kayıt bulunamadı." });
+    return res.json({ id: updated.id, code: updated.accountingCode });
+  }
+
+  // account/unit/vendor/personnel hala legacy shim uzerinden (db.load/db.save)
+  // yaziliyor - digerleriyle ayni collection'lari paylastiklari icin.
+  const collectionName = { account: "accounts", unit: "units", vendor: "vendors", personnel: "personnel" }[type];
+  const data = await db.load();
+  const row = data[collectionName].find((x) => x.id === id);
+  if (!row) return res.status(404).json({ error: "Kayıt bulunamadı." });
+  row.accountingCode = code || null;
+  await db.save(data);
+  res.json({ id: row.id, code: row.accountingCode });
+});
+
+router.post("/accounting/codes/auto-assign", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const categories = await db.prisma.expenseCategory.findMany();
+  let assigned = 0;
+
+  function nextCode(prefix, existingCodes) {
+    let n = 1;
+    while (existingCodes.has(`${prefix}.${String(n).padStart(2, "0")}`)) n++;
+    const code = `${prefix}.${String(n).padStart(2, "0")}`;
+    existingCodes.add(code);
+    return code;
+  }
+
+  const plans = [
+    { prefix: "100", rows: data.accounts },
+    { prefix: "120", rows: data.units },
+    { prefix: "320", rows: data.vendors },
+    { prefix: "335", rows: data.personnel },
+  ];
+  for (const plan of plans) {
+    const existing = new Set(plan.rows.filter((r) => r.accountingCode).map((r) => r.accountingCode));
+    plan.rows.forEach((r) => {
+      if (!r.accountingCode) {
+        r.accountingCode = nextCode(plan.prefix, existing);
+        assigned++;
+      }
+    });
+  }
+  await db.save(data);
+
+  const existingCat = new Set(categories.filter((c) => c.accountingCode).map((c) => c.accountingCode));
+  for (const cat of categories) {
+    if (!cat.accountingCode) {
+      const code = nextCode("770", existingCat);
+      await db.prisma.expenseCategory.update({ where: { id: cat.id }, data: { accountingCode: code } });
+      assigned++;
+    }
+  }
+
+  res.json({ message: `${assigned} tanıma otomatik kod atandı.`, assigned });
+});
+
+// Mizan Raporu: her varlik turu (kasa/uye/firma/personel) icin Toplam Borc/
+// Toplam Alacak/Borc Bakiye/Alacak Bakiye - mevcut netDebt/partyDebt/hesap
+// bakiyesi hesaplarimizin ustune Hesap Kodu etiketiyle birlestirilmis hali.
+router.get("/accounting/mizan", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const categories = await db.prisma.expenseCategory.findMany();
+  const rows = [];
+
+  data.accounts.forEach((a) => {
+    const gelir = data.transactions.filter((t) => t.accountId === a.id && t.type === "gelir").reduce((s, t) => s + t.amount, 0);
+    const gider = data.transactions.filter((t) => t.accountId === a.id && t.type === "gider").reduce((s, t) => s + t.amount, 0);
+    const balance = a.openingBalance + gelir - gider;
+    rows.push({ code: a.accountingCode || null, label: a.name, group: "Kasalar/Bankalar", toplamBorc: a.openingBalance + gelir, toplamAlacak: gider, borcBakiye: Math.max(0, balance), alacakBakiye: Math.max(0, -balance) });
+  });
+
+  data.units.forEach((u) => {
+    const charges = data.charges.filter((c) => c.unitId === u.id);
+    const toplamBorc = charges.reduce((s, c) => s + c.amount, 0);
+    const toplamAlacak = data.payments.filter((p) => p.unitId === u.id && !p.cancelled).reduce((s, p) => s + p.amount, 0);
+    const net = db.netDebt(data, u.id);
+    rows.push({ code: u.accountingCode || null, label: `(${u.block}/${u.no}) ${u.ownerName || "-"}`, group: "Üyeler", toplamBorc, toplamAlacak, borcBakiye: Math.max(0, net), alacakBakiye: Math.max(0, -net) });
+  });
+
+  function partyRows(list, partyType, group) {
+    list.forEach((entity) => {
+      const charges = data.partyCharges.filter((c) => c.partyType === partyType && c.partyId === entity.id);
+      const toplamBorc = charges.reduce((s, c) => s + c.amount, 0);
+      const toplamAlacak = data.partyPayments.filter((p) => p.partyType === partyType && p.partyId === entity.id && !p.cancelled).reduce((s, p) => s + p.amount, 0);
+      const openBalance = charges.filter((c) => c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0);
+      rows.push({ code: entity.accountingCode || null, label: entity.name, group, toplamBorc, toplamAlacak, borcBakiye: Math.max(0, openBalance), alacakBakiye: Math.max(0, -openBalance) });
+    });
+  }
+  partyRows(data.vendors, "firma", "Firmalar");
+  partyRows(data.personnel, "personel", "Personel");
+
+  categories.forEach((cat) => {
+    const charges = data.partyCharges.filter((c) => !c.partyType && c.categoryId === cat.id);
+    if (!charges.length) return;
+    const toplamBorc = charges.reduce((s, c) => s + c.amount, 0);
+    const openBalance = charges.filter((c) => c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0);
+    rows.push({ code: cat.accountingCode || null, label: `${cat.group} / ${cat.name}`, group: "Genel Giderler", toplamBorc, toplamAlacak: toplamBorc - openBalance, borcBakiye: Math.max(0, openBalance), alacakBakiye: Math.max(0, -openBalance) });
+  });
+
+  let filtered = rows;
+  if (req.query.code) filtered = filtered.filter((r) => (r.code || "").toLowerCase().includes(String(req.query.code).toLowerCase()));
+  res.json(filtered);
+});
+
+// Muhasebe Tahakkuk Fisleri: verilen tarih araliginda olusan her borc/tahsilat
+// olayini (Charge/Payment/PartyCharge/PartyPayment) Fis No + Hesap Kodu +
+// Aciklama + Borc/Alacak seklinde tek bir kronolojik listede birlestirir.
+router.get("/accounting/fisler", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const categories = await db.prisma.expenseCategory.findMany();
+  const catMap = new Map(categories.map((c) => [c.id, c]));
+  const from = req.query.from ? new Date(req.query.from) : null;
+  const to = req.query.to ? new Date(req.query.to) : null;
+  const inRange = (d) => (!from || new Date(d) >= from) && (!to || new Date(d) <= to);
+
+  const unitById = new Map(data.units.map((u) => [u.id, u]));
+  const vendorById = new Map(data.vendors.map((v) => [v.id, v]));
+  const personnelById = new Map(data.personnel.map((p) => [p.id, p]));
+
+  const fisler = [];
+  data.charges.filter((c) => inRange(c.createdAt)).forEach((c) => {
+    const unit = unitById.get(c.unitId);
+    fisler.push({ date: c.createdAt, code: unit?.accountingCode || null, description: `${unit ? `(${unit.block}/${unit.no})` : "-"} ${c.type} — ${c.description || ""}`, borc: c.amount, alacak: 0 });
+  });
+  data.payments.filter((p) => !p.cancelled && inRange(p.date)).forEach((p) => {
+    const unit = unitById.get(p.unitId);
+    fisler.push({ date: p.date, code: unit?.accountingCode || null, description: `${unit ? `(${unit.block}/${unit.no})` : "-"} Tahsilat — Makbuz ${p.receiptNo}`, borc: 0, alacak: p.amount });
+  });
+  data.partyCharges.filter((c) => inRange(c.date)).forEach((c) => {
+    let party = null, label = "Genel Gider";
+    if (c.partyType === "firma") { party = vendorById.get(c.partyId); label = party?.name || "-"; }
+    else if (c.partyType === "personel") { party = personnelById.get(c.partyId); label = party?.name || "-"; }
+    else { const cat = catMap.get(c.categoryId); if (cat) { party = cat; label = `${cat.group} / ${cat.name}`; } }
+    fisler.push({ date: c.date, code: party?.accountingCode || null, description: `${label} — Fatura ${c.invoiceNo}`, borc: c.amount, alacak: 0 });
+  });
+  data.partyPayments.filter((p) => !p.cancelled && inRange(p.date)).forEach((p) => {
+    const party = p.partyType === "firma" ? vendorById.get(p.partyId) : p.partyType === "personel" ? personnelById.get(p.partyId) : null;
+    fisler.push({ date: p.date, code: party?.accountingCode || null, description: `${party?.name || "Genel Gider"} — Makbuz ${p.receiptNo}`, borc: 0, alacak: p.amount });
+  });
+
+  fisler.sort((a, b) => new Date(a.date) - new Date(b.date));
+  res.json(fisler.map((f, i) => ({ fisNo: i + 1, ...f })));
+});
+
+module.exports = router;
