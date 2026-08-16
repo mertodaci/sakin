@@ -771,6 +771,22 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   tekrar kullanıyor. `test-toplu-borc-tebligat.js` ile (PDF üretimi +
   eşik filtresi + kriter-eşleşmeyince-404) doğrulandı.
 
+- ✅ **İşletme Projesi** — bu turun en büyük yeni özelliği, gerçek
+  karşılığı olmayan tek Yönetimcell modülü. Yeni `ExpenseProject`
+  modeli: bir gideri (proje adı + dönem aralığı + gider kategorisi +
+  paylaşım şekli + aylık toplam tutar) tanımlayıp, "Hesapla" ile
+  metrekare/arsa payı/eşit paylaşıma göre HER taşınmazın payını
+  önizler (kaydetmez), "Kaydet" ile o payları dönem aralığındaki
+  HER ay için gerçek `Charge` kaydına çevirir (geri alınamaz — proje
+  "applied" olur, tekrar uygulanamaz, silinemez). Finans grubuna
+  eklendi. `test-isletme-projesi.js` ile 14 ayrı kontrolle doğrulandı:
+  eşit paylaşımda tüm birimler aynı tutarı alıyor, metrekare
+  paylaşımında farklı tutarlar çıkıyor (m² farklı olduğundan), payların
+  toplamı aylık tutarı tutuyor, kaydet sonrası oluşan `Charge` sayısı
+  (birim×ay) doğru, tekrar kaydetme ve uygulanmış projeyi silme
+  reddediliyor. Test sırasında oluşan gerçek `Charge` kayıtları ve
+  proje, demo veriyi kirletmemek için temizlendi.
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı

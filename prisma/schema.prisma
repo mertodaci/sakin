@@ -392,8 +392,28 @@ model ExpenseCategory {
   partyCharges     PartyCharge[]
   recurringCharges RecurringPartyCharge[]
   charges          Charge[]
+  expenseProjects  ExpenseProject[]
 
   @@index([group])
+}
+
+// Yonetimcell karsilastirmasi: "İşletme Projesi" - bir gideri (orn. bakim
+// sozlesmesi) belirli bir donem araligi boyunca m2/arsa payi/esit paylasima
+// gore tasinmazlara TOPLU borclandiran arac. "Kaydet" ile her ay+tasinmaz
+// icin ayri bir Charge olusturur (bkz. routes/finance.js apply-project).
+model ExpenseProject {
+  id            String   @id @default(uuid())
+  name          String
+  startPeriod   String   // "2026-01" (Charge.period ile ayni format)
+  endPeriod     String   // "2026-12"
+  categoryId    String?
+  category      ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  shareMethod   String   // "metrekare" | "arsapayi" | "esit"
+  monthlyAmount Decimal  @db.Decimal(12, 2)
+  blockFilter   String?  // null = tum bloklar
+  status        String   @default("draft") // "draft" | "applied"
+  createdBy     String
+  createdAt     DateTime @default(now())
 }
 
 // "Ileri Tarihli Borc Listesi" / Tekrarlayan Faturalar (Yonetimcell

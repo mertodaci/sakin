@@ -768,4 +768,102 @@ router.get("/reports/aylik-bilanco", requireAuth, requireRole("yonetici"), async
   });
 });
 
+/* ---------------- İŞLETME PROJESİ (m2/arsa payı/eşit paylaşıma göre toplu borçlandırma) ---------------- */
+// Yonetimcell karsilastirmasi: bir gideri (orn. bakim sozlesmesi) belirli bir
+// donem araligi boyunca m2/arsa payi/esit paylasima gore tasinmazlara TOPLU
+// borclandiran arac. "Hesapla" (calculate) sadece ONIZLEME dondurur, hicbir
+// sey kaydetmez; "Kaydet" (apply) gercek Charge kayitlarini olusturur.
+
+function periodsBetween(start, end) {
+  const [sy, sm] = start.split("-").map(Number);
+  const [ey, em] = end.split("-").map(Number);
+  const periods = [];
+  let y = sy, m = sm;
+  while (y < ey || (y === ey && m <= em)) {
+    periods.push(`${y}-${String(m).padStart(2, "0")}`);
+    m++; if (m > 12) { m = 1; y++; }
+    if (periods.length > 240) break; // 20 yil - sonsuz donguye karsi guvenlik
+  }
+  return periods;
+}
+
+async function calculateProjectShares(project) {
+  const where = project.blockFilter ? { block: project.blockFilter } : {};
+  const units = await prisma.unit.findMany({ where, orderBy: [{ block: "asc" }, { no: "asc" }] });
+  const toNum = (d) => (d ? Number(d) : 0);
+  let totalWeight = 0;
+  const weightOf = (u) => project.shareMethod === "metrekare" ? toNum(u.squareMeters) : project.shareMethod === "arsapayi" ? toNum(u.landShare) : 1;
+  units.forEach((u) => { totalWeight += weightOf(u); });
+  const monthlyAmount = Number(project.monthlyAmount);
+  return units.map((u) => {
+    const weight = weightOf(u);
+    const oran = totalWeight > 0 ? weight / totalWeight : 0;
+    const aylikTutar = Math.round(monthlyAmount * oran * 100) / 100;
+    return { unitId: u.id, block: u.block, no: u.no, metrekare: toNum(u.squareMeters), arsaPayi: toNum(u.landShare), katilimOrani: oran, aylikTutar };
+  });
+}
+
+router.get("/expense-projects", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const projects = await prisma.expenseProject.findMany({ orderBy: { createdAt: "desc" }, include: { category: true } });
+  res.json(projects);
+});
+
+router.post("/expense-projects", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const { name, startPeriod, endPeriod, categoryId, shareMethod, monthlyAmount, blockFilter } = req.body || {};
+  if (!name || !startPeriod || !endPeriod || !monthlyAmount) return res.status(400).json({ error: "Proje adı, dönem aralığı ve aylık tutar zorunludur." });
+  if (!["metrekare", "arsapayi", "esit"].includes(shareMethod)) return res.status(400).json({ error: "Geçersiz paylaşım şekli." });
+  if (periodsBetween(startPeriod, endPeriod).length === 0) return res.status(400).json({ error: "Bitiş dönemi başlangıçtan önce olamaz." });
+  const project = await prisma.expenseProject.create({
+    data: { name, startPeriod, endPeriod, categoryId: categoryId || null, shareMethod, monthlyAmount: new Prisma.Decimal(monthlyAmount), blockFilter: blockFilter || null, createdBy: req.user.id },
+  });
+  res.status(201).json(project);
+});
+
+router.get("/expense-projects/:id/calculate", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const project = await prisma.expenseProject.findUnique({ where: { id: req.params.id } });
+  if (!project) return res.status(404).json({ error: "Proje bulunamadı." });
+  const rows = await calculateProjectShares(project);
+  const periods = periodsBetween(project.startPeriod, project.endPeriod);
+  const monthlyTotal = rows.reduce((s, r) => s + r.aylikTutar, 0);
+  res.json({ rows, periods, monthlyTotal, genelToplam: monthlyTotal * periods.length });
+});
+
+router.post("/expense-projects/:id/apply", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const project = await prisma.expenseProject.findUnique({ where: { id: req.params.id } });
+  if (!project) return res.status(404).json({ error: "Proje bulunamadı." });
+  if (project.status === "applied") return res.status(400).json({ error: "Bu proje zaten borçlandırıldı, tekrar uygulanamaz." });
+  const rows = await calculateProjectShares(project);
+  const periods = periodsBetween(project.startPeriod, project.endPeriod);
+  const category = project.categoryId ? await prisma.expenseCategory.findUnique({ where: { id: project.categoryId } }) : null;
+  const typeLabel = category ? category.name : "diger";
+
+  const chargesToCreate = [];
+  rows.forEach((r) => {
+    if (r.aylikTutar <= 0) return;
+    periods.forEach((period) => {
+      const [y, m] = period.split("-").map(Number);
+      chargesToCreate.push({
+        unitId: r.unitId, type: typeLabel, period, amount: new Prisma.Decimal(r.aylikTutar),
+        dueDate: new Date(y, m - 1, 5), status: "unpaid", paidAmount: 0,
+        description: `İşletme Projesi: ${project.name}`, categoryId: project.categoryId || null,
+      });
+    });
+  });
+
+  await prisma.$transaction([
+    prisma.charge.createMany({ data: chargesToCreate }),
+    prisma.expenseProject.update({ where: { id: project.id }, data: { status: "applied" } }),
+    prisma.activityLog.create({ data: { actorId: req.user.id, actorName: req.user.name, action: "expense-project.apply", detail: `"${project.name}" işletme projesi uygulandı: ${chargesToCreate.length} borç kaydı (${rows.length} taşınmaz × ${periods.length} ay) oluşturuldu.` } }),
+  ]);
+  res.json({ message: `${chargesToCreate.length} borç kaydı oluşturuldu.`, count: chargesToCreate.length });
+});
+
+router.delete("/expense-projects/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const project = await prisma.expenseProject.findUnique({ where: { id: req.params.id } });
+  if (!project) return res.status(404).json({ error: "Proje bulunamadı." });
+  if (project.status === "applied") return res.status(400).json({ error: "Uygulanmış (borçlandırılmış) bir proje silinemez." });
+  await prisma.expenseProject.delete({ where: { id: req.params.id } });
+  res.json({ message: "Proje silindi." });
+});
+
 module.exports = router;

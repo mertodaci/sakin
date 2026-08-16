@@ -297,7 +297,7 @@ const NAV_GROUPS = {
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
     { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"], ["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"]] },
-    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"], ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["uyedonem", "Üye/Dönem Raporu"], ["uyedetay", "Üye/Detay Raporu"], ["tahsilatraporu", "Tahsilat Raporu"], ["giderraporu", "Detaylı Gider Raporu"], ["aylikbilanco", "Aylık Bilanço"], ["butce", "Bütçe"]] },
+    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"], ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["uyedonem", "Üye/Dönem Raporu"], ["uyedetay", "Üye/Detay Raporu"], ["tahsilatraporu", "Tahsilat Raporu"], ["giderraporu", "Detaylı Gider Raporu"], ["aylikbilanco", "Aylık Bilanço"], ["isletmeprojesi", "İşletme Projesi"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
     { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"], ["bilgibankasi", "Bilgi Bankası"]] },
@@ -655,6 +655,7 @@ async function renderTab(tab) {
     else if (tab === "tahsilatraporu") await renderHareketLogu(c, "tahsilat");
     else if (tab === "giderraporu") await renderHareketLogu(c, "gider");
     else if (tab === "aylikbilanco") await renderAylikBilanco(c);
+    else if (tab === "isletmeprojesi") await renderIsletmeProjesi(c);
     else if (tab === "bilgibankasi") await renderBilgiBankasi(c);
     else if (tab === "toplusms") await renderTopluSms(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
@@ -2384,6 +2385,111 @@ async function renderAylikBilanco(c) {
     try { result = await load(f.year, f.month); document.getElementById("aylikBilancoResult").innerHTML = renderResult(); }
     catch (err) { toast(err.message); }
   });
+}
+
+// Yonetimcell karsilastirmasi: "İşletme Projesi" - bir gideri donem araligi
+// boyunca m2/arsa payi/esit paylasima gore tasinmazlara toplu borclandiran
+// arac. Hesapla = onizleme (kaydetmez), Kaydet = gercek Charge kayitlari
+// olusturur (geri alinamaz - proje "applied" olur).
+const SHARE_METHOD_LABEL = { metrekare: "Metrekareye Göre Paylaşım", arsapayi: "Arsa Payına Göre Paylaşım", esit: "Eşit Paylaşım" };
+
+async function renderIsletmeProjesi(c) {
+  const [projects, expenseCategories, units] = await Promise.all([api("/expense-projects"), api("/expense-categories"), api("/units")]);
+  const blocks = Array.from(new Set(units.map((u) => u.block))).sort();
+  let openId = null;
+  let openPreview = null;
+
+  function renderList() {
+    return `
+      <div class="report-wrap"><table class="report">
+        <thead><tr><th>Proje Adı</th><th>Dönem</th><th>Paylaşım</th><th class="num">Aylık Tutar</th><th>Durum</th><th></th></tr></thead>
+        <tbody>
+          ${projects.map((p) => `<tr style="cursor:pointer;" data-open="${p.id}"><td>${esc(p.name)}</td><td>${esc(p.startPeriod)} — ${esc(p.endPeriod)}</td><td>${esc(SHARE_METHOD_LABEL[p.shareMethod])}</td><td class="num f-num">${tl(Number(p.monthlyAmount))}</td><td>${pill(p.status === "applied" ? "Aktif" : "Pasif")}</td><td>${openId === p.id ? "▲" : "▼"}</td></tr>`).join("") || '<tr><td colspan="6" class="empty-row">Henüz proje yok.</td></tr>'}
+        </tbody>
+      </table></div>`;
+  }
+
+  function renderDetail() {
+    const p = projects.find((x) => x.id === openId);
+    if (!p) return "";
+    return `
+      <div class="card pad mb-16">
+        <div class="flex-between">
+          <div><h3 class="f-display" style="margin:0;">${esc(p.name)}</h3><div class="small muted">${esc(p.startPeriod)} — ${esc(p.endPeriod)} · ${esc(SHARE_METHOD_LABEL[p.shareMethod])}${p.blockFilter ? " · Blok: " + esc(p.blockFilter) : ""}</div></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" id="calcProjectBtn">Hesapla</button>
+            ${p.status === "draft" ? `<button class="btn btn-primary btn-sm" id="applyProjectBtn">Kaydet (Borçlandır)</button><button class="btn-danger" id="deleteProjectBtn">Sil</button>` : ""}
+          </div>
+        </div>
+        ${p.status === "applied" ? '<div class="small" style="color:var(--green);margin-top:6px;">✓ Bu proje uygulanmış, ilgili borçlar oluşturulmuş.</div>' : ""}
+        <div id="projectPreview" style="margin-top:14px;">${openPreview ? renderPreview(openPreview) : ""}</div>
+      </div>`;
+  }
+
+  function renderPreview(preview) {
+    return `
+      <div class="small muted" style="margin-bottom:8px;">${preview.periods.length} ay × aylık toplam ${tl(preview.monthlyTotal)} = genel toplam ${tl(preview.genelToplam)}</div>
+      <div class="report-wrap"><table class="report">
+        <thead><tr><th>Taşınmaz</th><th class="num">Metrekare</th><th class="num">Arsa Payı</th><th class="num">Katılım Oranı</th><th class="num">Aylık Tutar</th></tr></thead>
+        <tbody>
+          ${preview.rows.map((r) => `<tr><td>${esc(r.block)} / ${esc(r.no)}</td><td class="num f-num">${r.metrekare || "-"}</td><td class="num f-num">${r.arsaPayi || "-"}</td><td class="num f-num">%${(r.katilimOrani * 100).toFixed(2)}</td><td class="num f-num">${tl(r.aylikTutar)}</td></tr>`).join("") || '<tr><td colspan="5" class="empty-row">Eşleşen taşınmaz yok.</td></tr>'}
+        </tbody>
+      </table></div>`;
+  }
+
+  function render() {
+    c.innerHTML = `
+      ${sectionTitle("İşletme Projesi", "Bir gideri metrekare/arsa payı/eşit paylaşıma göre taşınmazlara toplu borçlandırın")}
+      <div class="report-wrap">
+        <form id="newProjectForm" class="report-filter-bar">
+          <div class="field" style="min-width:180px;"><label>Proje Adı</label><input name="name" placeholder="Örn. 2026 Bahçe Bakım" required /></div>
+          <div class="field"><label>Başlangıç Dönemi</label><input name="startPeriod" type="month" required /></div>
+          <div class="field"><label>Bitiş Dönemi</label><input name="endPeriod" type="month" required /></div>
+          <div class="field"><label>Gider Kategorisi</label><select name="categoryId"><option value="">Yok</option>${expenseCategories.map((cat) => `<option value="${cat.id}">${esc(cat.group)} / ${esc(cat.name)}</option>`).join("")}</select></div>
+          <div class="field"><label>Paylaşım Şekli</label><select name="shareMethod">${Object.entries(SHARE_METHOD_LABEL).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
+          <div class="field"><label>Blok</label><select name="blockFilter"><option value="">Tüm Bloklar</option>${blocks.map((b) => `<option value="${esc(b)}">${esc(b)}</option>`).join("")}</select></div>
+          <div class="field"><label>Aylık Toplam Tutar (₺)</label><input name="monthlyAmount" type="number" min="0.01" step="0.01" required /></div>
+          <button class="btn btn-primary btn-sm" type="submit">Proje Oluştur</button>
+        </form>
+      </div>
+      <div id="projectListBox">${renderList()}</div>
+      <div id="projectDetailBox" style="margin-top:16px;">${renderDetail()}</div>
+    `;
+    document.getElementById("newProjectForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(e.target));
+      try {
+        await api("/expense-projects", { method: "POST", body: f });
+        toast("Proje oluşturuldu.");
+        renderTab("isletmeprojesi");
+      } catch (err) { toast(err.message); }
+    });
+    c.querySelectorAll("[data-open]").forEach((row) => row.addEventListener("click", () => {
+      const id = row.dataset.open;
+      openId = openId === id ? null : id;
+      openPreview = null;
+      render();
+    }));
+    if (openId) {
+      document.getElementById("calcProjectBtn").addEventListener("click", async () => {
+        try { openPreview = await api(`/expense-projects/${openId}/calculate`); render(); }
+        catch (err) { toast(err.message); }
+      });
+      const applyBtn = document.getElementById("applyProjectBtn");
+      if (applyBtn) applyBtn.addEventListener("click", async () => {
+        if (!confirm("Bu işlem geri alınamaz: hesaplanan tutarlar taşınmazlara borç olarak işlenecek. Devam edilsin mi?")) return;
+        try { const r = await api(`/expense-projects/${openId}/apply`, { method: "POST" }); toast(r.message); renderTab("isletmeprojesi"); }
+        catch (err) { toast(err.message); }
+      });
+      const deleteBtn = document.getElementById("deleteProjectBtn");
+      if (deleteBtn) deleteBtn.addEventListener("click", async () => {
+        if (!confirm("Bu proje taslağı silinsin mi?")) return;
+        try { await api(`/expense-projects/${openId}`, { method: "DELETE" }); toast("Proje silindi."); openId = null; renderTab("isletmeprojesi"); }
+        catch (err) { toast(err.message); }
+      });
+    }
+  }
+  render();
 }
 
 const KNOWLEDGE_CATEGORIES = ["Bilgi Bankası", "Örnek Yazışmalar", "Yönetmelikler"];
