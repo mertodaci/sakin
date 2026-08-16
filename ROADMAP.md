@@ -259,6 +259,63 @@ değerlendirilebilir):
 
 ---
 
+## 🎯 Yönetimcell Paritesi Hedefi — DEVAM EDİYOR (2026-08-16'dan itibaren)
+
+**Mert'in net hedefi:** "Yönetimcell'in kapsadığı her şeyi, kendi
+arayüzümüzle inşa edeceğiz." Bu, Bölüm 🔍'teki analiz dokümanının
+(bkz. `C:\Users\mert_\.claude\projects\...\artifact` — "Sakin ×
+Yönetimcell — Sektörel Analiz") uygulama fazı. Çok oturumluk bir hedef,
+tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
+
+**Tamamlanan:**
+- ✅ UI: sidebar'a ayrı renk kimliği (koyu lacivert), içerik alanı
+  genişletildi (1040px→1360px), istatistik/metin boyutları büyütüldü.
+- ✅ Özet ekranındaki istatistik kutucukları tıklanabilir (ilgili
+  sekmeye doğrudan geçiş) — üç rol için de.
+- ✅ TC kimlik no (`User.nationalId`) + araç plaka (`Vehicle` modeli,
+  plaka/marka/renk) — Kullanıcılar ekranında düzenleme modali.
+- ✅ Aidat Takibi'ne borç eşiği filtresi ("500 ₺ ve fazla borcu olan"
+  gibi — Yönetimcell'de 4+ ekranda tekrar eden bir kalıp).
+- ✅ Hesap Özeti modali — bir dairenin borç+tahsilat hareketlerini
+  kronolojik, koşan bakiyeli tek bir ekstre olarak gösterir (Daireler
+  ve Aidat Takibi ekranlarından açılıyor).
+- ✅ **Ajanda** (`AgendaItem` — not/faaliyet, tarihe bağlı,
+  bekleyen/tamamlanan), **İş Takibi** (`InternalTask` — Devam Eden/
+  Tamamlanan/Kapatılan, İşin Alanı/Türü, personele/daireye
+  bağlanabilir, Talepler'den ayrı), **Gelen Mesajlar** (`Message` —
+  sakin↔yönetici iki yönlü özel mesajlaşma, bildirim tetikler) —
+  hepsi `routes/workspace.js`'te, rol bazlı görünürlükle
+  (`NAV_GROUPS`).
+
+**Sırada (henüz yapılmadı, bu sırayla ilerlenecek):**
+1. ⏳ İkamet Edenler + yakınlık derecesi (yeni tablo, `Unit`'e FK),
+   arsa payı/aidat grubu/çoklu sayaç tipi alanları, üye bazlı serbest
+   not (CRM tarzı).
+2. ⏳ Hukuki modülün kalanı: Tebligat/İhtarname (Yönetimcell'den
+   gerçek metinleriyle çıkarıldı — bkz. analiz Bölüm 5), Genel Kurul
+   Çağrısı, Vekaletname Örneği, Hazirun Cetveli, Antetli Evrak, Adres
+   Etiket Yazdır, Bilgi Bankası. Karar Defteri zaten var.
+3. ⏳ Toplu SMS/e-posta arayüzü (şablon + `<adsoyad>` gibi
+   kişiselleştirme parametresi + zamanlanmış gönderim — gerçek
+   sağlayıcı sözleşmesi olmadan arayüz/taslak modunda) + toplu döküm
+   (tüm üyelerin makbuz/ekstre/borç listesi tek seferde).
+4. ⏳ **[Önce plan modu gerekir]** Alacaklı bakiye + serbest kategori
+   modeli — para mantığının merkezine dokunuyor
+   (`Charge`/`Payment`/`ChargeType` birlikte değişir). En yüksek
+   etkili madde ama en riskli; rastgele başlanmayacak.
+5. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
+   Kebir Defteri, banka entegrasyonu — sadece iskelet/arayüz düzeyinde
+   (gerçek banka API'si/mali müşavir entegrasyonu üçüncü taraf
+   sözleşmesi gerektirir, Mert'in kararı).
+
+**Birebir kopyalanamayacaklar** (README'nin "Neler Gerçek, Neler
+Demo" ayrımına eklenecek): gerçek banka entegrasyonu, gerçek SMS
+gönderimi, ayrı denetçi/güvenlik-görevlisi mobil uygulamaları, sitenin
+kendi halka açık web sitesi barındırması. Bunlarda veri modeli/arayüz
+kurulur, üçüncü taraf bağlantısı Mert'in kararına bırakılır.
+
+---
+
 ## 🔧 Git Entegrasyonu — Durum
 
 **2026-08-16 itibarıyla tamamlandı.** Mert'in git deneyimi yoktu, adım adım
