@@ -398,19 +398,75 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   No dahil kronolojik ekstre gösteriyor; "Firma & Personel" ekranındaki
   her kartta "📄 Hesap Hareketleri" butonundan açılıyor.
 
-**Sırada (henüz yapılmadı, bu sırayla ilerlenecek):**
-1. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
+- ✅ **Kalan tüm Yönetimcell menülerini yeniden denetle** — Mert'in
+  talebi üzerine ("Bunu tamamladıktan sonra diğer menüler/sayfalar için
+  de tekrar kontrolü yap ve emin ol eksik bir şey kalmasın"), canlı
+  hesapta Üyeler, Kasalar, Raporlar, Borçlandır, Hukuki menülerinin
+  HER alt sayfasına tek tek girildi (Tanımlar bu hesabın yetkisi
+  dışındaydı — DOM'da boş `<ul>`, "Borçlandır → İleri Tarihli
+  Borçlandırma" da "Bu işlem için yetkiniz yok" verdi, incelenemedi).
+  **Hukuki menüsü baştan sona zaten önceki fazda kapsanmıştı, yeni
+  eksik çıkmadı.** Bulunan yeni eksikler aşağıdaki "Sırada" listesine
+  eklendi.
+
+**Sırada (henüz yapılmadı, bu sırayla ilerlenecek — menü denetiminden çıkan yeni liste):**
+1. ⏳ **Dosya Arşivi** — Raporlar altında bulundu, klasör bazlı genel
+   evrak/dosya yükleme-saklama sistemi (Personel Evrakları, Personel
+   Maaş Bordroları, SGK Ödemeleri, Üye Evrakları, Yönetim Evrakları
+   gibi klasörler + dosya ekle/klasör ekle). Bizde bu HİÇ yok — şu ana
+   kadarki her şey ya veritabanı kaydı ya da anlık üretilen PDF; bunun
+   için gerçek dosya depolama (yerel disk ya da obje depolama)
+   gerekiyor, mimari bir karar. **Buradan devam et — en somut/eksiksiz
+   yeni yetenek.**
+2. ⏳ **Borç Dökümü** ekranı — Üye Listesi'ndeki 3 satır-aksiyonundan
+   biri (Hesap Özeti/Borç Dökümü/Tahsilat Ekranı — Mert'in bu
+   oturumun en başındaki asıl şikayeti). "Hesap Özeti"nden farklı:
+   sadece AÇIK borçları (geçmiş ödemeler olmadan) tek tabloda gösterir,
+   yanında doğrudan "Tahsil Et" / "Sms Gönder" / "Yazdır-E-Posta"
+   butonları olur. Şu an bizde Hesap Özeti tarihçe+açık borcu
+   birleştiriyor, ayrı bir "sadece açık borç" görünümü yok.
+3. ⏳ **Tahsilat Ekranı zenginleştirme** — aynı kişi birden fazla
+   taşınmaza sahipse TÜM taşınmazlarındaki borçları tek ekranda
+   gösterip seçili borçları (checkbox ile, salt FIFO değil) tahsil
+   edebilme. Bizde tahsilat her zaman tek daire + saf FIFO.
+4. ⏳ **Hesap Özeti kategori kırılımı** — üstte Aidat/Yakıt/Demirbaş/
+   Ek Gider/Su Kullanım Bedeli gibi gider tipine göre ayrı ayrı bakiye
+   sütunları (bizde tek toplam bakiye var); ayrıca ekstredeki her satır
+   için makbuz PDF'i ve "Hesap Özetini Yazdır" ile tüm ekstreyi
+   PDF olarak indirme.
+5. ⏳ **Boş taşınmaz (vacant unit) durumu** — `Occupancy` enum'unda
+   sadece `owner`/`tenant` var, "boş/kimse oturmuyor" durumu yok.
+   Yönetimcell'in "Boş/Dolu Taşınmaz Listesi" raporu bunu ayrı bir
+   durum olarak takip ediyor.
+6. ⏳ **Unit.squareMeters (m²) alanı** — "Detaylı Üye Listesi" rapor
+   oluşturucusunda görüldü, arsa payının yanında dairenin metrekaresi
+   de ayrı bir alan; bizde yok.
+7. ⏳ **Kullanıcıda ikinci telefon/e-posta** — rapor oluşturucuda
+   "Cep Telefonu 1/2", "Eposta Adresi 1/2" ayrı alanlar; bizde
+   kullanıcı başına tek telefon/tek e-posta var.
+8. ⏳ **Genel Kasa Durumu'na "Borçlar Toplamı" eklenmesi** — Yönetimcell'in
+   genel kasa özetinde Alacaklar (üye borçları) ile yan yana bir de
+   toplam "Borçlar" (firma/personel/genel gidere olan borç) kartı var,
+   Ana Para/Gecikme kırılımıyla. Bizde dashboard/Kasalar'da sadece
+   tahsilat tarafı (totalDebt/totalCredit) var, ödenecek (payables)
+   toplamı hiç gösterilmiyor — artık Borç Listesi ile veri hazır, sadece
+   toplam bir kart eklemek yeterli.
+9. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
    Kebir Defteri, banka entegrasyonu — sadece iskelet/arayüz düzeyinde
    (gerçek banka API'si/mali müşavir entegrasyonu üçüncü taraf
-   sözleşmesi gerektirir, Mert'in kararı). **Buradan devam et.**
-2. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
-   sayfasıydı, en düşük öncelik, atlanabilir).
-3. ⏳ **Kalan tüm Yönetimcell menülerini yeniden denetle** — Mert'in
-   talebi: "Bunu tamamladıktan sonra diğer menüler/sayfalar için de
-   tekrar kontrolü yap ve emin ol eksik bir şey kalmasın." Üyeler,
-   Kasalar, Raporlar, Borçlandır, Hukuki, Tanımlar menülerinin HER
-   alt sayfasına tek tek girip (Giderler modülünde yapıldığı gibi)
-   gerçek işlevini anlama, bizde eksik olanları tespit etme.
+   sözleşmesi gerektirir, Mert'in kararı). Menü denetiminde
+   "Muhasebe Raporları" alt menüsü (Tahakkuk Fişleri/Özet Mizan/
+   Yevmiye ve Kebir Defteri/Muhasebe Kodları/Firma Mutabakat Mektubu)
+   bu maddenin kapsamını doğruladı.
+10. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
+    sayfasıydı, en düşük öncelik, atlanabilir).
+
+**Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
+düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
+("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı
+hedefli SMS — hariç, bu gerçek bir eksik), "Site Sakini Şifrelerini
+Gönder" (bizim self-servis kayıt/onay modelimizle uyuşmuyor, admin'in
+şifre atayıp SMS'le göndermesi bizim akışımızda yok).
 
 **Birebir kopyalanamayacaklar** (README'nin "Neler Gerçek, Neler
 Demo" ayrımına eklenecek): gerçek banka entegrasyonu, gerçek SMS
