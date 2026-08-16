@@ -22,6 +22,9 @@ enum Role {
 enum Occupancy {
   owner
   tenant
+  // Yonetimcell karsilastirmasi: "Bos/Dolu Tasinmaz Listesi" raporu - kimse
+  // ikamet etmeyen (ne malik ne kiraci fiilen oturuyor) tasinmazlar icin.
+  vacant
 }
 
 enum AccountType {

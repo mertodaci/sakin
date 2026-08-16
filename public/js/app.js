@@ -31,7 +31,7 @@ function sectionTitle(title, sub) { return `<div class="section-title"><h2>${esc
 function ledgerRow(title, sub, right, color) {
   return `<div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${title}</div><div class="small muted">${sub}</div></div><div class="f-num" style="font-size:14px;font-weight:600;${color ? `color:${color};` : ""}">${right}</div></div>`;
 }
-const PILL_MAP = { "Ödendi": "green", "Borçlu": "red", "Alacaklı": "green", "Açık": "red", "Kısmi": "amber", "İşlemde": "amber", "Çözüldü": "green", "Onaylandı": "green", "depoda": "grey", "zimmetli": "amber", "Teslim Alındı": "amber", "Teslim Edildi": "green", "Güncel": "green", "Bakım Gecikti": "red", "Pasif": "grey", "Aktif": "green" };
+const PILL_MAP = { "Ödendi": "green", "Borçlu": "red", "Alacaklı": "green", "Açık": "red", "Kısmi": "amber", "İşlemde": "amber", "Çözüldü": "green", "Onaylandı": "green", "depoda": "grey", "zimmetli": "amber", "Teslim Alındı": "amber", "Teslim Edildi": "green", "Güncel": "green", "Bakım Gecikti": "red", "Pasif": "grey", "Aktif": "green", "Boş": "amber" };
 // Net bakiye (borc - alacakli bakiye) uc durumlu: pozitif=borclu (kirmizi),
 // negatif=alacakli (yesil), sifir=odendi (yesil).
 function debtStatusLabel(debt) { return debt > 0 ? "Borçlu" : debt < 0 ? "Alacaklı" : "Ödendi"; }
@@ -1298,12 +1298,13 @@ async function renderDaireler(c) {
         <div class="field"><label>Malik Telefon</label><input name="ownerPhone" /></div>
         <div class="field"><label>Arsa Payı</label><input name="landShare" type="number" step="0.0001" placeholder="Örn. 0.0125" /></div>
         <div class="field"><label>Aidat Grubu</label><input name="feeGroup" placeholder="Örn. 2+1, Villa…" /></div>
+        <div class="field"><label>İkamet Durumu</label><select name="occupancy"><option value="owner">Malik Oturuyor</option><option value="tenant">Kiracı Oturuyor</option><option value="vacant">Boş</option></select></div>
         <button class="btn btn-primary" type="submit">Ekle</button>
       </form>
     </div>
     <div class="card tight">
       ${list.map((u) => `
-        <div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}${u.tenantName ? " (Kiracı: " + esc(u.tenantName) + ")" : ""}${u.feeGroup ? " · " + esc(u.feeGroup) : ""}${u.landShare ? " · Arsa Payı: " + esc(String(u.landShare)) : ""}</div></div>
+        <div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)} ${u.occupancy === "vacant" ? pill("Boş") : ""}</div><div class="small muted">${esc(u.ownerName || "-")}${u.tenantName ? " (Kiracı: " + esc(u.tenantName) + ")" : ""}${u.feeGroup ? " · " + esc(u.feeGroup) : ""}${u.landShare ? " · Arsa Payı: " + esc(String(u.landShare)) : ""}</div></div>
         <div style="display:flex;align-items:center;gap:10px;"><div class="f-num" style="color:${debtColor(u.debt)};font-weight:600;">${tl(Math.abs(u.debt))}</div>${pill(debtStatusLabel(u.debt))}<button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button><button class="btn btn-ghost btn-sm" data-borcdokumu="${u.id}" title="Borç Dökümü">📋</button><button class="btn btn-ghost btn-sm" data-editunit="${u.id}">Düzenle</button></div></div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
   `;
@@ -1342,6 +1343,7 @@ async function renderUnitEditModal(u) {
         <div class="field" style="flex:1 1 140px;"><label>Kiracı Telefon</label><input name="tenantPhone" value="${esc(u.tenantPhone || "")}" /></div>
         <div class="field" style="flex:1 1 140px;"><label>Arsa Payı</label><input name="landShare" type="number" step="0.0001" value="${u.landShare != null ? esc(String(u.landShare)) : ""}" /></div>
         <div class="field" style="flex:1 1 140px;"><label>Aidat Grubu</label><input name="feeGroup" value="${esc(u.feeGroup || "")}" /></div>
+        <div class="field" style="flex:1 1 140px;"><label>İkamet Durumu</label><select name="occupancy"><option value="owner" ${u.occupancy === "owner" ? "selected" : ""}>Malik Oturuyor</option><option value="tenant" ${u.occupancy === "tenant" ? "selected" : ""}>Kiracı Oturuyor</option><option value="vacant" ${u.occupancy === "vacant" ? "selected" : ""}>Boş</option></select></div>
         <div style="display:flex;gap:8px;margin-top:4px;width:100%;">
           <button type="button" class="btn btn-ghost" id="unitEditCancel" style="flex:1;">Kapat</button>
           <button type="submit" class="btn btn-primary" style="flex:1;">Kaydet</button>
