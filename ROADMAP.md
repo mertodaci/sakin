@@ -341,13 +341,51 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   hesaplamayı birleştirdi. `test-credit.js` ile regresyon testleri
   (havuz-sızıntısı senaryosu dahil) geçiyor.
 
+- ✅ **Giderler (Ödeme) modülü — gider kategorisi + genel gider** (Mert'in
+  canlı Yönetimcell hesabında "Giderler (Ödeme)" menüsünü tek tek
+  gezip her alt sayfanın GERÇEK işlevini (sadece menü adını değil)
+  çıkarmamız üzerine): yeni `ExpenseCategory` modeli (Gider Grubu →
+  Gider kalemi hiyerarşisi, Yönetimcell'deki "Bahçe Bakım Hizmetleri →
+  Ağaç Kesim ve Budama Gideri" gibi taksonomiyle aynı fikir).
+  `PartyCharge`/`PartyPayment`'ın `partyType`/`partyId` alanları artık
+  nullable — belirli bir firma/personele bağlı olmadan, sadece bir
+  gider kategorisine bağlı "genel gider" borçlandırması mümkün (yeni
+  "Giderler" sekmesi). Her borçlandırmaya `invoiceNo` (Fatura No), her
+  ödemeye `receiptNo` (Makbuz No) otomatik üretiliyor
+  (Yönetimcell'deki fatura/makbuz numarası alanlarının karşılığı).
+  `POST /party-payments/pay` artık ya taraf bazlı FIFO (firma/personel,
+  değişmedi) ya da `chargeId` ile tek bir kaydı hedefleyen ödeme kabul
+  ediyor (genel giderler Yönetimcell'de de toplu değil fatura fatura
+  ödeniyor). Vendor'a `contactName`/`email` eklendi. Yeni **Borç
+  Listesi** sekmesi: firma+personel+genel gider ayrımı yapmadan TÜM
+  açık borçları taraf türü/vade aralığı filtreleriyle tek tabloda
+  gösteriyor (`GET /party-charges?openOnly=1&...`). Kategori silme
+  `onDelete: SetNull` ile güvenli (bağlı borç kaydı asla silinmez,
+  sadece kategori referansını kaybeder). `test-giderler.js` ile
+  regresyon testleri geçiyor. **Bilinçli sadeleştirme**: Yönetimcell'in
+  fatura oluştururken "Ödendi" kutucuğuyla anında ödenmiş işaretleme
+  kısayolu şimdilik yok — önce borçlandır, sonra ayrı adımda öde
+  (uygulamanın genelindeki tutarlı desen).
+
 **Sırada (henüz yapılmadı, bu sırayla ilerlenecek):**
-1. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
+1. ⏳ Tekrarlayan/İleri tarihli fatura sistemi (Yönetimcell'in "İleri
+   Tarihli Borç Listesi"nin gerçek karşılığı — meğer sadece vadesi ileri
+   olan borçlar değil, asıl periyodik/zamanlanmış fatura şablonu
+   sistemiymiş). **Buradan devam et.**
+2. ⏳ Firma/Personel "Hesap Hareketleri" — koşan bakiyeli tam ekstre
+   ekranı (Hesap Özeti pattern'inin firma/personel'e genişletilmesi).
+3. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
    Kebir Defteri, banka entegrasyonu — sadece iskelet/arayüz düzeyinde
    (gerçek banka API'si/mali müşavir entegrasyonu üçüncü taraf
-   sözleşmesi gerektirir, Mert'in kararı). **Buradan devam et.**
-2. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
+   sözleşmesi gerektirir, Mert'in kararı).
+4. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
    sayfasıydı, en düşük öncelik, atlanabilir).
+5. ⏳ **Kalan tüm Yönetimcell menülerini yeniden denetle** — Mert'in
+   talebi: "Bunu tamamladıktan sonra diğer menüler/sayfalar için de
+   tekrar kontrolü yap ve emin ol eksik bir şey kalmasın." Üyeler,
+   Kasalar, Raporlar, Borçlandır, Hukuki, Tanımlar menülerinin HER
+   alt sayfasına tek tek girip (Giderler modülünde yapıldığı gibi)
+   gerçek işlevini anlama, bizde eksik olanları tespit etme.
 
 **Birebir kopyalanamayacaklar** (README'nin "Neler Gerçek, Neler
 Demo" ayrımına eklenecek): gerçek banka entegrasyonu, gerçek SMS

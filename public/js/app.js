@@ -31,7 +31,7 @@ function sectionTitle(title, sub) { return `<div class="section-title"><h2>${esc
 function ledgerRow(title, sub, right, color) {
   return `<div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${title}</div><div class="small muted">${sub}</div></div><div class="f-num" style="font-size:14px;font-weight:600;${color ? `color:${color};` : ""}">${right}</div></div>`;
 }
-const PILL_MAP = { "Ödendi": "green", "Borçlu": "red", "Alacaklı": "green", "Açık": "red", "İşlemde": "amber", "Çözüldü": "green", "Onaylandı": "green", "depoda": "grey", "zimmetli": "amber", "Teslim Alındı": "amber", "Teslim Edildi": "green", "Güncel": "green", "Bakım Gecikti": "red", "Pasif": "grey" };
+const PILL_MAP = { "Ödendi": "green", "Borçlu": "red", "Alacaklı": "green", "Açık": "red", "Kısmi": "amber", "İşlemde": "amber", "Çözüldü": "green", "Onaylandı": "green", "depoda": "grey", "zimmetli": "amber", "Teslim Alındı": "amber", "Teslim Edildi": "green", "Güncel": "green", "Bakım Gecikti": "red", "Pasif": "grey" };
 // Net bakiye (borc - alacakli bakiye) uc durumlu: pozitif=borclu (kirmizi),
 // negatif=alacakli (yesil), sifir=odendi (yesil).
 function debtStatusLabel(debt) { return debt > 0 ? "Borçlu" : debt < 0 ? "Alacaklı" : "Ödendi"; }
@@ -273,6 +273,8 @@ const NAV_ICON = {
   icra: '<line x1="12" y1="3" x2="12" y2="21"/><path d="M5 8l-3 5a3 3 0 0 0 6 0z"/><path d="M19 8l-3 5a3 3 0 0 0 6 0z"/><path d="M5 8h14"/><path d="M8 21h8"/>',
   belgeler: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>',
   toplusms: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/>',
+  giderler: '<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/>',
+  borclistesi: '<path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="5" y="4" width="14" height="17" rx="2"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="16" y2="15"/>',
   ayarlar: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/>',
 };
 function navIcon(id) { return svgIcon(NAV_ICON[id] || NAV_ICON.ozet); }
@@ -289,7 +291,7 @@ const NAV_GROUPS = {
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
     { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"]] },
-    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["butce", "Bütçe"]] },
+    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
     { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"]] },
@@ -606,6 +608,8 @@ async function renderTab(tab) {
     else if (tab === "muhasebe") await renderMuhasebe(c);
     else if (tab === "kasalar") await renderKasalar(c);
     else if (tab === "cari") await renderCari(c);
+    else if (tab === "giderler") await renderGiderler(c);
+    else if (tab === "borclistesi") await renderBorcListesi(c);
     else if (tab === "personel") await renderPersonelView(c);
     else if (tab === "demirbas") await renderDemirbas(c);
     else if (tab === "karar") await renderKarar(c);
@@ -1447,8 +1451,9 @@ async function renderKasalar(c) {
 }
 
 async function renderCari(c) {
-  const [vendors, personnel, charges, accounts] = await Promise.all([api("/vendors"), api("/personnel"), api("/party-charges"), api("/accounts")]);
+  const [vendors, personnel, charges, accounts, categories] = await Promise.all([api("/vendors"), api("/personnel"), api("/party-charges"), api("/accounts"), api("/expense-categories")]);
   const personnelDebt = (id) => charges.filter((ch) => ch.partyType === "personel" && ch.partyId === id && ch.status !== "paid").reduce((s, ch) => s + (ch.amount - ch.paidAmount), 0);
+  const categoryOptions = `<option value="">Kategori seçin (opsiyonel)</option>` + categories.map((cat) => `<option value="${cat.id}">${esc(cat.group)} / ${esc(cat.name)}</option>`).join("");
 
   function partyCard(name, sub, debt, partyType, partyId) {
     return `
@@ -1472,7 +1477,9 @@ async function renderCari(c) {
       <form id="vendorForm" class="form-row">
         <div class="field"><label>Firma Adı</label><input name="name" required /></div>
         <div class="field"><label>Kategori</label><input name="category" placeholder="Asansör, Temizlik, Güvenlik…" /></div>
+        <div class="field"><label>Yetkili</label><input name="contactName" placeholder="İletişim kişisi" /></div>
         <div class="field"><label>Telefon</label><input name="phone" /></div>
+        <div class="field"><label>E-posta</label><input name="email" type="email" /></div>
         <button class="btn btn-primary" type="submit">Ekle</button>
       </form>
     </div>
@@ -1496,6 +1503,7 @@ async function renderCari(c) {
       <form class="form-row" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;" data-charge-form="${partyType}|${partyId}">
         <div class="field"><label>Tutar (₺)</label><input name="amount" type="number" required /></div>
         <div class="field" style="flex:2 1 200px;"><label>Açıklama</label><input name="description" placeholder="Aylık bakım bedeli, maaş…" required /></div>
+        <div class="field" style="flex:2 1 200px;"><label>Gider Kategorisi</label><select name="categoryId">${categoryOptions}</select></div>
         <button class="btn btn-primary btn-sm" type="submit">Kaydet</button>
       </form>`;
     box.querySelector("form").addEventListener("submit", async (e) => {
@@ -1522,6 +1530,191 @@ async function renderCari(c) {
       catch (err) { toast(err.message); }
     });
   }));
+}
+
+// Yonetimcell karsilastirmasi: "Giderler (Odeme ve Borclanma)" ekrani.
+// Belirli bir firma/personele bagli olmayan, sadece bir Gider Grubu/Kalemi
+// kategorisine baglanan borc/fatura girisi + bu kategori taksonomisinin
+// yonetimi (bkz. task: PartyCharge.categoryId, partyType null olabilir).
+async function renderGiderler(c) {
+  const [categories, generalCharges, accounts] = await Promise.all([api("/expense-categories"), api("/party-charges?general=1"), api("/accounts")]);
+  const categoryOptions = categories.map((cat) => `<option value="${cat.id}">${esc(cat.group)} / ${esc(cat.name)}</option>`).join("");
+
+  function chargeRow(ch) {
+    const kalan = ch.amount - ch.paidAmount;
+    return `
+      <div class="ledger-row">
+        <div>
+          <div style="font-weight:600;">${esc(ch.category ? `${ch.category.group} / ${ch.category.name}` : "Kategorisiz")}</div>
+          <div class="small muted">${esc(ch.description)} · Fatura ${esc(ch.invoiceNo)} · Vade ${dt(ch.dueDate)}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${pill(ch.status === "paid" ? "Ödendi" : ch.status === "partial" ? "Kısmi" : "Açık")}
+          <div class="f-num" style="font-weight:600;">${tl(kalan)}</div>
+          ${kalan > 0 ? `<button class="btn btn-ghost btn-sm" data-pay-charge="${ch.id}|${kalan}">Öde</button>` : ""}
+        </div>
+        <div id="gider-pay-${ch.id}" style="flex-basis:100%;"></div>
+      </div>`;
+  }
+
+  c.innerHTML = `
+    ${sectionTitle("Giderler", "Firma/personele bağlı olmayan genel gider borçlandırması + gider kategorisi yönetimi")}
+    <div class="grid cols-2">
+      <div class="card form-card">
+        <div class="ledger-title" style="padding:0 0 10px;">Yeni Gider Kategorisi</div>
+        <form id="categoryForm" class="form-row">
+          <div class="field"><label>Gider Grubu</label><input name="group" placeholder="Bahçe Bakım Hizmetleri" required /></div>
+          <div class="field"><label>Gider Kalemi</label><input name="name" placeholder="Ağaç Kesim ve Budama Gideri" required /></div>
+          <button class="btn btn-primary btn-sm" type="submit">Ekle</button>
+        </form>
+        <div class="ledger-title" style="padding-top:14px;">Kayıtlı Kategoriler</div>
+        <div id="categoryList" style="max-height:220px;overflow-y:auto;">
+          ${categories.map((cat) => `<div class="ledger-row" style="padding:6px 0;"><span class="small">${esc(cat.group)} / ${esc(cat.name)}</span><button class="btn-danger" data-delcat="${cat.id}">Sil</button></div>`).join("") || '<div class="empty-row">Kategori yok.</div>'}
+        </div>
+      </div>
+      <div class="card form-card">
+        <div class="ledger-title" style="padding:0 0 10px;">Genel Gider Borçlandır</div>
+        <form id="generalChargeForm">
+          <div class="field"><label>Gider Kategorisi</label><select name="categoryId" required>${categoryOptions || '<option value="">Önce bir kategori ekleyin</option>'}</select></div>
+          <div class="field"><label>Açıklama</label><input name="description" required /></div>
+          <div class="form-row">
+            <div class="field"><label>Tutar (₺)</label><input name="amount" type="number" min="0.01" step="0.01" required /></div>
+            <div class="field"><label>Vade Tarihi</label><input name="dueDate" type="date" /></div>
+          </div>
+          <button class="btn btn-primary btn-sm" type="submit">Kaydet</button>
+        </form>
+      </div>
+    </div>
+    <div class="card tight" style="margin-top:16px;">
+      <div class="ledger-title">Genel Giderler</div>
+      ${generalCharges.map(chargeRow).join("") || '<div class="empty-row">Kayıtlı genel gider yok.</div>'}
+    </div>
+  `;
+
+  document.getElementById("categoryForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    try { await api("/expense-categories", { method: "POST", body: f }); toast("Kategori eklendi."); renderTab("giderler"); }
+    catch (err) { toast(err.message); }
+  });
+  c.querySelectorAll("[data-delcat]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Bu kategoriyi silmek istediğinize emin misiniz?")) return;
+    try { await api("/expense-categories/" + b.dataset.delcat, { method: "DELETE" }); toast("Kategori silindi."); renderTab("giderler"); }
+    catch (err) { toast(err.message); }
+  }));
+  document.getElementById("generalChargeForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    try { await api("/party-charges", { method: "POST", body: f }); toast("Gider borçlandırması kaydedildi."); renderTab("giderler"); }
+    catch (err) { toast(err.message); }
+  });
+  c.querySelectorAll("[data-pay-charge]").forEach((b) => b.addEventListener("click", () => {
+    const [chargeId, kalan] = b.dataset.payCharge.split("|");
+    const box = document.getElementById(`gider-pay-${chargeId}`);
+    box.innerHTML = `
+      <form class="form-row" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;width:100%;">
+        <div class="field"><label>Tutar (₺)</label><input name="amount" type="number" value="${kalan}" required /></div>
+        <div class="field"><label>Hesap</label><select name="accountId">${accounts.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></div>
+        <button class="btn btn-primary btn-sm" type="submit">Öde</button>
+      </form>`;
+    box.querySelector("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(e.target));
+      try { await api("/party-payments/pay", { method: "POST", body: { chargeId, ...f } }); toast("Ödeme kaydedildi."); renderTab("giderler"); }
+      catch (err) { toast(err.message); }
+    });
+  }));
+}
+
+// Yonetimcell karsilastirmasi: "Borc Listesi" ekrani. Firma/personel/genel
+// gider ayrimi yapmadan TUM acik PartyCharge kayitlarini tek, filtrelenebilir
+// bir tabloda gosterir (Firma&Personel ekranindaki kart-bazli gorunumun
+// aksine).
+async function renderBorcListesi(c) {
+  async function load(filters) {
+    const qs = new URLSearchParams({ openOnly: "1", ...filters }).toString();
+    return api("/party-charges?" + qs);
+  }
+  const accounts = await api("/accounts");
+  let charges = await load({});
+
+  function partyLabel(ch) {
+    if (ch.partyName) return `${ch.partyName} (${ch.partyType === "firma" ? "Firma" : "Personel"})`;
+    if (ch.category) return `${ch.category.group} / ${ch.category.name} (Genel Gider)`;
+    return "Genel Gider";
+  }
+
+  function row(ch) {
+    const kalan = ch.amount - ch.paidAmount;
+    return `
+      <tr>
+        <td>${dt(ch.dueDate)}</td>
+        <td>${esc(ch.invoiceNo)}</td>
+        <td>${esc(partyLabel(ch))}</td>
+        <td>${esc(ch.description)}</td>
+        <td class="f-num">${tl(ch.amount)}</td>
+        <td class="f-num">${tl(ch.paidAmount)}</td>
+        <td class="f-num" style="font-weight:600;">${tl(kalan)}</td>
+        <td><button class="btn btn-ghost btn-sm" data-pay-charge="${ch.id}|${kalan}">Öde</button></td>
+      </tr>
+      <tr id="bl-pay-${ch.id}" style="display:none;"><td colspan="8"></td></tr>`;
+  }
+
+  function renderTable() {
+    return `
+      <div class="scroll-x">
+        <table class="simple">
+          <thead><tr><th>Vade</th><th>Fatura No</th><th>Taraf / Kategori</th><th>Açıklama</th><th>Borç</th><th>Ödenen</th><th>Kalan</th><th></th></tr></thead>
+          <tbody>${charges.map(row).join("") || '<tr><td colspan="8" class="empty-row">Açık borç yok.</td></tr>'}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function bindRowActions() {
+    c.querySelectorAll("[data-pay-charge]").forEach((b) => b.addEventListener("click", () => {
+      const [chargeId, kalan] = b.dataset.payCharge.split("|");
+      const holder = document.getElementById(`bl-pay-${chargeId}`);
+      holder.style.display = "table-row";
+      holder.querySelector("td").innerHTML = `
+        <form class="form-row" style="padding:8px 0;">
+          <div class="field"><label>Tutar (₺)</label><input name="amount" type="number" value="${kalan}" required /></div>
+          <div class="field"><label>Hesap</label><select name="accountId">${accounts.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></div>
+          <button class="btn btn-primary btn-sm" type="submit">Öde</button>
+        </form>`;
+      holder.querySelector("form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const f = Object.fromEntries(new FormData(e.target));
+        try { await api("/party-payments/pay", { method: "POST", body: { chargeId, ...f } }); toast("Ödeme kaydedildi."); renderTab("borclistesi"); }
+        catch (err) { toast(err.message); }
+      });
+    }));
+  }
+
+  c.innerHTML = `
+    ${sectionTitle("Borç Listesi", "Firma, personel ve genel giderlerin tamamındaki açık borçlar")}
+    <div class="card tight" style="margin-bottom:16px;">
+      <form id="blFilterForm" class="form-row" style="padding:14px;">
+        <div class="field"><label>Taraf Türü</label><select name="partyType"><option value="">Tümü</option><option value="firma">Firma</option><option value="personel">Personel</option></select></div>
+        <div class="field"><label>Vade Başlangıç</label><input name="dueFrom" type="date" /></div>
+        <div class="field"><label>Vade Bitiş</label><input name="dueTo" type="date" /></div>
+        <button class="btn btn-ghost btn-sm" type="submit">Filtrele</button>
+      </form>
+    </div>
+    <div id="blTable">${renderTable()}</div>
+  `;
+  bindRowActions();
+
+  document.getElementById("blFilterForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    const filters = {};
+    if (f.partyType) filters.partyType = f.partyType;
+    if (f.dueFrom) filters.dueFrom = f.dueFrom;
+    if (f.dueTo) filters.dueTo = f.dueTo;
+    charges = await load(filters);
+    document.getElementById("blTable").innerHTML = renderTable();
+    bindRowActions();
+  });
 }
 
 async function renderPersonelView(c) {

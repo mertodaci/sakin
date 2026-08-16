@@ -339,27 +339,48 @@ model Budget {
 // ---------------- Firma & Personel Cari Hesap ----------------
 
 model Vendor {
+  id          String   @id @default(uuid())
+  name        String
+  category    String
+  contactName String   @default("")
+  phone       String
+  email       String   @default("")
+  taxNumber   String
+  iban        String
+  notes       String
+  createdAt   DateTime @default(now())
+}
+
+// Gider Grubu -> Gider kalemi hiyerarsisi (Yonetimcell karsilastirmasi:
+// "Giderler (Odeme)" modulunun temeli - her borc/fatura bir kategoriye
+// baglanabilir, taraf zorunlu degil).
+model ExpenseCategory {
   id        String   @id @default(uuid())
+  group     String
   name      String
-  category  String
-  phone     String
-  taxNumber String
-  iban      String
-  notes     String
   createdAt DateTime @default(now())
+
+  partyCharges PartyCharge[]
+
+  @@index([group])
 }
 
 // partyId, partyType'a gore vendors.id VEYA personnel.id'ye referans verir
 // (polymorphic) - iki farkli tabloya tek FK Postgres'te temiz ifade
 // edilemedigi icin bilerek FK'siz birakildi, mevcut davranisla ayni.
+// partyType/partyId ikisi de null olabilir - "genel gider" (belirli bir
+// firma/personele bagli olmayan, sadece kategoriye baglanan borc) icin.
 model PartyCharge {
   id          String       @id @default(uuid())
-  partyType   PartyType
-  partyId     String
+  partyType   PartyType?
+  partyId     String?
+  categoryId  String?
+  category    ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   amount      Decimal      @db.Decimal(12, 2)
   paidAmount  Decimal      @db.Decimal(12, 2) @default(0)
   status      ChargeStatus @default(unpaid)
   description String
+  invoiceNo   String       @default("")
   date        DateTime     @default(now())
   dueDate     DateTime
   createdBy   String
@@ -367,17 +388,19 @@ model PartyCharge {
   allocations PartyPaymentAllocation[]
 
   @@index([partyType, partyId])
+  @@index([categoryId])
 }
 
 model PartyPayment {
   id            String       @id @default(uuid())
-  partyType     PartyType
-  partyId       String
+  partyType     PartyType?
+  partyId       String?
   amount        Decimal      @db.Decimal(12, 2)
   accountId     String
   account       Account      @relation(fields: [accountId], references: [id], onDelete: Restrict)
   method        String
   description   String
+  receiptNo     String       @default("")
   date          DateTime     @default(now())
   createdBy     String
   transactionId String?      @unique
