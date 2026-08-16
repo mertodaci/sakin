@@ -32,6 +32,7 @@ function ledgerRow(title, sub, right, color) {
   return `<div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${title}</div><div class="small muted">${sub}</div></div><div class="f-num" style="font-size:14px;font-weight:600;${color ? `color:${color};` : ""}">${right}</div></div>`;
 }
 const PILL_MAP = { "Ödendi": "green", "Borçlu": "red", "Açık": "red", "İşlemde": "amber", "Çözüldü": "green", "Onaylandı": "green", "depoda": "grey", "zimmetli": "amber", "Teslim Alındı": "amber", "Teslim Edildi": "green", "Güncel": "green", "Bakım Gecikti": "red", "Pasif": "grey" };
+function chargeTypeLabel(ch) { return ch.type === "aidat" ? "Aidat" : ch.type === "sayac" ? "Sayaç" : ch.type === "gecikme_faizi" ? "⚠ Gecikme Faizi" : "Diğer"; }
 function pill(status) { const cls = PILL_MAP[status] || "grey"; return `<span class="pill ${cls}"><span class="dot"></span>${esc(status)}</span>`; }
 function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2600); }
 
@@ -521,22 +522,23 @@ async function renderResidentOzet(c) {
   const [dash, announcements] = await Promise.all([api("/dashboard"), api("/announcements")]);
   c.innerHTML = `
     ${sectionTitle("Merhaba, " + state.user.name.split(" ")[0], state.user.unitLabel || "")}
-    <div class="card pad mb-16">
+    <div class="card pad mb-16 clickable" data-goto="aidat">
       <div class="flex-between">
         <div><div class="stat-label">GÜNCEL BAKİYE</div><div class="f-num stat-value" style="color:${dash.debt > 0 ? "var(--red)" : "var(--green)"}">${tl(dash.debt)}</div></div>
         ${pill(dash.debt > 0 ? "Borçlu" : "Ödendi")}
       </div>
     </div>
     <div class="grid cols-3 mb-16">
-      <div class="card stat-card"><div class="stat-label">AÇIK TALEP</div><div class="stat-value">${dash.openTickets}</div></div>
-      <div class="card stat-card"><div class="stat-label">YAKLAŞAN REZERVASYON</div><div class="stat-value">${dash.upcomingReservations}</div></div>
-      <div class="card stat-card"><div class="stat-label">BEKLEYEN KARGO</div><div class="stat-value">${dash.pendingPackages}</div></div>
+      <div class="card stat-card clickable" data-goto="talep"><div class="stat-label">AÇIK TALEP</div><div class="stat-value">${dash.openTickets}</div></div>
+      <div class="card stat-card clickable" data-goto="rezervasyon"><div class="stat-label">YAKLAŞAN REZERVASYON</div><div class="stat-value">${dash.upcomingReservations}</div></div>
+      <div class="card stat-card clickable" data-goto="kargo"><div class="stat-label">BEKLEYEN KARGO</div><div class="stat-value">${dash.pendingPackages}</div></div>
     </div>
     <div class="card tight">
       <div class="ledger-title">Güncel Duyurular</div>
       ${announcements.slice(0, 3).map((a) => ledgerRow(esc(a.title), dt(a.date), "")).join("") || '<div class="empty-row">Duyuru yok.</div>'}
     </div>
   `;
+  c.querySelectorAll("[data-goto]").forEach((el) => el.addEventListener("click", () => goToTab(el.dataset.goto)));
 }
 
 async function renderResidentAidat(c) {
@@ -553,7 +555,7 @@ async function renderResidentAidat(c) {
     </div>
     <div class="card tight mb-16">
       <div class="ledger-title">Borç Kalemleri</div>
-      ${charges.map((ch) => ledgerRow(`${ch.type === "aidat" ? "Aidat" : ch.type === "sayac" ? "Sayaç" : ch.type === "gecikme_faizi" ? "⚠ Gecikme Faizi" : "Diğer"} — ${esc(ch.description)}`, dt(ch.dueDate) + " · " + pill(ch.status === "paid" ? "Ödendi" : "Borçlu"), tl(ch.amount - ch.paidAmount), ch.status !== "paid" ? "var(--red)" : "var(--green)")).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+      ${charges.map((ch) => ledgerRow(`${chargeTypeLabel(ch)} — ${esc(ch.description)}`, dt(ch.dueDate) + " · " + pill(ch.status === "paid" ? "Ödendi" : "Borçlu"), tl(ch.amount - ch.paidAmount), ch.status !== "paid" ? "var(--red)" : "var(--green)")).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
     <div class="card tight">
       <div class="ledger-title">Ödeme Geçmişi</div>
@@ -845,19 +847,76 @@ async function renderManagerOzet(c) {
   c.innerHTML = `
     ${sectionTitle("Genel Özet", "Sitenin genel mali ve operasyonel durumu")}
     <div class="grid cols-3 mb-16">
-      <div class="card stat-card"><div class="stat-label">KASA BAKİYESİ</div><div class="f-num stat-value" style="color:${dash.kasa >= 0 ? "var(--green)" : "var(--red)"};">${tl(dash.kasa)}</div></div>
-      <div class="card stat-card"><div class="stat-label">TOPLAM ALACAK</div><div class="f-num stat-value" style="color:var(--red);">${tl(dash.totalDebt)}</div></div>
-      <div class="card stat-card"><div class="stat-label">AİDATI ÖDENEN</div><div class="stat-value">${dash.paidUnits}/${dash.unitCount}</div></div>
+      <div class="card stat-card clickable" data-goto="kasalar"><div class="stat-label">KASA BAKİYESİ</div><div class="f-num stat-value" style="color:${dash.kasa >= 0 ? "var(--green)" : "var(--red)"};">${tl(dash.kasa)}</div></div>
+      <div class="card stat-card clickable" data-goto="tahsilat"><div class="stat-label">TOPLAM ALACAK</div><div class="f-num stat-value" style="color:var(--red);">${tl(dash.totalDebt)}</div></div>
+      <div class="card stat-card clickable" data-goto="tahsilat"><div class="stat-label">AİDATI ÖDENEN</div><div class="stat-value">${dash.paidUnits}/${dash.unitCount}</div></div>
     </div>
     <div class="grid cols-3 mb-16">
-      <div class="card stat-card"><div class="stat-label">AÇIK TALEP</div><div class="stat-value">${dash.openTickets}</div></div>
-      <div class="card stat-card"><div class="stat-label">ONAY BEKLEYEN</div><div class="stat-value">${dash.pendingApprovals}</div></div>
-      <div class="card stat-card"><div class="stat-label">BAKIMI GECİKEN</div><div class="stat-value">${dash.overdueEquipment}</div></div>
+      <div class="card stat-card clickable" data-goto="talep"><div class="stat-label">AÇIK TALEP</div><div class="stat-value">${dash.openTickets}</div></div>
+      <div class="card stat-card clickable" data-goto="kullanicilar"><div class="stat-label">ONAY BEKLEYEN</div><div class="stat-value">${dash.pendingApprovals}</div></div>
+      <div class="card stat-card clickable" data-goto="demirbas"><div class="stat-label">BAKIMI GECİKEN</div><div class="stat-value">${dash.overdueEquipment}</div></div>
     </div>
     <div class="card tight">
       <div class="ledger-title">Borcu Bulunan Daireler</div>
       ${units.filter((u) => u.debt > 0).map((u) => ledgerRow(esc(u.block) + " - Daire " + esc(u.no), esc(u.ownerName || ""), tl(u.debt), "var(--red)")).join("") || '<div class="empty-row">Borçlu daire yok.</div>'}
     </div>
+  `;
+  c.querySelectorAll("[data-goto]").forEach((el) => el.addEventListener("click", () => goToTab(el.dataset.goto)));
+}
+
+// Ozet ekranindaki istatistik kutucuklarindan ilgili sekmeye dogrudan gecis.
+function goToTab(tabId) {
+  const groups = NAV_GROUPS[state.user.role] || [];
+  const owner = groups.find((g) => g.items.some(([id]) => id === tabId));
+  if (owner) { if (!expandedGroups) expandedGroups = new Set(); expandedGroups.add(owner.group); }
+  state.tab = tabId;
+  renderSidebarNav();
+  renderTab(tabId);
+}
+
+// Yonetimcell karsilastirmasindan: bir dairenin borc+tahsilat hareketlerini
+// kronolojik, bakiye takip eden tek bir ekstre olarak gosteren modal
+// (Yonetimcell'in uye detayindaki "Hesap Ozeti" tablosunun karsiligi).
+async function renderHesapOzetiModal(unit) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(12,32,50,.35);z-index:70;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;";
+  overlay.innerHTML = `
+    <div class="card pad" style="max-width:680px;width:100%;max-height:85vh;overflow-y:auto;">
+      <div class="flex-between" style="margin-bottom:2px;">
+        <h3 class="f-display" style="margin:0;">${esc(unit.block)} - Daire ${esc(unit.no)}</h3>
+        <button class="btn btn-ghost btn-sm" id="hesapOzetiClose">Kapat</button>
+      </div>
+      <div class="small muted" style="margin-bottom:14px;">Hesap Özeti — kronolojik borç/tahsilat dökümü</div>
+      <div id="hesapOzetiBody"><div class="empty-row">Yükleniyor…</div></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#hesapOzetiClose").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+
+  const [charges, payments] = await Promise.all([api("/charges?unitId=" + unit.id), api("/payments?unitId=" + unit.id)]);
+  const entries = [];
+  charges.forEach((ch) => entries.push({ date: ch.dueDate, label: `${chargeTypeLabel(ch)} — ${ch.description || ""}`, amount: Number(ch.amount) }));
+  payments.filter((p) => !p.cancelled).forEach((p) => entries.push({ date: p.date, label: `Tahsilat (${p.method}) — Makbuz ${p.receiptNo}`, amount: -Number(p.amount) }));
+  entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+  let running = 0;
+  entries.forEach((e) => { running += e.amount; e.balance = running; });
+
+  const body = overlay.querySelector("#hesapOzetiBody");
+  if (!entries.length) { body.innerHTML = '<div class="empty-row">Hareket kaydı yok.</div>'; return; }
+  body.innerHTML = `
+    <div class="scroll-x">
+      <table class="simple">
+        <thead><tr><th>Tarih</th><th>Açıklama</th><th style="text-align:right;">Tutar</th><th style="text-align:right;">Bakiye</th></tr></thead>
+        <tbody>${entries.slice().reverse().map((e) => `
+          <tr>
+            <td>${dt(e.date)}</td>
+            <td>${esc(e.label)}</td>
+            <td class="f-num" style="text-align:right;color:${e.amount > 0 ? "var(--red)" : "var(--green)"};">${e.amount > 0 ? "+" : ""}${tl(e.amount)}</td>
+            <td class="f-num" style="text-align:right;font-weight:600;">${tl(e.balance)}</td>
+          </tr>`).join("")}</tbody>
+      </table>
+    </div>
+    <div class="small muted" style="margin-top:12px;">Güncel bakiye: <b style="color:${running > 0 ? "var(--red)" : "var(--green)"};">${tl(running)}</b>${running > 0 ? " (borçlu)" : " (borcu yok)"}</div>
   `;
 }
 
@@ -935,7 +994,7 @@ async function renderDaireler(c) {
     <div class="card tight">
       ${list.map((u) => `
         <div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}${u.tenantName ? " (Kiracı: " + esc(u.tenantName) + ")" : ""}</div></div>
-        <div class="f-num" style="color:${u.debt > 0 ? "var(--red)" : "var(--green)"};font-weight:600;">${tl(u.debt)}</div></div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+        <div style="display:flex;align-items:center;gap:10px;"><div class="f-num" style="color:${u.debt > 0 ? "var(--red)" : "var(--green)"};font-weight:600;">${tl(u.debt)}</div><button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button></div></div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
   `;
   document.getElementById("unitForm").addEventListener("submit", async (e) => {
@@ -944,6 +1003,10 @@ async function renderDaireler(c) {
     try { await api("/units", { method: "POST", body: Object.fromEntries(f) }); toast("Daire eklendi."); renderTab("daireler"); }
     catch (err) { toast(err.message); }
   });
+  c.querySelectorAll("[data-ozet]").forEach((b) => b.addEventListener("click", () => {
+    const u = list.find((x) => x.id === b.dataset.ozet);
+    if (u) renderHesapOzetiModal(u);
+  }));
 }
 
 async function renderTahsilat(c) {
@@ -1002,9 +1065,13 @@ async function renderTahsilat(c) {
     box.innerHTML = filtered.map((u) => `
         <div class="ledger-row" style="flex-wrap:wrap;">
           <div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}</div></div>
-          <div style="display:flex;align-items:center;gap:10px;"><span class="f-num" style="font-weight:600;color:${u.debt > 0 ? "var(--red)" : "var(--green)"};">${tl(u.debt)}</span>${pill(u.debt > 0 ? "Borçlu" : "Ödendi")}${u.debt > 0 ? `<button class="btn btn-ghost btn-sm" data-collect="${u.id}">Tahsil Et</button>` : ""}</div>
+          <div style="display:flex;align-items:center;gap:10px;"><span class="f-num" style="font-weight:600;color:${u.debt > 0 ? "var(--red)" : "var(--green)"};">${tl(u.debt)}</span>${pill(u.debt > 0 ? "Borçlu" : "Ödendi")}<button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button>${u.debt > 0 ? `<button class="btn btn-ghost btn-sm" data-collect="${u.id}">Tahsil Et</button>` : ""}</div>
           <div style="width:100%;" id="collect-form-${u.id}"></div>
         </div>`).join("") || '<div class="empty-row">Bu filtreye uyan daire yok.</div>';
+    box.querySelectorAll("[data-ozet]").forEach((b) => b.addEventListener("click", () => {
+      const u = units.find((x) => x.id === b.dataset.ozet);
+      if (u) renderHesapOzetiModal(u);
+    }));
     box.querySelectorAll("[data-collect]").forEach((b) => b.addEventListener("click", () => {
       const unitId = b.dataset.collect;
       const unit = units.find((u) => u.id === unitId);
@@ -1568,8 +1635,9 @@ async function renderPersonelOzet(c) {
   c.innerHTML = `
     ${sectionTitle("Merhaba, " + state.user.name.split(" ")[0], state.user.department || "")}
     <div class="grid cols-2">
-      <div class="card stat-card"><div class="stat-label">SİZE ATANAN AÇIK TALEP</div><div class="stat-value">${dash.openTickets}</div></div>
-      <div class="card stat-card"><div class="stat-label">BAKIMI GECİKEN DEMİRBAŞ</div><div class="stat-value">${dash.overdueEquipment}</div></div>
+      <div class="card stat-card clickable" data-goto="talep"><div class="stat-label">SİZE ATANAN AÇIK TALEP</div><div class="stat-value">${dash.openTickets}</div></div>
+      <div class="card stat-card clickable" data-goto="demirbas"><div class="stat-label">BAKIMI GECİKEN DEMİRBAŞ</div><div class="stat-value">${dash.overdueEquipment}</div></div>
     </div>
   `;
+  c.querySelectorAll("[data-goto]").forEach((el) => el.addEventListener("click", () => goToTab(el.dataset.goto)));
 }
