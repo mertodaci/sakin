@@ -156,7 +156,6 @@ const LEGACY_COLLECTIONS = [
   { name: "notifications", model: "notification", load: simple("notification") },
   { name: "activityLog", model: "activityLog", load: loadActivityLog },
   { name: "budgets", model: "budget", load: simple("budget") },
-  { name: "contacts", model: "contact", load: simple("contact") },
 ];
 
 // Salt-okunur passthrough: bir koleksiyon kendi route'unda Prisma'ya
@@ -169,6 +168,9 @@ const READONLY_PASSTHROUGH = [
   // Burada sadece hala data.users okuyan diger legacy route'lar (dashboard,
   // comms, ops, jobs, system/export) icin salt-okunur olarak sunuluyor.
   { name: "users", load: loadUsers },
+  // contacts: routes/contacts.js artik dogrudan Prisma kullaniyor. Burada
+  // sadece system.js'nin /export ucu icin salt-okunur olarak sunuluyor.
+  { name: "contacts", load: simple("contact") },
 ];
 
 async function load() {
