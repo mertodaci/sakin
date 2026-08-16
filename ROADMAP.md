@@ -286,27 +286,35 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   sakin↔yönetici iki yönlü özel mesajlaşma, bildirim tetikler) —
   hepsi `routes/workspace.js`'te, rol bazlı görünürlükle
   (`NAV_GROUPS`).
+- ✅ **İkamet Edenler** (`HouseholdMember` — yakınlık derecesi,
+  "taşındı" işaretlenince geçmiş olarak korunur), **Arsa Payı/Aidat
+  Grubu** (`Unit.landShare`/`feeGroup`), **Üye Notu** (`UserNote`,
+  CRM tarzı) — Daireler ve Kullanıcılar düzenleme modallerine eklendi.
+- ✅ **Hukuki modülün kalanı**: `LegalCase` modeli (icra takibi,
+  `routes/legal.js`) + 7 PDF şablonu (`routes/documents.js`):
+  Tebligat (Ödeme Çağrısı/İhtarname — Yönetimcell'den gerçek
+  metinleriyle çıkarıldı), Genel Kurul Çağrısı, Vekaletname Örneği,
+  Hazirun Cetveli, Antetli Evrak, Adres Etiketleri, Toplu Hesap Özeti.
+  "Kurul & Hukuk" grubuna "İcra Takibi" ve "Belge Şablonları"
+  sekmeleri eklendi.
+- ✅ **Toplu SMS/e-posta arayüzü** (`POST /bulk-messages/preview`+`/send`
+  — blok/borç filtresi, `<adsoyad>`/`<daire>`/`<borc>` kişiselleştirme
+  parametresi; gerçek sağlayıcı olmadığı için sadece önizler ve
+  konsola loglar, README'nin "demo" desenine uygun) + **Toplu Hesap
+  Özeti Dökümü** (tüm dairelerin ekstresi tek PDF'te).
 
 **Sırada (henüz yapılmadı, bu sırayla ilerlenecek):**
-1. ⏳ İkamet Edenler + yakınlık derecesi (yeni tablo, `Unit`'e FK),
-   arsa payı/aidat grubu/çoklu sayaç tipi alanları, üye bazlı serbest
-   not (CRM tarzı).
-2. ⏳ Hukuki modülün kalanı: Tebligat/İhtarname (Yönetimcell'den
-   gerçek metinleriyle çıkarıldı — bkz. analiz Bölüm 5), Genel Kurul
-   Çağrısı, Vekaletname Örneği, Hazirun Cetveli, Antetli Evrak, Adres
-   Etiket Yazdır, Bilgi Bankası. Karar Defteri zaten var.
-3. ⏳ Toplu SMS/e-posta arayüzü (şablon + `<adsoyad>` gibi
-   kişiselleştirme parametresi + zamanlanmış gönderim — gerçek
-   sağlayıcı sözleşmesi olmadan arayüz/taslak modunda) + toplu döküm
-   (tüm üyelerin makbuz/ekstre/borç listesi tek seferde).
-4. ⏳ **[Önce plan modu gerekir]** Alacaklı bakiye + serbest kategori
+1. ⏳ **[Önce plan modu gerekir]** Alacaklı bakiye + serbest kategori
    modeli — para mantığının merkezine dokunuyor
    (`Charge`/`Payment`/`ChargeType` birlikte değişir). En yüksek
-   etkili madde ama en riskli; rastgele başlanmayacak.
-5. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
+   etkili madde ama en riskli; rastgele başlanmayacak. **Buradan
+   devam et.**
+2. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
    Kebir Defteri, banka entegrasyonu — sadece iskelet/arayüz düzeyinde
    (gerçek banka API'si/mali müşavir entegrasyonu üçüncü taraf
    sözleşmesi gerektirir, Mert'in kararı).
+3. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
+   sayfasıydı, en düşük öncelik, atlanabilir).
 
 **Birebir kopyalanamayacaklar** (README'nin "Neler Gerçek, Neler
 Demo" ayrımına eklenecek): gerçek banka entegrasyonu, gerçek SMS
