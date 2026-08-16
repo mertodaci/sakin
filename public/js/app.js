@@ -29,7 +29,7 @@ function dt(d) { return d ? new Date(d).toLocaleDateString("tr-TR", { day: "2-di
 function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }
 function sectionTitle(title, sub) { return `<div class="section-title"><h2>${esc(title)}</h2>${sub ? `<p>${esc(sub)}</p>` : ""}</div>`; }
 function ledgerRow(title, sub, right, color) {
-  return `<div class="ledger-row"><div><div style="font-size:13px;font-weight:600;">${title}</div><div class="small muted">${sub}</div></div><div class="f-num" style="font-size:14px;font-weight:600;${color ? `color:${color};` : ""}">${right}</div></div>`;
+  return `<div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${title}</div><div class="small muted">${sub}</div></div><div class="f-num" style="font-size:14px;font-weight:600;${color ? `color:${color};` : ""}">${right}</div></div>`;
 }
 const PILL_MAP = { "Ödendi": "green", "Borçlu": "red", "Açık": "red", "İşlemde": "amber", "Çözüldü": "green", "Onaylandı": "green", "depoda": "grey", "zimmetli": "amber", "Teslim Alındı": "amber", "Teslim Edildi": "green", "Güncel": "green", "Bakım Gecikti": "red", "Pasif": "grey" };
 function pill(status) { const cls = PILL_MAP[status] || "grey"; return `<span class="pill ${cls}"><span class="dot"></span>${esc(status)}</span>`; }
@@ -404,7 +404,7 @@ async function toggleNotifPanel() {
   panel.id = "notifPanel";
   panel.className = "notif-panel";
   panel.innerHTML = `
-    <div class="flex-between" style="margin-bottom:8px;"><strong style="font-size:13px;">Bildirimler</strong><button class="btn btn-ghost btn-sm" id="readAllBtn" style="font-size:11px;">Tümünü okundu yap</button></div>
+    <div class="flex-between" style="margin-bottom:8px;"><strong style="font-size:14px;">Bildirimler</strong><button class="btn btn-ghost btn-sm" id="readAllBtn" style="font-size:11px;">Tümünü okundu yap</button></div>
     ${list.map((n) => `<div class="notif-item" style="${n.read ? "opacity:.55;" : ""}">${esc(n.message)}<div class="small muted">${dt(n.date)}</div></div>`).join("") || '<div class="empty-row">Bildirim yok.</div>'}
   `;
   document.querySelector(".topbar").appendChild(panel);
@@ -499,7 +499,7 @@ async function renderResidentAidat(c) {
       <div class="ledger-title">Ödeme Geçmişi</div>
       ${payments.map((p) => `
         <div class="ledger-row">
-          <div><div style="font-size:13px;font-weight:600;">Ödeme — ${esc(p.method)}</div><div class="small muted">${dt(p.date)} · ${p.receiptNo}</div></div>
+          <div><div style="font-size:14px;font-weight:600;">Ödeme — ${esc(p.method)}</div><div class="small muted">${dt(p.date)} · ${p.receiptNo}</div></div>
           <div style="display:flex;align-items:center;gap:10px;"><span class="f-num" style="font-weight:600;color:var(--green);">+${tl(p.amount)}</span><button class="btn btn-ghost btn-sm" data-receipt="${p.id}">📄 Makbuz</button></div>
         </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
@@ -546,7 +546,7 @@ async function renderDuyuru(c) {
     <div class="grid">${list.map((a) => `
       <div class="card pad accent mb-16">
         <div class="flex-between"><div class="f-display" style="font-weight:700;font-size:15px;">${esc(a.title)} ${a.pinned ? "📌" : ""}</div><div class="small muted">${dt(a.date)}</div></div>
-        <p style="font-size:13px;color:var(--steel);margin-top:6px;line-height:1.55;">${esc(a.body)}</p>
+        <p style="font-size:14px;color:var(--steel);margin-top:6px;line-height:1.55;">${esc(a.body)}</p>
         ${canCreate ? `<button class="btn-danger" data-del="${a.id}">Sil</button>` : ""}
       </div>`).join("") || '<div class="empty-row">Duyuru yok.</div>'}</div>
   `;
@@ -578,7 +578,7 @@ function surveyCard(s) {
     ${s.options.map((o, i) => {
       const pct = Math.round((o.votes / total) * 100);
       return `<div style="margin-bottom:8px;">
-        <div class="flex-between" style="font-size:13px;">
+        <div class="flex-between" style="font-size:14px;">
           <button ${voted ? "disabled" : ""} data-sid="${s.id}" data-vote="${i}" style="background:none;border:none;padding:0;font-weight:600;color:${voted ? "var(--ink)" : "var(--navy)"};cursor:${voted ? "default" : "pointer"};text-align:left;">${esc(o.text)}</button>
           <span class="f-num muted">${pct}% · ${o.votes} oy</span>
         </div>
@@ -639,7 +639,7 @@ async function renderRezervasyon(c) {
       <div class="ledger-title">${canManage ? "Tüm Rezervasyonlar" : "Rezervasyonlarım"}</div>
       ${reservations.map((r) => `
         <div class="ledger-row">
-          <div><div style="font-size:13px;font-weight:600;">${esc(r.facilityName)}</div><div class="small muted">${dt(r.date)} · ${r.startTime}-${r.endTime}${canManage ? " · " + esc(r.unitLabel) : ""}</div></div>
+          <div><div style="font-size:14px;font-weight:600;">${esc(r.facilityName)}</div><div class="small muted">${dt(r.date)} · ${r.startTime}-${r.endTime}${canManage ? " · " + esc(r.unitLabel) : ""}</div></div>
           <div style="display:flex;align-items:center;gap:10px;">${pill(r.status)}<button class="btn-danger" data-cancel="${r.id}">İptal</button></div>
         </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
@@ -657,10 +657,10 @@ function ticketCard(t, role, personnel) {
   const canManage = role === "yonetici" || role === "personel";
   return `<div class="card pad mb-16">
     <div class="flex-between">
-      <div><div style="font-size:13px;font-weight:700;">${esc(t.category)} — ${esc(t.title)}</div><div class="small muted">${role !== "sakin" ? esc(t.residentName) + " · " + esc(t.unitLabel) + " · " : ""}${dt(t.createdAt)}</div></div>
+      <div><div style="font-size:14px;font-weight:700;">${esc(t.category)} — ${esc(t.title)}</div><div class="small muted">${role !== "sakin" ? esc(t.residentName) + " · " + esc(t.unitLabel) + " · " : ""}${dt(t.createdAt)}</div></div>
       ${pill(t.status)}
     </div>
-    <p style="font-size:13px;color:var(--steel);margin-top:8px;">${esc(t.description)}</p>
+    <p style="font-size:14px;color:var(--steel);margin-top:8px;">${esc(t.description)}</p>
     ${t.assignedName ? `<div class="small muted">Atanan: ${esc(t.assignedName)}</div>` : ""}
     ${t.comments.length ? `<div class="small muted" style="margin-top:6px;">${t.comments.map((cm) => `💬 ${esc(cm.text)}`).join("<br/>")}</div>` : ""}
     ${role === "yonetici" ? `<div class="field" style="margin-top:8px;max-width:220px;"><label class="small">Ata</label><select data-assign="${t.id}"><option value="">Atanmadı</option>${personnel.map((p) => `<option value="${p.id}" ${t.assignedPersonnelId === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>` : ""}
@@ -720,7 +720,7 @@ async function renderKargo(c) {
     <div class="card tight">
       ${list.map((p) => `
         <div class="ledger-row">
-          <div><div style="font-size:13px;font-weight:600;">${esc(p.courier)}${p.trackingNo ? " · " + esc(p.trackingNo) : ""}</div><div class="small muted">${canManage ? esc(p.unitLabel) + " · " : ""}${dt(p.receivedDate)}</div></div>
+          <div><div style="font-size:14px;font-weight:600;">${esc(p.courier)}${p.trackingNo ? " · " + esc(p.trackingNo) : ""}</div><div class="small muted">${canManage ? esc(p.unitLabel) + " · " : ""}${dt(p.receivedDate)}</div></div>
           <div style="display:flex;align-items:center;gap:10px;">${pill(p.status)}${canManage && p.status !== "Teslim Edildi" ? `<button class="btn btn-ghost btn-sm" data-deliver="${p.id}">Teslim Et</button>` : ""}</div>
         </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
@@ -756,7 +756,7 @@ async function renderPano(c) {
       <div class="card pad mb-16">
         <div class="flex-between"><span class="pill grey">${esc(adType(a.type))}</span><div class="small muted">${dt(a.date)} · ${esc(a.authorName)}</div></div>
         <div style="font-weight:700;margin-top:8px;">${esc(a.title)}</div>
-        <p style="font-size:13px;color:var(--steel);margin-top:4px;">${esc(a.description)}</p>
+        <p style="font-size:14px;color:var(--steel);margin-top:4px;">${esc(a.description)}</p>
         ${a.resolved ? '<span class="pill green">Tamamlandı</span>' : `<button class="btn btn-ghost btn-sm" data-resolve="${a.id}">Tamamlandı işaretle</button>`}
       </div>`).join("") || '<div class="empty-row">İlan yok.</div>'}</div>
   `;
@@ -812,14 +812,14 @@ async function renderKullanicilar(c) {
     ${sectionTitle("Kullanıcılar")}
     ${pending.length ? `<div class="card tight mb-16"><div class="ledger-title">Onay Bekleyenler</div>${pending.map((u) => {
       const days = daysSince(u.createdAt);
-      return `<div class="ledger-row"><div><div style="font-size:13px;font-weight:600;">${esc(u.name)} ${days >= 3 ? '<span class="pill red"><span class="dot"></span>Gecikti</span>' : ""}</div><div class="small muted">${esc(u.email)} · ${esc(u.unitLabel || "-")} · ${days === 0 ? "bugün" : days + " gündür bekliyor"}</div></div>
+      return `<div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(u.name)} ${days >= 3 ? '<span class="pill red"><span class="dot"></span>Gecikti</span>' : ""}</div><div class="small muted">${esc(u.email)} · ${esc(u.unitLabel || "-")} · ${days === 0 ? "bugün" : days + " gündür bekliyor"}</div></div>
       <div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" data-approve="${u.id}">Onayla</button><button class="btn-danger" data-deluser="${u.id}">Reddet</button></div></div>`;
     }).join("")}</div>` : ""}
     ${resetRequests.length ? `<div class="card tight mb-16"><div class="ledger-title">Şifre Sıfırlama Talepleri</div>${resetRequests.map((u) => `
-      <div class="ledger-row"><div><div style="font-size:13px;font-weight:600;">${esc(u.name)}</div><div class="small muted">${esc(u.email)} · Talep: ${dt(u.resetRequestedAt)}</div></div>
+      <div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(u.name)}</div><div class="small muted">${esc(u.email)} · Talep: ${dt(u.resetRequestedAt)}</div></div>
       <button class="btn btn-primary btn-sm" data-reset="${u.id}">Geçici Şifre Oluştur</button></div>`).join("")}</div>` : ""}
     <div class="card tight mb-16"><div class="ledger-title">Sakinler &amp; Personel</div>${approved.map((u) => `
-      <div class="ledger-row" style="${u.isActive === false ? "opacity:.55;" : ""}"><div><div style="font-size:13px;font-weight:600;">${esc(u.name)} ${u.role === "yonetici" ? "👑" : ""} ${u.isActive === false ? pill("Pasif") : ""}</div><div class="small muted">${esc(u.email)} · ${u.role === "sakin" ? esc(u.unitLabel || "-") : u.role === "personel" ? esc(u.department || "Personel") : "Yönetici"}</div></div>
+      <div class="ledger-row" style="${u.isActive === false ? "opacity:.55;" : ""}"><div><div style="font-size:14px;font-weight:600;">${esc(u.name)} ${u.role === "yonetici" ? "👑" : ""} ${u.isActive === false ? pill("Pasif") : ""}</div><div class="small muted">${esc(u.email)} · ${u.role === "sakin" ? esc(u.unitLabel || "-") : u.role === "personel" ? esc(u.department || "Personel") : "Yönetici"}</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">${u.role !== "yonetici" ? `<button class="btn btn-ghost btn-sm" data-reset="${u.id}">Şifre Sıfırla</button>` : ""}${u.role !== "yonetici" && u.id !== state.user.id ? (u.isActive === false ? `<button class="btn btn-ghost btn-sm" data-reactivate="${u.id}">Aktif Et</button>` : `<button class="btn btn-ghost btn-sm" data-deactivate="${u.id}">Pasife Al</button>`) : ""}${u.id !== state.user.id ? `<button class="btn-danger" data-deluser="${u.id}">Kalıcı Sil</button>` : ""}</div></div>`).join("")}</div>
     <div class="card form-card">
       <div class="ledger-title" style="padding:0 0 10px;">Yeni Personel Ekle</div>
@@ -870,7 +870,7 @@ async function renderDaireler(c) {
     </div>
     <div class="card tight">
       ${list.map((u) => `
-        <div class="ledger-row"><div><div style="font-size:13px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}${u.tenantName ? " (Kiracı: " + esc(u.tenantName) + ")" : ""}</div></div>
+        <div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}${u.tenantName ? " (Kiracı: " + esc(u.tenantName) + ")" : ""}</div></div>
         <div class="f-num" style="color:${u.debt > 0 ? "var(--red)" : "var(--green)"};font-weight:600;">${tl(u.debt)}</div></div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
   `;
@@ -900,7 +900,7 @@ async function renderTahsilat(c) {
     <div class="card tight mb-16">
       ${units.map((u) => `
         <div class="ledger-row" style="flex-wrap:wrap;">
-          <div><div style="font-size:13px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}</div></div>
+          <div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}</div></div>
           <div style="display:flex;align-items:center;gap:10px;"><span class="f-num" style="font-weight:600;color:${u.debt > 0 ? "var(--red)" : "var(--green)"};">${tl(u.debt)}</span>${pill(u.debt > 0 ? "Borçlu" : "Ödendi")}${u.debt > 0 ? `<button class="btn btn-ghost btn-sm" data-collect="${u.id}">Tahsil Et</button>` : ""}</div>
           <div style="width:100%;" id="collect-form-${u.id}"></div>
         </div>`).join("")}
@@ -911,7 +911,7 @@ async function renderTahsilat(c) {
         const u = units.find((x) => x.id === p.unitId);
         const label = u ? `${u.block} - Daire ${u.no}` : "-";
         return `<div class="ledger-row" style="${p.cancelled ? "opacity:.5;" : ""}">
-          <div><div style="font-size:13px;font-weight:600;">${esc(label)} ${p.cancelled ? "(İptal edildi)" : ""}</div><div class="small muted">${p.method} · ${p.receiptNo} · ${dt(p.date)}</div></div>
+          <div><div style="font-size:14px;font-weight:600;">${esc(label)} ${p.cancelled ? "(İptal edildi)" : ""}</div><div class="small muted">${p.method} · ${p.receiptNo} · ${dt(p.date)}</div></div>
           <div style="display:flex;align-items:center;gap:10px;"><span class="f-num" style="font-weight:600;${p.cancelled ? "text-decoration:line-through;" : "color:var(--green);"}">+${tl(p.amount)}</span>${!p.cancelled ? `<button class="btn-danger" data-cancel-payment="${p.id}">İptal Et</button>` : ""}</div>
         </div>`;
       }).join("") || '<div class="empty-row">Kayıt yok.</div>'}
@@ -991,7 +991,7 @@ async function renderMuhasebe(c) {
     <div class="card tight">
       <div class="ledger-title">Hareket Dökümü</div>
       ${transactions.slice(0, 25).map((t) => `
-        <div class="ledger-row"><div><div style="font-size:13px;font-weight:600;">${esc(t.category)}</div><div class="small muted">${esc(t.description)} · ${accName(t.accountId)} · ${dt(t.date)}</div></div>
+        <div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(t.category)}</div><div class="small muted">${esc(t.description)} · ${accName(t.accountId)} · ${dt(t.date)}</div></div>
         <div style="display:flex;align-items:center;gap:8px;"><span class="f-num" style="font-weight:600;color:${t.type === "gelir" ? "var(--green)" : "var(--red)"};">${t.type === "gelir" ? "+" : "-"}${tl(t.amount)}</span><button class="btn-danger" data-deltxn="${t.id}">Sil</button></div></div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
   `;
@@ -1168,7 +1168,7 @@ async function renderPersonelView(c) {
   c.innerHTML = `
     ${sectionTitle("Personel")}
     <div class="card tight">
-      ${list.map((p) => `<div class="ledger-row"><div><div style="font-size:13px;font-weight:600;">${esc(p.name)}</div><div class="small muted">${esc(p.department)} · ${esc(p.phone || "-")}</div></div>${pill(p.active ? "Ödendi" : "Açık")}</div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+      ${list.map((p) => `<div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(p.name)}</div><div class="small muted">${esc(p.department)} · ${esc(p.phone || "-")}</div></div>${pill(p.active ? "Ödendi" : "Açık")}</div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
     <p class="small muted" style="margin-top:12px;">Yeni personel eklemek için "Kullanıcılar" sekmesini kullanın.</p>
   `;
@@ -1253,7 +1253,7 @@ async function renderKarar(c) {
       ${list.map((d) => `
         <div class="card pad mb-16">
           <div class="flex-between"><div style="font-weight:700;">Karar No: ${d.decisionNo} — ${esc(d.title)}</div><div class="small muted">${dt(d.date)}</div></div>
-          <p style="font-size:13px;color:var(--steel);margin-top:6px;">${esc(d.content)}</p>
+          <p style="font-size:14px;color:var(--steel);margin-top:6px;">${esc(d.content)}</p>
           <div class="small muted">Katılımcı sayısı: ${d.attendees}</div>
         </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
@@ -1291,7 +1291,7 @@ async function renderAnahtar(c) {
     </div>
     <div class="card tight">
       ${list.map((k) => `
-        <div class="ledger-row"><div><div style="font-size:13px;font-weight:600;">${esc(k.keyName)}</div><div class="small muted">${esc(k.location || "-")}${k.status === "zimmetli" ? " · Zimmetli: " + esc(k.holderName) : ""}</div></div>
+        <div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(k.keyName)}</div><div class="small muted">${esc(k.location || "-")}${k.status === "zimmetli" ? " · Zimmetli: " + esc(k.holderName) : ""}</div></div>
         <div style="display:flex;align-items:center;gap:8px;">${pill(k.status)}
         ${k.status === "depoda" ? `<button class="btn btn-ghost btn-sm" data-checkout="${k.id}">Zimmetle</button>` : `<button class="btn btn-ghost btn-sm" data-checkin="${k.id}">Teslim Al</button>`}
         </div></div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
@@ -1340,7 +1340,7 @@ async function renderSeffaflik(c) {
     <div class="card tight">
       ${list.map((l) => `
         <div class="ledger-row">
-          <div><div style="font-size:13px;font-weight:600;">${ACTION_LABEL[l.action] || l.action}</div><div class="small muted">${esc(l.detail)}</div></div>
+          <div><div style="font-size:14px;font-weight:600;">${ACTION_LABEL[l.action] || l.action}</div><div class="small muted">${esc(l.detail)}</div></div>
           <div style="text-align:right;"><div class="small muted">${esc(l.actorName)}</div><div class="small muted">${dt(l.date)}</div></div>
         </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
