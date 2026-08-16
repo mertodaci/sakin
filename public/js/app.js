@@ -1041,6 +1041,53 @@ async function renderHesapOzetiModal(unit) {
   `;
 }
 
+// Yonetimcell karsilastirmasi: Firma/Personel detay sayfasindaki "Hesap
+// Hareketleri" - unit'lerin Hesap Özeti'yle ayni kosan-bakiyeli desen,
+// PartyCharge/PartyPayment'a uygulanmis hali (Fatura No/Makbuz No dahil).
+async function renderPartyHesapHareketleriModal(partyType, partyId, label) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(12,32,50,.35);z-index:70;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;";
+  overlay.innerHTML = `
+    <div class="card pad" style="max-width:680px;width:100%;max-height:85vh;overflow-y:auto;">
+      <div class="flex-between" style="margin-bottom:2px;">
+        <h3 class="f-display" style="margin:0;">${esc(label)}</h3>
+        <button class="btn btn-ghost btn-sm" id="partyHesapClose">Kapat</button>
+      </div>
+      <div class="small muted" style="margin-bottom:14px;">Hesap Hareketleri — kronolojik borç/ödeme dökümü</div>
+      <div id="partyHesapBody"><div class="empty-row">Yükleniyor…</div></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#partyHesapClose").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+
+  const qs = `partyType=${partyType}&partyId=${partyId}`;
+  const [charges, payments] = await Promise.all([api("/party-charges?" + qs), api("/party-payments?" + qs)]);
+  const entries = [];
+  charges.forEach((ch) => entries.push({ date: ch.dueDate, label: `${esc(ch.description || "Borçlandırma")} — Fatura ${esc(ch.invoiceNo)}`, amount: Number(ch.amount) }));
+  payments.filter((p) => !p.cancelled).forEach((p) => entries.push({ date: p.date, label: `Ödeme (${esc(p.method)}) — Makbuz ${esc(p.receiptNo)}`, amount: -Number(p.amount) }));
+  entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+  let running = 0;
+  entries.forEach((e) => { running += e.amount; e.balance = running; });
+
+  const body = overlay.querySelector("#partyHesapBody");
+  if (!entries.length) { body.innerHTML = '<div class="empty-row">Hareket kaydı yok.</div>'; return; }
+  body.innerHTML = `
+    <div class="scroll-x">
+      <table class="simple">
+        <thead><tr><th>Tarih</th><th>Açıklama</th><th style="text-align:right;">Tutar</th><th style="text-align:right;">Bakiye</th></tr></thead>
+        <tbody>${entries.slice().reverse().map((e) => `
+          <tr>
+            <td>${dt(e.date)}</td>
+            <td>${e.label}</td>
+            <td class="f-num" style="text-align:right;color:${e.amount > 0 ? "var(--red)" : "var(--green)"};">${(e.amount > 0 ? "+" : "") + tl(e.amount)}</td>
+            <td class="f-num" style="text-align:right;font-weight:600;">${tl(e.balance)}</td>
+          </tr>`).join("")}</tbody>
+      </table>
+    </div>
+    <div class="small muted" style="margin-top:12px;">Güncel bakiye: <b style="color:${running > 0 ? "var(--red)" : "var(--green)"};">${tl(running)}</b>${running > 0 ? " (borçlu)" : running < 0 ? " (fazla ödenmiş)" : " (borcu yok)"}</div>
+  `;
+}
+
 function daysSince(d) { return Math.floor((Date.now() - new Date(d).getTime()) / 86400000); }
 
 async function renderKullanicilar(c) {
@@ -1457,7 +1504,9 @@ async function renderCari(c) {
   const personnelDebt = (id) => charges.filter((ch) => ch.partyType === "personel" && ch.partyId === id && ch.status !== "paid").reduce((s, ch) => s + (ch.amount - ch.paidAmount), 0);
   const categoryOptions = `<option value="">Kategori seçin (opsiyonel)</option>` + categories.map((cat) => `<option value="${cat.id}">${esc(cat.group)} / ${esc(cat.name)}</option>`).join("");
 
+  const partyNameMap = new Map();
   function partyCard(name, sub, debt, partyType, partyId) {
+    partyNameMap.set(`${partyType}|${partyId}`, name);
     return `
       <div class="card pad mb-16">
         <div class="flex-between">
@@ -1467,6 +1516,7 @@ async function renderCari(c) {
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
           <button class="btn btn-ghost btn-sm" data-charge="${partyType}|${partyId}">+ Borçlandır</button>
           ${debt > 0 ? `<button class="btn btn-ghost btn-sm" data-pay="${partyType}|${partyId}|${debt}">Öde</button>` : ""}
+          <button class="btn btn-ghost btn-sm" data-hesap="${partyType}|${partyId}" title="Hesap Hareketleri">📄 Hesap Hareketleri</button>
         </div>
         <div id="cari-action-${partyType}-${partyId}"></div>
       </div>`;
@@ -1531,6 +1581,11 @@ async function renderCari(c) {
       try { await api("/party-payments/pay", { method: "POST", body: { partyType, partyId, ...f } }); toast("Ödeme kaydedildi."); renderTab("cari"); }
       catch (err) { toast(err.message); }
     });
+  }));
+
+  c.querySelectorAll("[data-hesap]").forEach((b) => b.addEventListener("click", () => {
+    const [partyType, partyId] = b.dataset.hesap.split("|");
+    renderPartyHesapHareketleriModal(partyType, partyId, partyNameMap.get(`${partyType}|${partyId}`) || "Hesap Hareketleri");
   }));
 }
 

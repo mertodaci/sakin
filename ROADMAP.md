@@ -392,17 +392,20 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   vade ilerletme, henüz-vadesi-gelmeyeni-atlamak, tekrar-çalıştırma
   idempotent'liği, aktif/pasif, silme) test edildi, geçiyor.
 
+- ✅ **Firma/Personel "Hesap Hareketleri"** — Hesap Özeti pattern'i
+  (`renderHesapOzetiModal`) firma/personel'e genişletildi:
+  `renderPartyHesapHareketleriModal` koşan bakiyeli, Fatura No/Makbuz
+  No dahil kronolojik ekstre gösteriyor; "Firma & Personel" ekranındaki
+  her kartta "📄 Hesap Hareketleri" butonundan açılıyor.
+
 **Sırada (henüz yapılmadı, bu sırayla ilerlenecek):**
-1. ⏳ Firma/Personel "Hesap Hareketleri" — koşan bakiyeli tam ekstre
-   ekranı (Hesap Özeti pattern'inin firma/personel'e genişletilmesi).
-   **Buradan devam et.**
-2. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
+1. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
    Kebir Defteri, banka entegrasyonu — sadece iskelet/arayüz düzeyinde
    (gerçek banka API'si/mali müşavir entegrasyonu üçüncü taraf
-   sözleşmesi gerektirir, Mert'in kararı).
-3. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
+   sözleşmesi gerektirir, Mert'in kararı). **Buradan devam et.**
+2. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
    sayfasıydı, en düşük öncelik, atlanabilir).
-4. ⏳ **Kalan tüm Yönetimcell menülerini yeniden denetle** — Mert'in
+3. ⏳ **Kalan tüm Yönetimcell menülerini yeniden denetle** — Mert'in
    talebi: "Bunu tamamladıktan sonra diğer menüler/sayfalar için de
    tekrar kontrolü yap ve emin ol eksik bir şey kalmasın." Üyeler,
    Kasalar, Raporlar, Borçlandır, Hukuki, Tanımlar menülerinin HER
