@@ -653,6 +653,23 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   Elle `yıl-ay-gün` formatlamaya çevrilip düzeltildi.
   `test-bilanco.js` ile doğrulandı.
 
+- ✅ **Gider Grubu Raporu + Genel Bilanço** — `GET /reports/gider-grubu`
+  (firma+tarih aralığı filtreli, `PartyCharge` tutarlarını
+  `ExpenseCategory` bazında toplar) ve `GET /reports/genel-bilanco`
+  (tek tarihe kadar kümülatif Gelirler/`Charge` + Giderler/`PartyCharge`
+  kategori kırılımı, yan yana iki tablo). Finans grubuna eklendi.
+  **Yol boyunca bulunan gerçek hata**: ilk halde kategori bazında
+  gruplama `categoryId`'ye göre yapılıyordu; ama demo veride aynı
+  grup/kalem adına sahip BİRDEN FAZLA `ExpenseCategory` kaydı var
+  (tekrarlanan seed/test script çalıştırmalarından kalma — oturumun
+  başında not edilen "duplicate knowledge article" ile aynı sınıf
+  sorun). Sonuç: aynı kalem 9 ayrı satırda görünüyordu. Gruplama
+  anahtarını `categoryId` yerine `"grup|||ad"` metnine çevirdim — bu,
+  altta yatan veri tekrar etse bile raporun doğru toplaması anlamına
+  geliyor (kozmetik bir gizleme değil, gerçek bir sağlamlaştırma).
+  `test-gider-genel.js` ile doğrulandı (17 satır → 4 satır, toplam
+  değişmedi).
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı

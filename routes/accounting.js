@@ -180,4 +180,63 @@ router.get("/accounting/fisler", requireAuth, requireRole("yonetici"), async (re
   res.json(fisler.map((f, i) => ({ fisNo: i + 1, ...f })));
 });
 
+// Yonetimcell karsilastirmasi: "Gider Grubu Raporu" - secilen firma+tarih
+// araligindaki PartyCharge (firma/personel fatura) tutarlarini
+// ExpenseCategory bazinda gruplar.
+router.get("/reports/gider-grubu", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const categories = await db.prisma.expenseCategory.findMany();
+  const catById = new Map(categories.map((c) => [c.id, c]));
+  const { vendorId, startDate, endDate } = req.query;
+  const start = startDate ? new Date(startDate) : null;
+  const end = endDate ? new Date(new Date(endDate).setHours(23, 59, 59, 999)) : null;
+
+  // Grup anahtari kategori ADINA gore (categoryId'ye gore degil) - ayni
+  // grup/kalem adiyla birden fazla ExpenseCategory kaydi olsa bile
+  // (tekrarlanan seed/test verisi) rapor tek satirda toplar.
+  const totals = new Map(); // "group|||name" -> amount
+  data.partyCharges
+    .filter((c) => !vendorId || (c.partyType === "firma" && c.partyId === vendorId))
+    .filter((c) => !start || new Date(c.date) >= start)
+    .filter((c) => !end || new Date(c.date) <= end)
+    .forEach((c) => {
+      const cat = catById.get(c.categoryId);
+      const key = cat ? `${cat.group}|||${cat.name}` : "Kategorisiz|||Kategorisiz";
+      totals.set(key, (totals.get(key) || 0) + c.amount);
+    });
+
+  const rows = Array.from(totals.entries()).map(([key, amount]) => {
+    const [group, name] = key.split("|||");
+    return { group, name, amount };
+  }).sort((a, b) => a.group.localeCompare(b.group, "tr") || a.name.localeCompare(b.name, "tr"));
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  res.json({ rows, total });
+});
+
+// Yonetimcell karsilastirmasi: "Genel Bilanco" - tek bir tarihe KADAR
+// kumulatif gelir (Charge) ve gider (PartyCharge) kategori kirilimi.
+router.get("/reports/genel-bilanco", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const categories = await db.prisma.expenseCategory.findMany();
+  const catById = new Map(categories.map((c) => [c.id, c]));
+  const asOf = req.query.asOfDate ? new Date(new Date(req.query.asOfDate).setHours(23, 59, 59, 999)) : new Date();
+
+  function groupBy(list) {
+    const totals = new Map(); // "group|||name" -> amount, ayni ad birden fazla kategori ID'sinde olsa bile tek satir
+    list.filter((x) => new Date(x.date) <= asOf).forEach((x) => {
+      const cat = catById.get(x.categoryId);
+      const key = cat ? `${cat.group}|||${cat.name}` : "Kategorisiz|||Kategorisiz";
+      totals.set(key, (totals.get(key) || 0) + x.amount);
+    });
+    return Array.from(totals.entries()).map(([key, amount]) => {
+      const [group, name] = key.split("|||");
+      return { group, name, amount };
+    }).sort((a, b) => b.amount - a.amount);
+  }
+
+  const gelirler = groupBy(data.charges);
+  const giderler = groupBy(data.partyCharges);
+  res.json({ gelirler, giderler, totalGelir: gelirler.reduce((s, r) => s + r.amount, 0), totalGider: giderler.reduce((s, r) => s + r.amount, 0) });
+});
+
 module.exports = router;
