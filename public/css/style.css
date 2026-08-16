@@ -109,6 +109,9 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .card.pad { padding: 24px; }
 .card.tight { padding: 6px 24px; }
 .card.accent { border-left: 3px solid var(--azure); }
+.card.clickable { cursor: pointer; transition: transform .12s, box-shadow .12s, border-color .12s; }
+.card.clickable:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--azure); }
+.card.clickable:active { transform: translateY(0); }
 
 .ledger-row { border-bottom: 1px solid var(--line); padding: 13px 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14.5px; }
 .ledger-row:last-child { border-bottom: none; }

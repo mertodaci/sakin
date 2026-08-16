@@ -85,14 +85,15 @@ model Unit {
   tenantPhone String
   occupancy   Occupancy
 
-  users        User[]
-  charges      Charge[]
-  payments     Payment[]
-  reservations Reservation[]
-  tickets      Ticket[]
-  meters       Meter[]
-  packages     Package[]
-  activityLogs ActivityLog[]
+  users         User[]
+  charges       Charge[]
+  payments      Payment[]
+  reservations  Reservation[]
+  tickets       Ticket[]
+  meters        Meter[]
+  packages      Package[]
+  activityLogs  ActivityLog[]
+  internalTasks InternalTask[]
 }
 
 model User {
@@ -115,15 +116,18 @@ model User {
   lockedUntil         DateTime?
   createdAt           DateTime  @default(now())
 
-  personnel      Personnel?
-  payments       Payment[]
-  reservations   Reservation[]
-  tickets        Ticket[]
-  ticketComments TicketComment[]
-  classifieds    Classifieds[]
-  notifications  Notification[]
-  surveyVotes    SurveyVote[]
-  vehicles       Vehicle[]
+  personnel        Personnel?
+  payments         Payment[]
+  reservations     Reservation[]
+  tickets          Ticket[]
+  ticketComments   TicketComment[]
+  classifieds      Classifieds[]
+  notifications    Notification[]
+  surveyVotes      SurveyVote[]
+  vehicles         Vehicle[]
+  agendaItems      AgendaItem[]
+  sentMessages     Message[]       @relation("MessageSender")
+  receivedMessages Message[]       @relation("MessageRecipient")
 }
 
 // Yonetimcell karsilastirmasindan: guvenlik/kapi gorevlisinin gozle
@@ -335,6 +339,7 @@ model Personnel {
 
   equipmentResponsible Equipment[]
   ticketsAssigned      Ticket[]
+  internalTasks        InternalTask[]
 }
 
 // ---------------- Demirbas / Bakim ----------------
@@ -571,4 +576,65 @@ model Contact {
   name  String
   role  String
   phone String
+}
+
+// ---------------- Ajanda / Is Takibi / Gelen Mesajlar ----------------
+// Yonetimcell karsilastirmasindan: yonetimin kendi ic calisma alani -
+// sakin taleplerinden (Ticket) ayri, sadece yonetici/personelin gordugu.
+
+enum AgendaKind {
+  not
+  faaliyet
+}
+
+// "Ajanda (Notlar)" ve "Ajanda (Faaliyetler)" Yonetimcell'de ayni arayuzu
+// paylasiyor, sadece cerceveleme (serbest not vs. sitede gerceklesen olay)
+// farkli - bu yuzden tek model + kind alani yeterli, iki ayri tablo gerekmiyor.
+model AgendaItem {
+  id        String     @id @default(uuid())
+  kind      AgendaKind
+  date      DateTime
+  text      String
+  done      Boolean    @default(false)
+  authorId  String
+  author    User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@index([date])
+}
+
+// Yonetimin kendi dahili is/gorev takibi - sakin taleplerinden (Ticket) farkli,
+// "asansor firmasini ara" gibi disariya kapali islerdir. Durum serbest metin
+// (Ticket.status ile ayni desen): Devam Eden / Tamamlanan / Kapatilan.
+model InternalTask {
+  id                  String     @id @default(uuid())
+  title               String
+  description         String
+  area                String
+  type                String
+  status              String     @default("Devam Eden")
+  assignedPersonnelId String?
+  assignedPersonnel   Personnel? @relation(fields: [assignedPersonnelId], references: [id], onDelete: SetNull)
+  unitId              String?
+  unit                Unit?      @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  dueDate             DateTime?
+  createdBy           String
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @default(now())
+}
+
+// Sakin-yonetici arasi ozel (iki yonlu) mesajlasma - duyuru/pano tek yonlu
+// oldugu icin ayri. recipientId bos ise "yonetime" (tum yoneticilere) gonderilmis
+// sayilir; yonetici cevaplarken belirli bir sakine (recipientId) yazar.
+model Message {
+  id          String   @id @default(uuid())
+  senderId    String
+  sender      User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId String?
+  recipient   User?    @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+  body        String
+  date        DateTime @default(now())
+  read        Boolean  @default(false)
+
+  @@index([date])
 }

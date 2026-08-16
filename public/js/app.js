@@ -231,14 +231,14 @@ function logout() {
 /* ---------------- Shell ---------------- */
 const NAV_GROUPS = {
   sakin: [
-    { group: "Genel", items: [["ozet", "Özet"]] },
+    { group: "Genel", items: [["ozet", "Özet"], ["mesajlar", "Gelen Mesajlar"]] },
     { group: "Hesabım", items: [["aidat", "Aidatım"], ["sayac", "Sayaçlarım"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"]] },
     { group: "Hizmetler", items: [["rezervasyon", "Rezervasyon"], ["talep", "Arıza/Talep"], ["kargo", "Kargolarım"]] },
     { group: "Sistem", items: [["seffaflik", "Şeffaflık"]] },
   ],
   yonetici: [
-    { group: "Genel", items: [["ozet", "Özet"]] },
+    { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
     { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"]] },
     { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"]] },
@@ -247,7 +247,7 @@ const NAV_GROUPS = {
     { group: "Sistem", items: [["seffaflik", "Şeffaflık"], ["ayarlar", "Ayarlar"]] },
   ],
   personel: [
-    { group: "Genel", items: [["ozet", "Özet"]] },
+    { group: "Genel", items: [["ozet", "Özet"], ["istakibi", "İş Takibi"]] },
     { group: "İş", items: [["talep", "Talepler"], ["demirbas", "Demirbaş"], ["kargo", "Kargo"]] },
     { group: "Sistem", items: [["rehber", "Rehber"]] },
   ],
@@ -510,6 +510,9 @@ async function renderTab(tab) {
     else if (tab === "butce") await renderButce(c);
     else if (tab === "rehber") await renderRehber(c);
     else if (tab === "ayarlar") await renderAyarlar(c);
+    else if (tab === "ajanda") await renderAjanda(c);
+    else if (tab === "istakibi") await renderIsTakibi(c);
+    else if (tab === "mesajlar") await renderMesajlar(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
   } catch (err) {
     c.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
@@ -1392,6 +1395,133 @@ async function renderSayacYonetici(c) {
   `;
   document.getElementById("meterForm").addEventListener("submit", async (e) => { e.preventDefault(); const f = new FormData(e.target); try { await api("/meters", { method: "POST", body: Object.fromEntries(f) }); toast("Sayaç eklendi."); renderTab("sayac"); } catch (err) { toast(err.message); } });
   document.getElementById("readingForm").addEventListener("submit", async (e) => { e.preventDefault(); const f = new FormData(e.target); try { await api("/meter-readings", { method: "POST", body: Object.fromEntries(f) }); toast("Fatura oluşturuldu."); renderTab("sayac"); } catch (err) { toast(err.message); } });
+}
+
+/* ================= AJANDA / İŞ TAKİBİ / GELEN MESAJLAR ================= */
+/* Yönetimcell karşılaştırmasından: yönetimin kendi iç çalışma alanı. */
+
+async function renderAjanda(c) {
+  const today = new Date().toISOString().slice(0, 10);
+  const list = await api("/agenda");
+  c.innerHTML = `
+    ${sectionTitle("Ajanda", "Notlar ve sitede gerçekleşen faaliyetler")}
+    <div class="card form-card">
+      <div class="ledger-title" style="padding:0 0 10px;">Yeni Kayıt Ekle</div>
+      <form id="agendaForm" class="form-row">
+        <div class="field" style="flex:0 0 140px;"><label>Tür</label><select name="kind"><option value="not">Not</option><option value="faaliyet">Faaliyet</option></select></div>
+        <div class="field" style="flex:0 0 170px;"><label>Tarih</label><input type="date" name="date" value="${today}" required /></div>
+        <div class="field" style="flex:1 1 260px;"><label>Metin</label><input name="text" required /></div>
+        <button class="btn btn-primary" type="submit">Ekle</button>
+      </form>
+    </div>
+    <div class="card tight">
+      ${list.map((i) => `
+        <div class="ledger-row" style="${i.done ? "opacity:.55;" : ""}">
+          <div><div style="font-size:14px;font-weight:600;">${i.kind === "faaliyet" ? "📌 Faaliyet" : "📝 Not"} — ${esc(i.text)}${i.done ? " (Tamamlandı)" : ""}</div><div class="small muted">${dt(i.date)} · ${esc(i.authorName)}</div></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" data-toggle="${i.id}" data-done="${i.done}">${i.done ? "Bekleyene Al" : "Tamamlandı"}</button>
+            <button class="btn-danger" data-delagenda="${i.id}">Sil</button>
+          </div>
+        </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+    </div>
+  `;
+  document.getElementById("agendaForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    try { await api("/agenda", { method: "POST", body: Object.fromEntries(f) }); toast("Kayıt eklendi."); renderTab("ajanda"); }
+    catch (err) { toast(err.message); }
+  });
+  c.querySelectorAll("[data-toggle]").forEach((b) => b.addEventListener("click", async () => {
+    try { await api("/agenda/" + b.dataset.toggle, { method: "PATCH", body: { done: b.dataset.done !== "true" } }); renderTab("ajanda"); }
+    catch (err) { toast(err.message); }
+  }));
+  c.querySelectorAll("[data-delagenda]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Bu kayıt silinsin mi?")) return;
+    try { await api("/agenda/" + b.dataset.delagenda, { method: "DELETE" }); renderTab("ajanda"); }
+    catch (err) { toast(err.message); }
+  }));
+}
+
+async function renderIsTakibi(c) {
+  const canCreate = state.user.role === "yonetici";
+  const [tasks, personnel, units] = await Promise.all([
+    api("/internal-tasks"),
+    canCreate ? api("/personnel") : Promise.resolve([]),
+    canCreate ? api("/units") : Promise.resolve([]),
+  ]);
+  const STATUSES = ["Devam Eden", "Tamamlanan", "Kapatılan"];
+  c.innerHTML = `
+    ${sectionTitle("İş Takibi", "Yönetimin kendi iç görev/to-do listesi")}
+    ${canCreate ? `
+    <div class="card form-card">
+      <div class="ledger-title" style="padding:0 0 10px;">Yeni İş Oluştur</div>
+      <form id="taskForm" class="form-row">
+        <div class="field" style="flex:1 1 220px;"><label>Başlık</label><input name="title" required /></div>
+        <div class="field" style="flex:1 1 160px;"><label>İşin Alanı</label><input name="area" placeholder="Genel, Temizlik, Bahçe…" /></div>
+        <div class="field" style="flex:1 1 160px;"><label>İşin Türü</label><input name="type" placeholder="Arıza, Öneri…" /></div>
+        <div class="field" style="flex:1 1 200px;"><label>Atanan Personel</label><select name="assignedPersonnelId"><option value="">—</option>${personnel.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select></div>
+        <div class="field" style="flex:1 1 200px;"><label>İlgili Daire</label><select name="unitId"><option value="">—</option>${units.map((u) => `<option value="${u.id}">${esc(u.block)} - Daire ${esc(u.no)}</option>`).join("")}</select></div>
+        <div class="field" style="flex:1 1 160px;"><label>Teslim Tarihi</label><input type="date" name="dueDate" /></div>
+        <div class="field" style="flex:1 1 260px;"><label>Açıklama</label><input name="description" /></div>
+        <button class="btn btn-primary" type="submit">Oluştur</button>
+      </form>
+    </div>` : ""}
+    <div class="card tight">
+      ${tasks.map((t) => `
+        <div class="ledger-row" style="flex-wrap:wrap;">
+          <div><div style="font-size:14px;font-weight:600;">${esc(t.title)}</div><div class="small muted">${esc(t.area)} · ${esc(t.type)}${t.assignedName ? " · " + esc(t.assignedName) : ""}${t.unitLabel ? " · " + esc(t.unitLabel) : ""}${t.dueDate ? " · Teslim: " + dt(t.dueDate) : ""}</div>${t.description ? `<div class="small muted" style="margin-top:2px;">${esc(t.description)}</div>` : ""}</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${pill(t.status)}
+            <select data-status="${t.id}">${STATUSES.map((s) => `<option value="${s}" ${s === t.status ? "selected" : ""}>${s}</option>`).join("")}</select>
+          </div>
+        </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+    </div>
+  `;
+  if (canCreate) {
+    document.getElementById("taskForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      try { await api("/internal-tasks", { method: "POST", body: Object.fromEntries(f) }); toast("İş oluşturuldu."); renderTab("istakibi"); }
+      catch (err) { toast(err.message); }
+    });
+  }
+  c.querySelectorAll("[data-status]").forEach((sel) => sel.addEventListener("change", async () => {
+    try { await api("/internal-tasks/" + sel.dataset.status, { method: "PATCH", body: { status: sel.value } }); toast("Durum güncellendi."); renderTab("istakibi"); }
+    catch (err) { toast(err.message); }
+  }));
+}
+
+async function renderMesajlar(c) {
+  const isYonetici = state.user.role === "yonetici";
+  const [list, residents] = await Promise.all([api("/messages"), isYonetici ? api("/users") : Promise.resolve([])]);
+  const sakinler = residents.filter((u) => u.role === "sakin" && u.isApproved);
+  c.innerHTML = `
+    ${sectionTitle("Gelen Mesajlar", isYonetici ? "Sakinlerden gelen özel mesajlar" : "Yönetime özel mesaj gönderin")}
+    <div class="card form-card">
+      <form id="msgForm" class="form-row">
+        ${isYonetici ? `<div class="field" style="flex:1 1 220px;"><label>Kime (boş = genel not)</label><select name="recipientId"><option value="">—</option>${sakinler.map((u) => `<option value="${u.id}">${esc(u.name)}${u.unitLabel ? " · " + esc(u.unitLabel) : ""}</option>`).join("")}</select></div>` : ""}
+        <div class="field" style="flex:1 1 320px;"><label>${isYonetici ? "Mesaj" : "Yönetime Mesajınız"}</label><input name="body" required placeholder="Mesajınızı yazın…" /></div>
+        <button class="btn btn-primary" type="submit">Gönder</button>
+      </form>
+    </div>
+    <div class="card tight">
+      ${list.map((m) => `
+        <div class="ledger-row" style="${m.read || m.senderId === state.user.id ? "" : "background:var(--azure-light);"}">
+          <div><div style="font-size:14px;font-weight:600;">${esc(m.senderName)}${m.senderUnitLabel ? " · " + esc(m.senderUnitLabel) : ""}</div><div class="small muted" style="margin-top:2px;">${esc(m.body)}</div><div class="small muted">${dt(m.date)}</div></div>
+          ${isYonetici && !m.read && m.senderId !== state.user.id ? `<button class="btn btn-ghost btn-sm" data-readmsg="${m.id}">Okundu İşaretle</button>` : ""}
+        </div>`).join("") || '<div class="empty-row">Gelen mesaj yok.</div>'}
+    </div>
+  `;
+  document.getElementById("msgForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    try { await api("/messages", { method: "POST", body: Object.fromEntries(f) }); toast("Mesaj gönderildi."); renderTab("mesajlar"); }
+    catch (err) { toast(err.message); }
+  });
+  c.querySelectorAll("[data-readmsg]").forEach((b) => b.addEventListener("click", async () => {
+    try { await api("/messages/" + b.dataset.readmsg + "/read", { method: "PATCH" }); renderTab("mesajlar"); }
+    catch (err) { toast(err.message); }
+  }));
 }
 
 async function renderKarar(c) {
