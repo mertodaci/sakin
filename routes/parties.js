@@ -1,6 +1,7 @@
 const express = require("express");
 const { Prisma } = require("@prisma/client");
 const db = require("../db");
+const { materializeRecurringPartyCharges } = require("../jobs");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
 const router = express.Router();
@@ -269,6 +270,71 @@ router.delete("/party-charges/:id", requireAuth, requireRole("yonetici"), async 
   db.logActivity(data, req.user, "party.charge.delete", `${partyName(data, charge.partyType, charge.partyId) || "Genel gider"} için borçlandırma silindi: ${charge.description}`, null);
   await db.save(data);
   res.json({ message: "Borçlandırma kaydı silindi." });
+});
+
+/* ---------------- TEKRARLAYAN / ILERI TARIHLI FATURALAR ---------------- */
+// Yonetimcell'deki "Ileri Tarihli Borc Listesi" ekraninin gercek karsiligi -
+// meger sadece vadesi ileri olan borclar degil, periyodik/zamanlanmis fatura
+// sablonu sistemiymis (bkz. jobs.js materializeRecurringPartyCharges).
+
+router.get("/recurring-party-charges", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const [list, categories] = await Promise.all([
+    db.prisma.recurringPartyCharge.findMany({ orderBy: { nextDate: "asc" } }),
+    db.prisma.expenseCategory.findMany(),
+  ]);
+  const catMap = new Map(categories.map((c) => [c.id, c]));
+  res.json(
+    list.map((r) => ({
+      ...r,
+      amount: r.amount.toNumber(),
+      partyName: partyName(data, r.partyType, r.partyId),
+      category: catMap.get(r.categoryId) || null,
+    }))
+  );
+});
+
+router.post("/recurring-party-charges", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const { partyType, partyId, categoryId, description, amount, nextDate, frequency } = req.body || {};
+  if ((!partyType || !partyId) && !categoryId) return res.status(400).json({ error: "En az bir taraf (firma/personel) veya bir gider kategorisi seçilmelidir." });
+  if (!amount || Number(amount) <= 0) return res.status(400).json({ error: "Geçerli bir tutar girilmelidir." });
+  if (!nextDate) return res.status(400).json({ error: "İlk vade tarihi zorunludur." });
+  if (!["once", "monthly", "yearly"].includes(frequency)) return res.status(400).json({ error: "Geçersiz sıklık." });
+  const r = await db.prisma.recurringPartyCharge.create({
+    data: {
+      partyType: partyType || null,
+      partyId: partyType ? partyId : null,
+      categoryId: categoryId || null,
+      description: description || "",
+      amount: new Prisma.Decimal(amount),
+      nextDate: new Date(nextDate),
+      frequency,
+      createdBy: req.user.id,
+    },
+  });
+  res.status(201).json(r);
+});
+
+router.patch("/recurring-party-charges/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const { active } = req.body || {};
+  const r = await db.prisma.recurringPartyCharge.update({ where: { id: req.params.id }, data: { active: !!active } }).catch(() => null);
+  if (!r) return res.status(404).json({ error: "Kayıt bulunamadı." });
+  res.json(r);
+});
+
+router.delete("/recurring-party-charges/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  await db.prisma.recurringPartyCharge.delete({ where: { id: req.params.id } }).catch((e) => {
+    if (e.code !== "P2025") throw e;
+  });
+  res.json({ message: "Tekrarlayan fatura şablonu silindi." });
+});
+
+// Normalde runMaintenanceTasks 6 saatte bir otomatik calisir - yonetici
+// vadesi gelmis sablonlari beklemeden hemen borca cevirmek isteyebilir
+// (charges/generate-month'un aidat tarafindaki manuel tetikleyicisiyle ayni desen).
+router.post("/recurring-party-charges/run-now", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const created = await materializeRecurringPartyCharges();
+  res.json({ message: `${created} fatura gerçek borca çevrildi.`, created });
 });
 
 module.exports = router;

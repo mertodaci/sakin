@@ -115,10 +115,58 @@ async function autoGenerateMonthlyDues(settings) {
   return created;
 }
 
+// Tekrarlayan/ileri tarihli fatura sablonlarini (RecurringPartyCharge)
+// vadesi gelince gercek bir PartyCharge'a cevirir (Yonetimcell'in "Ileri
+// Tarihli Borc Listesi"nin gercek karsiligi). PartyCharge hala legacy shim
+// uzerinden (db.load/db.save) yaziliyor - dogrudan prisma.partyCharge.create
+// KULLANILMAZ, cunku baska bir istek ayni anda db.load() yapip daha sonra
+// db.save() cagirirsa, save() o istegin eski snapshot'inda olmayan (bizim
+// burada dogrudan Prisma ile eklediğimiz) satiri "artik dizide yok" sanip
+// silerdi (bkz. db.js saveCollection - notIn ids -> deleteMany).
+async function materializeRecurringPartyCharges() {
+  const now = new Date();
+  const due = await prisma.recurringPartyCharge.findMany({ where: { active: true, nextDate: { lte: now } } });
+  if (due.length === 0) return 0;
+
+  const data = await db.load();
+  let created = 0;
+  for (const r of due) {
+    data.partyCharges.push({
+      id: db.uid(),
+      partyType: r.partyType,
+      partyId: r.partyId,
+      categoryId: r.categoryId,
+      amount: r.amount.toNumber(),
+      paidAmount: 0,
+      status: "unpaid",
+      description: r.description,
+      invoiceNo: "FT-" + Math.floor(100000 + Math.random() * 899999),
+      date: now.toISOString(),
+      dueDate: r.nextDate.toISOString(),
+      createdBy: r.createdBy,
+    });
+    created++;
+
+    if (r.frequency === "once") {
+      await prisma.recurringPartyCharge.update({ where: { id: r.id }, data: { active: false } });
+    } else {
+      const next = new Date(r.nextDate);
+      if (r.frequency === "yearly") next.setFullYear(next.getFullYear() + 1);
+      else next.setMonth(next.getMonth() + 1);
+      await prisma.recurringPartyCharge.update({ where: { id: r.id }, data: { nextDate: next } });
+    }
+  }
+
+  db.logActivity(data, null, "recurring.materialize", `${created} tekrarlayan/ileri tarihli fatura gerçek borca çevrildi.`, null);
+  await db.save(data);
+  return created;
+}
+
 async function runMaintenanceTasks() {
   const settings = await prisma.settings.findUniqueOrThrow({ where: { id: "singleton" } });
   await applyLateFees(settings);
   await autoGenerateMonthlyDues(settings);
+  await materializeRecurringPartyCharges();
 }
 
-module.exports = { runMaintenanceTasks };
+module.exports = { runMaintenanceTasks, materializeRecurringPartyCharges };

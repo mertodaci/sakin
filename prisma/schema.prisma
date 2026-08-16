@@ -360,9 +360,33 @@ model ExpenseCategory {
   name      String
   createdAt DateTime @default(now())
 
-  partyCharges PartyCharge[]
+  partyCharges     PartyCharge[]
+  recurringCharges RecurringPartyCharge[]
 
   @@index([group])
+}
+
+// "Ileri Tarihli Borc Listesi" / Tekrarlayan Faturalar (Yonetimcell
+// karsilastirmasi): bir sablon tanimlanir (taraf VEYA kategori, tutar,
+// aciklama, ilk vade), zamanlanmis gorev (jobs.js, runMaintenanceTasks)
+// vadesi geldiginde bunu gercek bir PartyCharge'a cevirir. frequency="once"
+// ise bir kez calisip pasif olur, "monthly"/"yearly" ise bir sonraki
+// vadeye atlar.
+model RecurringPartyCharge {
+  id          String           @id @default(uuid())
+  partyType   PartyType?
+  partyId     String?
+  categoryId  String?
+  category    ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  description String
+  amount      Decimal          @db.Decimal(12, 2)
+  nextDate    DateTime
+  frequency   String
+  active      Boolean          @default(true)
+  createdBy   String
+  createdAt   DateTime         @default(now())
+
+  @@index([active, nextDate])
 }
 
 // partyId, partyType'a gore vendors.id VEYA personnel.id'ye referans verir

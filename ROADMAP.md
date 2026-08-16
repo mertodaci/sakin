@@ -367,20 +367,42 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   kısayolu şimdilik yok — önce borçlandır, sonra ayrı adımda öde
   (uygulamanın genelindeki tutarlı desen).
 
+- ✅ **Tekrarlayan/İleri tarihli fatura sistemi** — Yönetimcell'in "İleri
+  Tarihli Borç Listesi"si meğer sadece vadesi ileri olan borçların
+  listesi değil, asıl periyodik/zamanlanmış fatura şablonu sistemiymiş
+  (canlı hesapta inceleyince ortaya çıktı). Yeni `RecurringPartyCharge`
+  modeli: taraf (firma/personel) VEYA kategoriye bağlı bir şablon
+  (tutar, açıklama, ilk vade, sıklık: Tek Seferlik/Aylık/Yıllık)
+  tanımlanır; `jobs.js`'teki `materializeRecurringPartyCharges()`
+  vadesi gelen şablonları gerçek `PartyCharge`'a çevirir (tek seferlik
+  şablon ateşleyince pasifleşir, aylık/yıllık bir sonraki vadeye
+  atlar) — mevcut `runMaintenanceTasks()` döngüsüne eklendi (6 saatte
+  bir otomatik + yönetici "Şimdi Çalıştır" ile anında tetikleyebiliyor,
+  aidat tarafındaki `charges/generate-month` ile aynı manuel-tetikleyici
+  deseni). **Önemli tasarım kararı**: bu materialize fonksiyonu
+  `PartyCharge`'ı doğrudan `prisma.partyCharge.create()` ile DEĞİL,
+  `db.load()`/`db.save()` legacy-shim döngüsü üzerinden yazıyor —
+  çünkü `PartyCharge` hâlâ shim'in tam-senkron `save()`'ine bağlı
+  (`saveCollection`, snapshot'ta olmayan id'leri `deleteMany` ile
+  siliyor); arka plandaki job doğrudan Prisma ile satır eklerse, o
+  sırada başka bir isteğin (routes/parties.js) eski bir `data`
+  snapshot'ıyla çağıracağı `db.save()` bu yeni satırı sessizce silerdi.
+  Yeni "İleri Tarihli / Tekrarlayan" sekmesi eklendi. `test-recurring.js`
+  ile tam yaşam döngüsü (materialize, tek-seferlik pasifleşme, aylık
+  vade ilerletme, henüz-vadesi-gelmeyeni-atlamak, tekrar-çalıştırma
+  idempotent'liği, aktif/pasif, silme) test edildi, geçiyor.
+
 **Sırada (henüz yapılmadı, bu sırayla ilerlenecek):**
-1. ⏳ Tekrarlayan/İleri tarihli fatura sistemi (Yönetimcell'in "İleri
-   Tarihli Borç Listesi"nin gerçek karşılığı — meğer sadece vadesi ileri
-   olan borçlar değil, asıl periyodik/zamanlanmış fatura şablonu
-   sistemiymiş). **Buradan devam et.**
-2. ⏳ Firma/Personel "Hesap Hareketleri" — koşan bakiyeli tam ekstre
+1. ⏳ Firma/Personel "Hesap Hareketleri" — koşan bakiyeli tam ekstre
    ekranı (Hesap Özeti pattern'inin firma/personel'e genişletilmesi).
-3. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
+   **Buradan devam et.**
+2. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
    Kebir Defteri, banka entegrasyonu — sadece iskelet/arayüz düzeyinde
    (gerçek banka API'si/mali müşavir entegrasyonu üçüncü taraf
    sözleşmesi gerektirir, Mert'in kararı).
-4. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
+3. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
    sayfasıydı, en düşük öncelik, atlanabilir).
-5. ⏳ **Kalan tüm Yönetimcell menülerini yeniden denetle** — Mert'in
+4. ⏳ **Kalan tüm Yönetimcell menülerini yeniden denetle** — Mert'in
    talebi: "Bunu tamamladıktan sonra diğer menüler/sayfalar için de
    tekrar kontrolü yap ve emin ol eksik bir şey kalmasın." Üyeler,
    Kasalar, Raporlar, Borçlandır, Hukuki, Tanımlar menülerinin HER

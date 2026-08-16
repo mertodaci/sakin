@@ -31,7 +31,7 @@ function sectionTitle(title, sub) { return `<div class="section-title"><h2>${esc
 function ledgerRow(title, sub, right, color) {
   return `<div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${title}</div><div class="small muted">${sub}</div></div><div class="f-num" style="font-size:14px;font-weight:600;${color ? `color:${color};` : ""}">${right}</div></div>`;
 }
-const PILL_MAP = { "Ödendi": "green", "Borçlu": "red", "Alacaklı": "green", "Açık": "red", "Kısmi": "amber", "İşlemde": "amber", "Çözüldü": "green", "Onaylandı": "green", "depoda": "grey", "zimmetli": "amber", "Teslim Alındı": "amber", "Teslim Edildi": "green", "Güncel": "green", "Bakım Gecikti": "red", "Pasif": "grey" };
+const PILL_MAP = { "Ödendi": "green", "Borçlu": "red", "Alacaklı": "green", "Açık": "red", "Kısmi": "amber", "İşlemde": "amber", "Çözüldü": "green", "Onaylandı": "green", "depoda": "grey", "zimmetli": "amber", "Teslim Alındı": "amber", "Teslim Edildi": "green", "Güncel": "green", "Bakım Gecikti": "red", "Pasif": "grey", "Aktif": "green" };
 // Net bakiye (borc - alacakli bakiye) uc durumlu: pozitif=borclu (kirmizi),
 // negatif=alacakli (yesil), sifir=odendi (yesil).
 function debtStatusLabel(debt) { return debt > 0 ? "Borçlu" : debt < 0 ? "Alacaklı" : "Ödendi"; }
@@ -275,6 +275,7 @@ const NAV_ICON = {
   toplusms: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/>',
   giderler: '<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/>',
   borclistesi: '<path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="5" y="4" width="14" height="17" rx="2"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="16" y2="15"/>',
+  tekrarlayan: '<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>',
   ayarlar: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/>',
 };
 function navIcon(id) { return svgIcon(NAV_ICON[id] || NAV_ICON.ozet); }
@@ -291,7 +292,7 @@ const NAV_GROUPS = {
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
     { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"]] },
-    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["butce", "Bütçe"]] },
+    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
     { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"]] },
@@ -610,6 +611,7 @@ async function renderTab(tab) {
     else if (tab === "cari") await renderCari(c);
     else if (tab === "giderler") await renderGiderler(c);
     else if (tab === "borclistesi") await renderBorcListesi(c);
+    else if (tab === "tekrarlayan") await renderTekrarlayan(c);
     else if (tab === "personel") await renderPersonelView(c);
     else if (tab === "demirbas") await renderDemirbas(c);
     else if (tab === "karar") await renderKarar(c);
@@ -1715,6 +1717,97 @@ async function renderBorcListesi(c) {
     document.getElementById("blTable").innerHTML = renderTable();
     bindRowActions();
   });
+}
+
+const RECURRING_FREQ_LABEL = { once: "Tek Seferlik", monthly: "Aylık", yearly: "Yıllık" };
+
+// Yonetimcell karsilastirmasi: "Ileri Tarihli Borc Listesi" - aslinda
+// periyodik/zamanlanmis fatura sablonu sistemi (bkz. jobs.js
+// materializeRecurringPartyCharges). Sablon burada tanimlanir, vadesi
+// gelince arka planda otomatik gercek borca cevrilir (ya da "Şimdi
+// Çalıştır" ile hemen).
+async function renderTekrarlayan(c) {
+  const [list, vendors, personnel, categories] = await Promise.all([
+    api("/recurring-party-charges"),
+    api("/vendors"),
+    api("/personnel"),
+    api("/expense-categories"),
+  ]);
+
+  const partyOptions =
+    `<option value="">Yok (sadece kategoriye bağlı genel gider)</option>` +
+    `<optgroup label="Firmalar">${vendors.map((v) => `<option value="firma|${v.id}">${esc(v.name)}</option>`).join("")}</optgroup>` +
+    `<optgroup label="Personel">${personnel.map((p) => `<option value="personel|${p.id}">${esc(p.name)}</option>`).join("")}</optgroup>`;
+  const categoryOptions = `<option value="">Kategori seçin (opsiyonel)</option>` + categories.map((cat) => `<option value="${cat.id}">${esc(cat.group)} / ${esc(cat.name)}</option>`).join("");
+
+  function row(r) {
+    const label = r.partyName ? `${r.partyName} (${r.partyType === "firma" ? "Firma" : "Personel"})` : r.category ? `${r.category.group} / ${r.category.name} (Genel Gider)` : "Genel Gider";
+    return `
+      <div class="ledger-row">
+        <div>
+          <div style="font-weight:600;">${esc(label)}</div>
+          <div class="small muted">${esc(r.description)} · Sonraki vade: ${dt(r.nextDate)} · ${RECURRING_FREQ_LABEL[r.frequency] || r.frequency}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${pill(r.active ? "Aktif" : "Pasif")}
+          <div class="f-num" style="font-weight:600;">${tl(r.amount)}</div>
+          <button class="btn btn-ghost btn-sm" data-toggle="${r.id}|${!r.active}">${r.active ? "Duraklat" : "Etkinleştir"}</button>
+          <button class="btn-danger" data-delrec="${r.id}">Sil</button>
+        </div>
+      </div>`;
+  }
+
+  c.innerHTML = `
+    ${sectionTitle("İleri Tarihli / Tekrarlayan Faturalar", "Firma, personel veya genel gider için zamanlanmış fatura şablonları - vadesi gelince otomatik borca dönüşür")}
+    <div class="card form-card">
+      <div class="flex-between" style="margin-bottom:10px;">
+        <div class="ledger-title" style="padding:0;">Yeni Şablon</div>
+        <button class="btn btn-ghost btn-sm" id="runNowBtn">Vadesi Gelenleri Şimdi Çalıştır</button>
+      </div>
+      <form id="recurringForm">
+        <div class="form-row">
+          <div class="field" style="flex:2 1 220px;"><label>Taraf</label><select name="party">${partyOptions}</select></div>
+          <div class="field" style="flex:2 1 220px;"><label>Gider Kategorisi</label><select name="categoryId">${categoryOptions}</select></div>
+        </div>
+        <div class="field"><label>Açıklama</label><input name="description" required /></div>
+        <div class="form-row">
+          <div class="field"><label>Tutar (₺)</label><input name="amount" type="number" min="0.01" step="0.01" required /></div>
+          <div class="field"><label>İlk Vade Tarihi</label><input name="nextDate" type="date" required /></div>
+          <div class="field"><label>Sıklık</label><select name="frequency"><option value="once">Tek Seferlik</option><option value="monthly">Aylık</option><option value="yearly">Yıllık</option></select></div>
+        </div>
+        <button class="btn btn-primary btn-sm" type="submit">Kaydet</button>
+      </form>
+    </div>
+    <div class="card tight" style="margin-top:16px;">
+      <div class="ledger-title">Kayıtlı Şablonlar</div>
+      ${list.map(row).join("") || '<div class="empty-row">Kayıtlı şablon yok.</div>'}
+    </div>
+  `;
+
+  document.getElementById("runNowBtn").addEventListener("click", async () => {
+    try { const r = await api("/recurring-party-charges/run-now", { method: "POST" }); toast(r.message); renderTab("tekrarlayan"); }
+    catch (err) { toast(err.message); }
+  });
+
+  document.getElementById("recurringForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    const body = { description: f.description, amount: f.amount, nextDate: f.nextDate, frequency: f.frequency, categoryId: f.categoryId || undefined };
+    if (f.party) { const [partyType, partyId] = f.party.split("|"); body.partyType = partyType; body.partyId = partyId; }
+    try { await api("/recurring-party-charges", { method: "POST", body }); toast("Şablon kaydedildi."); renderTab("tekrarlayan"); }
+    catch (err) { toast(err.message); }
+  });
+
+  c.querySelectorAll("[data-toggle]").forEach((b) => b.addEventListener("click", async () => {
+    const [id, active] = b.dataset.toggle.split("|");
+    try { await api("/recurring-party-charges/" + id, { method: "PATCH", body: { active: active === "true" } }); renderTab("tekrarlayan"); }
+    catch (err) { toast(err.message); }
+  }));
+  c.querySelectorAll("[data-delrec]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Bu şablonu silmek istediğinize emin misiniz?")) return;
+    try { await api("/recurring-party-charges/" + b.dataset.delrec, { method: "DELETE" }); toast("Şablon silindi."); renderTab("tekrarlayan"); }
+    catch (err) { toast(err.message); }
+  }));
 }
 
 async function renderPersonelView(c) {
