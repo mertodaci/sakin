@@ -22,6 +22,7 @@ router.get("/charges", requireAuth, async (req, res) => {
   const charges = await prisma.charge.findMany({
     where: unitFilter ? { unitId: unitFilter } : undefined,
     orderBy: { dueDate: "desc" },
+    include: { category: true },
   });
   res.json(charges);
 });
@@ -60,12 +61,23 @@ router.post("/charges/generate-month", requireAuth, requireRole("yonetici"), asy
 });
 
 router.post("/charges", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const { unitId, type, period, amount, dueDate, description } = req.body || {};
+  const { unitId, type, categoryId, period, amount, dueDate, description } = req.body || {};
   if (!unitId || !amount || Number(amount) <= 0) return res.status(400).json({ error: "Daire ve pozitif bir tutar zorunludur." });
+  // categoryId, PartyCharge (firma/personel gideri) ile AYNI Gider Grubu/
+  // Kalemi taksonomisini paylasir (orn. "Demirbas" hem bir firma
+  // faturasinda hem burada, dairelere yansitilirken kullanilabilir).
+  // type serbest metin olarak ana etiket olmaya devam eder - kategori
+  // secilip type bos birakilirsa, kategori adi type olarak kullanilir.
+  let resolvedType = type;
+  if (!resolvedType && categoryId) {
+    const cat = await prisma.expenseCategory.findUnique({ where: { id: categoryId } });
+    resolvedType = cat ? cat.name : "diger";
+  }
   const charge = await prisma.charge.create({
     data: {
       unitId,
-      type: type || "diger",
+      type: resolvedType || "diger",
+      categoryId: categoryId || null,
       period: period || "",
       amount: new Prisma.Decimal(amount),
       dueDate: dueDate ? new Date(dueDate) : new Date(),

@@ -236,6 +236,15 @@ model Charge {
   paidAmount            Decimal      @db.Decimal(12, 2) @default(0)
   lateFeeAppliedPeriods String[]
   description           String
+  // Firma/personel giderleriyle (PartyCharge) AYNI Gider Grubu/Kalemi
+  // taksonomisini paylasir - orn. bir "Demirbas" gideri hem bir firmadan
+  // alinan faturada (PartyCharge) hem de bu gideri dairelere yansitan
+  // borclandirmada (Charge) ayni ExpenseCategory'yi referans alabilir.
+  // `type` (serbest metin) geriye donuk uyumluluk/otomatik uretilen
+  // borclar (aidat/sayac/gecikme_faizi) icin ana etiket olmaya devam
+  // eder - categoryId sadece raporlama/kirlim icin ek bir siniflandirma.
+  categoryId            String?
+  category              ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   createdAt             DateTime     @default(now())
 
   allocations       PaymentAllocation[]
@@ -243,6 +252,7 @@ model Charge {
   creditApplications CreditApplication[]
 
   @@index([unitId])
+  @@index([categoryId])
 }
 
 model Payment {
@@ -362,6 +372,7 @@ model ExpenseCategory {
 
   partyCharges     PartyCharge[]
   recurringCharges RecurringPartyCharge[]
+  charges          Charge[]
 
   @@index([group])
 }

@@ -409,7 +409,23 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   eksik çıkmadı.** Bulunan yeni eksikler aşağıdaki "Sırada" listesine
   eklendi.
 
-**Sırada (henüz yapılmadı, bu sırayla ilerlenecek — menü denetiminden çıkan yeni liste):**
+- ✅ **Charge'ı ExpenseCategory'ye bağlama** (Mert'in düzeltmesi: "biz hep
+  aidat üzerinden gittik ama demirbaş giderleri gibi borçlandırmalar da
+  yapılıyor dairelere") — bir önceki fazda `ExpenseCategory`'yi sadece
+  `PartyCharge`'a (firma/personel gideri) bağlamıştım, dairelere kesilen
+  `Charge`'a hiç bağlamamıştım. `Charge.categoryId` eklendi — AYNI Gider
+  Grubu/Kalemi taksonomisini `PartyCharge` ile paylaşıyor (örn. "Demirbaş"
+  kategorisi hem bir firma faturasında hem bir daireye yansıtılan
+  borçlandırmada kullanılabiliyor). Tahsilat'taki "Özel Borçlandırma"
+  formuna kategori seçimi eklendi (`type` serbest metin alanı geriye
+  dönük uyumluluk için kalıyor, kategori seçilip type boş bırakılırsa
+  kategori adından türetiliyor). Hesap Özeti modaline bunun doğrudan
+  meyvesi olan **kategori kırılımı** eklendi: üstte Aidat/Demirbaş/...
+  gibi her kategori için ayrı kalan-bakiye çipi (Yönetimcell'deki
+  Aidat/Yakıt/Demirbaş/Ek Gider sütunlarının karşılığı).
+  `test-charge-category.js` ile regresyon testleri geçiyor.
+
+**Sırada (henüz yapılmadı, bu sırayla ilerlenecek — menü denetiminden çıkan liste):**
 1. ⏳ **Dosya Arşivi** — Raporlar altında bulundu, klasör bazlı genel
    evrak/dosya yükleme-saklama sistemi (Personel Evrakları, Personel
    Maaş Bordroları, SGK Ödemeleri, Üye Evrakları, Yönetim Evrakları
@@ -424,42 +440,39 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
    sadece AÇIK borçları (geçmiş ödemeler olmadan) tek tabloda gösterir,
    yanında doğrudan "Tahsil Et" / "Sms Gönder" / "Yazdır-E-Posta"
    butonları olur. Şu an bizde Hesap Özeti tarihçe+açık borcu
-   birleştiriyor, ayrı bir "sadece açık borç" görünümü yok.
+   birleştiriyor, ayrı bir "sadece açık borç" görünümü yok. Bu adımda
+   ayrıca Hesap Özeti'ndeki her satır için makbuz PDF'i ve "Hesap
+   Özetini Yazdır" ile tüm ekstreyi PDF olarak indirme de ele alınabilir.
 3. ⏳ **Tahsilat Ekranı zenginleştirme** — aynı kişi birden fazla
    taşınmaza sahipse TÜM taşınmazlarındaki borçları tek ekranda
    gösterip seçili borçları (checkbox ile, salt FIFO değil) tahsil
    edebilme. Bizde tahsilat her zaman tek daire + saf FIFO.
-4. ⏳ **Hesap Özeti kategori kırılımı** — üstte Aidat/Yakıt/Demirbaş/
-   Ek Gider/Su Kullanım Bedeli gibi gider tipine göre ayrı ayrı bakiye
-   sütunları (bizde tek toplam bakiye var); ayrıca ekstredeki her satır
-   için makbuz PDF'i ve "Hesap Özetini Yazdır" ile tüm ekstreyi
-   PDF olarak indirme.
-5. ⏳ **Boş taşınmaz (vacant unit) durumu** — `Occupancy` enum'unda
+4. ⏳ **Boş taşınmaz (vacant unit) durumu** — `Occupancy` enum'unda
    sadece `owner`/`tenant` var, "boş/kimse oturmuyor" durumu yok.
    Yönetimcell'in "Boş/Dolu Taşınmaz Listesi" raporu bunu ayrı bir
    durum olarak takip ediyor.
-6. ⏳ **Unit.squareMeters (m²) alanı** — "Detaylı Üye Listesi" rapor
+5. ⏳ **Unit.squareMeters (m²) alanı** — "Detaylı Üye Listesi" rapor
    oluşturucusunda görüldü, arsa payının yanında dairenin metrekaresi
    de ayrı bir alan; bizde yok.
-7. ⏳ **Kullanıcıda ikinci telefon/e-posta** — rapor oluşturucuda
+6. ⏳ **Kullanıcıda ikinci telefon/e-posta** — rapor oluşturucuda
    "Cep Telefonu 1/2", "Eposta Adresi 1/2" ayrı alanlar; bizde
    kullanıcı başına tek telefon/tek e-posta var.
-8. ⏳ **Genel Kasa Durumu'na "Borçlar Toplamı" eklenmesi** — Yönetimcell'in
+7. ⏳ **Genel Kasa Durumu'na "Borçlar Toplamı" eklenmesi** — Yönetimcell'in
    genel kasa özetinde Alacaklar (üye borçları) ile yan yana bir de
    toplam "Borçlar" (firma/personel/genel gidere olan borç) kartı var,
    Ana Para/Gecikme kırılımıyla. Bizde dashboard/Kasalar'da sadece
    tahsilat tarafı (totalDebt/totalCredit) var, ödenecek (payables)
    toplamı hiç gösterilmiyor — artık Borç Listesi ile veri hazır, sadece
    toplam bir kart eklemek yeterli.
-9. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
+8. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
    Kebir Defteri, banka entegrasyonu — sadece iskelet/arayüz düzeyinde
    (gerçek banka API'si/mali müşavir entegrasyonu üçüncü taraf
    sözleşmesi gerektirir, Mert'in kararı). Menü denetiminde
    "Muhasebe Raporları" alt menüsü (Tahakkuk Fişleri/Özet Mizan/
    Yevmiye ve Kebir Defteri/Muhasebe Kodları/Firma Mutabakat Mektubu)
    bu maddenin kapsamını doğruladı.
-10. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
-    sayfasıydı, en düşük öncelik, atlanabilir).
+9. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
+   sayfasıydı, en düşük öncelik, atlanabilir).
 
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar

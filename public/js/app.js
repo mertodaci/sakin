@@ -1022,9 +1022,26 @@ async function renderHesapOzetiModal(unit) {
   let running = 0;
   entries.forEach((e) => { if (!e.info) running += e.amount; e.balance = running; });
 
+  // Yonetimcell karsilastirmasi: ust kisimda gider kategorisine gore (Aidat/
+  // Demirbas/Su Kullanim Bedeli...) ayri ayri kalan bakiye kirilimi. charge.
+  // paidAmount zaten o kaleme yapilan tum tahsis toplamini yansittigi icin
+  // (amount - paidAmount) direkt o kategorinin kalan borcunu verir.
+  const categoryTotals = new Map();
+  charges.forEach((ch) => {
+    const label = ch.category ? `${ch.category.group} / ${ch.category.name}` : chargeTypeLabel(ch);
+    const remaining = Number(ch.amount) - Number(ch.paidAmount);
+    categoryTotals.set(label, (categoryTotals.get(label) || 0) + remaining);
+  });
+
   const body = overlay.querySelector("#hesapOzetiBody");
   if (!entries.length) { body.innerHTML = '<div class="empty-row">Hareket kaydı yok.</div>'; return; }
+  const categoryChips = [...categoryTotals.entries()].map(([label, total]) => `
+    <div style="flex:0 0 auto;padding:8px 14px;border-right:1px solid var(--line);">
+      <div class="small muted" style="white-space:nowrap;">${esc(label)}</div>
+      <div class="f-num" style="font-weight:600;color:${total > 0 ? "var(--red)" : total < 0 ? "var(--green)" : "var(--mist)"};">${tl(total)}</div>
+    </div>`).join("");
   body.innerHTML = `
+    <div class="scroll-x" style="display:flex;border:1px solid var(--line);border-radius:8px;margin-bottom:14px;">${categoryChips}</div>
     <div class="scroll-x">
       <table class="simple">
         <thead><tr><th>Tarih</th><th>Açıklama</th><th style="text-align:right;">Tutar</th><th style="text-align:right;">Bakiye</th></tr></thead>
@@ -1252,7 +1269,8 @@ async function renderUnitEditModal(u) {
 }
 
 async function renderTahsilat(c) {
-  const [units, accounts, payments, categories] = await Promise.all([api("/units"), api("/accounts"), api("/payments"), api("/charge-categories")]);
+  const [units, accounts, payments, categories, expenseCategories] = await Promise.all([api("/units"), api("/accounts"), api("/payments"), api("/charge-categories"), api("/expense-categories")]);
+  const expenseCategoryOptions = `<option value="">Yok (sadece serbest metin)</option>` + expenseCategories.map((cat) => `<option value="${cat.id}">${esc(cat.group)} / ${esc(cat.name)}</option>`).join("");
   c.innerHTML = `
     <div class="flex-between">${sectionTitle("Aidat Takibi")}<div style="display:flex;gap:8px;margin-bottom:16px;"><button class="btn btn-ghost btn-sm" id="printListBtn">🖨️ Borç Listesi Yazdır (PDF)</button><button class="btn btn-ghost btn-sm" id="csvListBtn">📊 Excel'e Aktar (CSV)</button></div></div>
     <div class="card form-card">
@@ -1265,10 +1283,11 @@ async function renderTahsilat(c) {
     </div>
     <div class="card form-card">
       <div class="ledger-title" style="padding:0 0 10px;">Özel Borçlandırma (tek daire, serbest kategori)</div>
-      <div class="small muted" style="margin-top:-4px;margin-bottom:10px;">Kategori serbest metin — İdari Ceza, Kıdem Tazminatı Fonu gibi siteye özel kalemler tanımlayabilirsiniz.</div>
+      <div class="small muted" style="margin-top:-4px;margin-bottom:10px;">Demirbaş, su kullanım bedeli gibi kalemler için "Gider Kategorisi"ni seçin — Giderler ekranındaki firma/personel faturalarıyla aynı kategori listesini paylaşır, raporlarda birlikte kırılım alabilirsiniz. Kategori seçmeden de serbest metinle borçlandırabilirsiniz.</div>
       <form id="manualChargeForm" class="form-row">
         <div class="field" style="flex:1 1 200px;"><label>Daire</label><select name="unitId">${units.map((u) => `<option value="${u.id}">${esc(u.block)} - Daire ${esc(u.no)}</option>`).join("")}</select></div>
-        <div class="field" style="flex:1 1 160px;"><label>Kategori</label><input name="type" list="chargeCategoryList" required placeholder="aidat, sosyal tesis…" /><datalist id="chargeCategoryList">${categories.map((cat) => `<option value="${esc(cat)}"></option>`).join("")}</datalist></div>
+        <div class="field" style="flex:1 1 200px;"><label>Gider Kategorisi</label><select name="categoryId">${expenseCategoryOptions}</select></div>
+        <div class="field" style="flex:1 1 160px;"><label>Kategori (serbest metin)</label><input name="type" list="chargeCategoryList" placeholder="Kategori seçtiyseniz boş bırakabilirsiniz" /><datalist id="chargeCategoryList">${categories.map((cat) => `<option value="${esc(cat)}"></option>`).join("")}</datalist></div>
         <div class="field" style="flex:0 0 140px;"><label>Tutar (₺)</label><input name="amount" type="number" min="0.01" step="0.01" required /></div>
         <div class="field" style="flex:1 1 220px;"><label>Açıklama</label><input name="description" /></div>
         <button class="btn btn-ghost btn-sm" type="submit">Borçlandır</button>
