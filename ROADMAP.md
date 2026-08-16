@@ -759,6 +759,18 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   kopya bir defter formatı açmak yerine mevcut defterlerin kapsadığı
   kabul edildi).
 
+- ✅ **Toplu Üye Borç Dökümü + Toplu Tebligat** — Aidat Takibi ekranına
+  2 yeni buton: "📋 Toplu Borç Dökümü" (`/documents/toplu-borc-dokumu`,
+  Durum+Bakiye eşiği filtreli, seçilen tüm taşınmazların detaylı borç
+  dökümünü tek PDF'de arka arkaya basar — tekli `borc-dokumu` ile
+  aynı içerik, toplu hali) ve "✉️ Toplu Tebligat"
+  (`/documents/toplu-tebligat`, Ödeme Çağrısı/İhtarname + Bakiye eşiği
+  filtreli, borçlu tüm taşınmazlara tek PDF'de tebligat basar —
+  tekli `tebligat` ile aynı metin, toplu hali). İkisi de
+  `toplu-makbuz`'da kurulan "tek PDF'de çoklu sayfa" desenini
+  tekrar kullanıyor. `test-toplu-borc-tebligat.js` ile (PDF üretimi +
+  eşik filtresi + kriter-eşleşmeyince-404) doğrulandı.
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı

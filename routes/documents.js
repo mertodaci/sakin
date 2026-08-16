@@ -212,6 +212,66 @@ router.get("/documents/borc-dokumu/:unitId", requireAuth, async (req, res) => {
   res.send(Buffer.from(bytes));
 });
 
+// Yonetimcell karsilastirmasi: "Toplu Üye Borç Dökümü" - secilen kriterlere
+// uyan (borc durumu + esik tutar) TUM tasinmazlarin detayli borc dokumunu
+// (tekli borc-dokumu ile ayni icerik) tek PDF'de arka arkaya basar.
+router.get("/documents/toplu-borc-dokumu", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const { durum, minBorc } = req.query;
+  const threshold = Number(minBorc) || 0;
+  const units = data.units
+    .map((u) => ({ unit: u, debt: netDebt(data, u.id) }))
+    .filter(({ debt }) => (durum === "borclu" ? debt > 0 : true))
+    .filter(({ debt }) => debt >= threshold)
+    .sort((a, b) => a.unit.block.localeCompare(b.unit.block, "tr") || a.unit.no.localeCompare(b.unit.no, "tr", { numeric: true }));
+  if (!units.length) return res.status(404).json({ error: "Seçilen kriterlere uyan taşınmaz bulunamadı." });
+
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const navy = rgb(0.078, 0.188, 0.29);
+  const grey = rgb(0.43, 0.5, 0.56);
+
+  units.forEach(({ unit }) => {
+    const openCharges = data.charges.filter((c) => c.unitId === unit.id && c.status !== "paid").sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    const total = openCharges.reduce((s, c) => s + (c.amount - c.paidAmount), 0) - (unit.creditBalance || 0);
+    const page = doc.addPage([595, 842]);
+    let y = 780;
+    page.drawText(trSafe("SAKIN"), { x: 50, y, size: 22, font: bold, color: navy });
+    page.drawText(trSafe("Site \ Apartman Yonetimi"), { x: 50, y: y - 18, size: 10, font, color: grey });
+    page.drawLine({ start: { x: 50, y: y - 32 }, end: { x: 545, y: y - 32 }, thickness: 1, color: rgb(0.87, 0.9, 0.93) });
+    y -= 70;
+    page.drawText(trSafe("BORÇ DÖKÜMÜ"), { x: 50, y, size: 15, font: bold, color: navy });
+    y -= 34;
+    const lines = [
+      `Bağımsız Bölüm: ${unit.block} - Daire ${unit.no}`,
+      `Malik: ${unit.ownerName || "-"}`,
+      "",
+      ...openCharges.map((c) => `${fmtDateTr(c.dueDate)}  ${c.type}  ${c.description || ""}  —  Kalan: ${fmtTL(c.amount - c.paidAmount)}`),
+      openCharges.length ? "" : "Açık borç kaydı bulunmamaktadır.",
+      unit.creditBalance > 0 ? `Alacaklı Bakiye: ${fmtTL(unit.creditBalance)}` : "",
+      "",
+      `TOPLAM NET BAKİYE: ${fmtTL(total)}`,
+    ].filter((l) => l !== undefined);
+    lines.forEach((line) => {
+      if (line === "") { y -= 12; return; }
+      if (y < 80) return; // tek dairede cok fazla acik kalem varsa tasma korumasi
+      page.drawText(trSafe(line), { x: 50, y, size: 11, font, color: rgb(0.06, 0.11, 0.15) });
+      y -= 20;
+    });
+    page.drawLine({ start: { x: 50, y: 130 }, end: { x: 545, y: 130 }, thickness: 1, color: rgb(0.87, 0.9, 0.93) });
+    page.drawText(trSafe("Bu dokum yalnizca acik borclari listeler."), { x: 50, y: 110, size: 9, font, color: grey });
+  });
+
+  const bytes = await doc.save();
+  db.logActivity(data, req.user, "document.toplu-borc-dokumu", `${units.length} taşınmaz için toplu borç dökümü indirildi.`, null);
+  await db.save(data);
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="toplu-borc-dokumu.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
 // Ilan panosuna asilabilecek, tum dairelerin guncel borc durumunu gosteren liste.
 // Turkiye'deki apartman yonetimlerinde cok yaygin bir rutin ihtiyactir.
 router.get("/documents/debt-list", requireAuth, requireRole("yonetici"), async (req, res) => {
@@ -342,6 +402,68 @@ router.get("/documents/tebligat/:unitId", requireAuth, requireRole("yonetici"), 
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="${tier}-${unit.block}-${unit.no}.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
+// Yonetimcell karsilastirmasi: "Tebligat Gönder" toplu hali - borcu esik
+// tutarin uzerinde olan TUM tasinmazlara tek PDF'de (her biri ayri sayfa)
+// ihtarname/odeme cagrisi basar.
+router.get("/documents/toplu-tebligat", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const tier = req.query.tier === "ihtarname" ? "ihtarname" : "call";
+  const minBorc = Number(req.query.minBorc) || 0;
+  const units = data.units
+    .map((u) => ({ unit: u, debt: netDebt(data, u.id) }))
+    .filter(({ debt }) => debt > 0 && debt >= minBorc)
+    .sort((a, b) => a.unit.block.localeCompare(b.unit.block, "tr") || a.unit.no.localeCompare(b.unit.no, "tr", { numeric: true }));
+  if (!units.length) return res.status(404).json({ error: "Seçilen kriterlere uyan borçlu taşınmaz bulunamadı." });
+
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const navy = rgb(0.078, 0.188, 0.29);
+  const grey = rgb(0.43, 0.5, 0.56);
+
+  units.forEach(({ unit, debt }) => {
+    const lines = tier === "ihtarname"
+      ? [
+          `Sayın ${unit.ownerName || "İlgili"},`, "",
+          `${data.meta.buildingName} Yöneticiliği'ne aşağıda dökümü mevcut borcunuz bulunmaktadır.`, "",
+          `Bağımsız Bölüm: ${unit.block} - Daire ${unit.no}`, `Güncel Borç: ${fmtTL(debt)}`, "",
+          "İşbu ihtarın tarafınıza tebliğini takip eden 7 (yedi) gün içerisinde vadesi geçmiş",
+          "borcunuzu site/apartman yönetimine nakden ödemenizi, belirtilen süre içerisinde",
+          "ödeme yapmamanız halinde borç bakiyesinin faiz ve ferileri ile birlikte tahsili için",
+          "yasal yollara başvurulacağını, hakkınızda icra takibi başlatılabileceğini, yapılacak",
+          "yasal işlemler nedeniyle oluşacak tüm masraf, yargılama gideri ve vekalet ücretinin",
+          "de tarafınızdan tahsil edileceğini ihtaren bildiririz.",
+        ]
+      : [
+          `Sayın ${unit.ownerName || "İlgili"},`, "",
+          `${unit.block} - Daire ${unit.no} nolu bağımsız bölümünüzün güncel aidat/ortak gider`,
+          `bakiyesi ${fmtTL(debt)} olarak görünmektedir.`, "",
+          "En kısa sürede ödemenizi rica eder, herhangi bir itirazınız varsa yönetime", "bildirmenizi dileriz.",
+        ];
+    const page = doc.addPage([595, 842]);
+    let y = 780;
+    page.drawText(trSafe("SAKIN"), { x: 50, y, size: 22, font: bold, color: navy });
+    page.drawText(trSafe("Site \ Apartman Yonetimi"), { x: 50, y: y - 18, size: 10, font, color: grey });
+    page.drawLine({ start: { x: 50, y: y - 32 }, end: { x: 545, y: y - 32 }, thickness: 1, color: rgb(0.87, 0.9, 0.93) });
+    y -= 70;
+    page.drawText(trSafe(tier === "ihtarname" ? "İHTARNAME" : "ÖDEME ÇAĞRISI"), { x: 50, y, size: 15, font: bold, color: navy });
+    y -= 34;
+    lines.forEach((line) => {
+      if (line === "") { y -= 12; return; }
+      page.drawText(trSafe(line), { x: 50, y, size: 11, font, color: rgb(0.06, 0.11, 0.15) });
+      y -= 20;
+    });
+  });
+
+  const bytes = await doc.save();
+  db.logActivity(data, req.user, "document.toplu-tebligat", `${units.length} borçlu taşınmaza toplu ${tier === "ihtarname" ? "ihtarname" : "ödeme çağrısı"} oluşturuldu.`, null);
+  await db.save(data);
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="toplu-${tier}.pdf"`);
   res.send(Buffer.from(bytes));
 });
 

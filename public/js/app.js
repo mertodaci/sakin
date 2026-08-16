@@ -1508,7 +1508,9 @@ async function renderTahsilat(c) {
   const [units, accounts, payments, categories, expenseCategories] = await Promise.all([api("/units"), api("/accounts"), api("/payments"), api("/charge-categories"), api("/expense-categories")]);
   const expenseCategoryOptions = `<option value="">Yok (sadece serbest metin)</option>` + expenseCategories.map((cat) => `<option value="${cat.id}">${esc(cat.group)} / ${esc(cat.name)}</option>`).join("");
   c.innerHTML = `
-    <div class="flex-between">${sectionTitle("Aidat Takibi")}<div style="display:flex;gap:8px;margin-bottom:16px;"><button class="btn btn-ghost btn-sm" id="printListBtn">🖨️ Borç Listesi Yazdır (PDF)</button><button class="btn btn-ghost btn-sm" id="csvListBtn">📊 Excel'e Aktar (CSV)</button></div></div>
+    <div class="flex-between">${sectionTitle("Aidat Takibi")}<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;"><button class="btn btn-ghost btn-sm" id="printListBtn">🖨️ Borç Listesi Yazdır (PDF)</button><button class="btn btn-ghost btn-sm" id="csvListBtn">📊 Excel'e Aktar (CSV)</button><button class="btn btn-ghost btn-sm" id="topluBorcDokumuBtn">📋 Toplu Borç Dökümü</button><button class="btn btn-ghost btn-sm" id="topluTebligatBtn">✉️ Toplu Tebligat</button></div></div>
+    <div id="topluBorcDokumuForm"></div>
+    <div id="topluTebligatForm"></div>
     <div class="card form-card">
       <div class="ledger-title" style="padding:0 0 10px;">Aylık Aidat Borçlandır</div>
       <form id="genForm" class="form-row">
@@ -1557,6 +1559,32 @@ async function renderTahsilat(c) {
   `;
   document.getElementById("printListBtn").addEventListener("click", () => downloadFile("/documents/debt-list", "aidat-borc-listesi.pdf"));
   document.getElementById("csvListBtn").addEventListener("click", () => downloadFile("/documents/debt-list.csv", "aidat-borc-listesi.csv"));
+  document.getElementById("topluBorcDokumuBtn").addEventListener("click", () => {
+    document.getElementById("topluBorcDokumuForm").innerHTML = `
+      <form id="topluBorcDokumuCreateForm" class="card form-card form-row">
+        <div class="field"><label>Durum</label><select name="durum"><option value="borclu">Borcu Olanlar</option><option value="tumu">Tümü</option></select></div>
+        <div class="field"><label>En Az Borç (₺)</label><input name="minBorc" type="number" value="0" /></div>
+        <button class="btn btn-primary" type="submit">İndir (PDF)</button>
+      </form>`;
+    document.getElementById("topluBorcDokumuCreateForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const qs = new URLSearchParams(Object.fromEntries(new FormData(e.target))).toString();
+      await downloadFile("/documents/toplu-borc-dokumu?" + qs, "toplu-borc-dokumu.pdf");
+    });
+  });
+  document.getElementById("topluTebligatBtn").addEventListener("click", () => {
+    document.getElementById("topluTebligatForm").innerHTML = `
+      <form id="topluTebligatCreateForm" class="card form-card form-row">
+        <div class="field"><label>Belge Türü</label><select name="tier"><option value="call">Ödeme Çağrısı</option><option value="ihtarname">İhtarname</option></select></div>
+        <div class="field"><label>En Az Borç (₺)</label><input name="minBorc" type="number" value="0" /></div>
+        <button class="btn btn-primary" type="submit">İndir (PDF)</button>
+      </form>`;
+    document.getElementById("topluTebligatCreateForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const qs = new URLSearchParams(Object.fromEntries(new FormData(e.target))).toString();
+      await downloadFile("/documents/toplu-tebligat?" + qs, "toplu-tebligat.pdf");
+    });
+  });
   document.getElementById("genForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
