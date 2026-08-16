@@ -805,4 +805,38 @@ router.get("/documents/firma-mutabakat/:vendorId", requireAuth, requireRole("yon
   res.send(Buffer.from(bytes));
 });
 
+// Yonetimcell karsilastirmasi: "Bütçe Raporları" - mevcut Butce ekranindaki
+// (planlanan/gerceklesen) verinin PDF ciktisi. Ekranda zaten olan tek eksik
+// buydu.
+router.get("/documents/butce-raporu", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const budgets = data.budgets.filter((b) => b.year === year);
+  const withActuals = budgets.map((b) => {
+    const actual = data.transactions.filter((t) => t.type === "gider" && t.category === b.category && new Date(t.date).getFullYear() === year).reduce((s, t) => s + t.amount, 0);
+    return { ...b, actualAmount: actual };
+  });
+  if (!withActuals.length) return res.status(404).json({ error: `${year} yılı için kayıtlı bütçe kalemi bulunamadı.` });
+
+  const totalPlanned = withActuals.reduce((s, b) => s + b.plannedAmount, 0);
+  const totalActual = withActuals.reduce((s, b) => s + b.actualAmount, 0);
+  const bytes = await buildDocument({
+    heading: `${year} YILI BÜTÇE RAPORU`,
+    lines: [
+      `Site: ${data.meta.buildingName}`,
+      "",
+      ...withActuals.map((b) => `${b.category}  —  Planlanan: ${fmtTL(b.plannedAmount)}  /  Gerçekleşen: ${fmtTL(b.actualAmount)}  /  Fark: ${fmtTL(b.plannedAmount - b.actualAmount)}`),
+      "",
+      `TOPLAM PLANLANAN: ${fmtTL(totalPlanned)}`,
+      `TOPLAM GERÇEKLEŞEN: ${fmtTL(totalActual)}`,
+      `TOPLAM FARK: ${fmtTL(totalPlanned - totalActual)}`,
+    ],
+    footerNote: "Gerçekleşen tutarlar, kategori adı eşleşen gider hareketlerinin toplamıdır.",
+  });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="butce-raporu-${year}.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
 module.exports = router;

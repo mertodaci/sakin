@@ -836,6 +836,17 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   `test-bulk-messages.js` ile doğrulandı (kiracı-filtreli tekil eşleşme
   + tüm parametrelerin doğru yer değiştirdiği).
 
+- ✅ **Bütçe Raporları PDF export** — Bütçe ekranındaki tek eksik
+  buydu: `GET /documents/butce-raporu?year=` mevcut planlanan/
+  gerçekleşen verisini PDF'e döküyor (kategori bazlı satırlar +
+  toplam planlanan/gerçekleşen/fark). "🖨️ Bütçe Raporu (PDF)" butonu
+  eklendi. `test-butce-pdf.js` ile doğrulandı.
+
+**Bu turun (Tur 2) 18 maddelik uygulama backlog'u tamamlandı** — sıradaki
+tek büyük madde, önceden konuşulan menü ayrımı (İşlemler/Raporlar) ve bu
+turda kurulan koyu-başlıklı rapor tasarımının TÜM mevcut ekranlara
+uygulanması.
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı

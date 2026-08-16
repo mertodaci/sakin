@@ -3745,7 +3745,7 @@ async function renderButce(c) {
   const year = new Date().getFullYear();
   const budgets = await api(`/budgets?year=${year}`);
   c.innerHTML = `
-    ${sectionTitle(year + " Yılı Bütçe Planlaması", "Planlanan gider ile gerçekleşen gideri karşılaştırın")}
+    <div class="flex-between">${sectionTitle(year + " Yılı Bütçe Planlaması", "Planlanan gider ile gerçekleşen gideri karşılaştırın")}<button class="btn btn-ghost btn-sm" id="butcePrintBtn" style="margin-bottom:16px;">🖨️ Bütçe Raporu (PDF)</button></div>
     <div class="card form-card">
       <div class="ledger-title" style="padding:0 0 10px;">Bütçe Kalemi Ekle / Güncelle</div>
       <form id="budgetForm" class="form-row">
@@ -3773,6 +3773,7 @@ async function renderButce(c) {
     try { await api("/budgets", { method: "POST", body: Object.fromEntries(f) }); toast("Bütçe kaydedildi."); renderTab("butce"); }
     catch (err) { toast(err.message); }
   });
+  document.getElementById("butcePrintBtn").addEventListener("click", () => downloadFile(`/documents/butce-raporu?year=${year}`, `butce-raporu-${year}.pdf`));
 }
 
 async function renderRehber(c) {
