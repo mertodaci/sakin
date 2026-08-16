@@ -153,23 +153,43 @@ function sendEmail(email, message) {
 // gonderilecegini kisisellestirip onizler ve konsola loglar (sendSms/
 // sendEmail stub'lari uzerinden). Boylece arayuz+filtre+sablon mekanizmasi
 // gercek saglayici baglanir baglanmaz kullanima hazir.
+// mode: "genel" (varsayilan) | "malik-kiraci" (Yonetimcell "Maliklere
+// Kiraci Borcu Bildir" - sadece kiracili dairelerde, ALICI malik olur,
+// metinde hem malik hem kiraci adi gecer - bizde ayri kisi-bazli cari
+// olmadigi icin borc yine Unit'e ait toplam borc, ama hedef kitle ve
+// hitap dogru sekilde kiraci varligina duyarli).
+const MONTH_NAMES_LONG = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+
 router.post("/bulk-messages/preview", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();
-  const { channel, template, block, minDebt } = req.body || {};
+  const { channel, template, block, minDebt, mode } = req.body || {};
   if (!template) return res.status(400).json({ error: "Mesaj şablonu zorunludur." });
 
   let units = data.units.map((u) => ({ ...u, debt: db.netDebt(data, u.id) }));
+  if (mode === "malik-kiraci") units = units.filter((u) => u.occupancy === "tenant" && u.tenantName);
   if (block) units = units.filter((u) => u.block === block);
   if (minDebt) units = units.filter((u) => u.debt >= Number(minDebt));
 
+  const donem = MONTH_NAMES_LONG[new Date().getMonth()] + " " + new Date().getFullYear();
   const recipients = units.map((u) => {
     const resident = data.users.find((usr) => usr.unitId === u.id && usr.role === "sakin");
-    const text = template
+    let text = template
       .split("<adsoyad>").join(u.ownerName || resident?.name || "-")
       .split("<borc>").join(String(u.debt))
-      .split("<daire>").join(`${u.block} - Daire ${u.no}`);
-    const contact = channel === "eposta" ? resident?.email || "" : resident?.phone || u.ownerPhone || "";
-    return { unitLabel: `${u.block} - Daire ${u.no}`, name: u.ownerName || resident?.name || "-", contact, text };
+      .split("<daire>").join(`${u.block} - Daire ${u.no}`)
+      .split("<blok>").join(u.block)
+      .split("<kapino>").join(u.no)
+      .split("<donem>").join(donem);
+    let contact, name;
+    if (mode === "malik-kiraci") {
+      text = text.split("<malsahibi>").join(u.ownerName || "-").split("<kiraci>").join(u.tenantName || "-");
+      contact = channel === "eposta" ? "" : u.ownerPhone || "";
+      name = u.ownerName || "-";
+    } else {
+      contact = channel === "eposta" ? resident?.email || "" : resident?.phone || u.ownerPhone || "";
+      name = u.ownerName || resident?.name || "-";
+    }
+    return { unitLabel: `${u.block} - Daire ${u.no}`, name, contact, text };
   }).filter((r) => r.contact);
 
   res.json({ count: recipients.length, recipients });

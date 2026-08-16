@@ -823,6 +823,19 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   düzeltmenin gerçekten çalıştığını (`"passwordHash" in response ===
   false`) doğruluyor.
 
+- ✅ **Toplu SMS/E-posta hazır-şablon varyantları** — mevcut Toplu SMS/
+  E-posta ekranına "Hazır Şablon" seçici eklendi: Borç Durumu Bildir
+  (SMS), Maliklere Kiracı Borcu Bildir (SMS), Hesap Özeti Gönder
+  (E-posta), Borç Dökümü Gönder (E-posta). `/bulk-messages/preview`
+  ucu `<blok>`/`<kapino>`/`<donem>` parametrelerini + yeni bir `mode:
+  "malik-kiraci"` seçeneğini destekliyor artık — bu modda sadece
+  kiracılı daireler filtrelenir, ALICI malik olur (kiracının değil),
+  metinde `<malsahibi>`/`<kiraci>` ayrı ayrı geçer. "Site Sakini
+  Şifrelerini Gönder" bilinçli olarak eklenmedi (düz metin şifre SMS
+  ile göndermek güvenlik anti-pattern'i — önceki turda not edildi).
+  `test-bulk-messages.js` ile doğrulandı (kiracı-filtreli tekil eşleşme
+  + tüm parametrelerin doğru yer değiştirdiği).
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı

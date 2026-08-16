@@ -3380,6 +3380,19 @@ async function renderMesajlar(c) {
    kişiselleştirme parametresi + blok/borç filtresi. Gerçek sağlayıcı
    bağlanana kadar sadece önizleme üretir, konsola loglar (bkz. README). */
 
+// Yonetimcell karsilastirmasi: "Üyelere Toplu Sms Gönder" / "Üyelere Toplu
+// E-Posta Gönder" alt sekmelerindeki hazir sablonlar. Gercek gonderim yok
+// (saglayici entegrasyonu gerekir, bkz. README) - bu sadece sablon+mod'u
+// otomatik dolduran bir kisayol, alt yapi hala tek preview/send ucu.
+const BULK_MESSAGE_PRESETS = {
+  serbest: { channel: null, mode: "genel", template: "" },
+  "borc-durumu": { channel: "sms", mode: "genel", template: "Sayın <adsoyad>, <blok> Blok <kapino> nolu bağımsız bölümünüzün <donem> dönemi itibarıyla güncel borcu <borc> ₺'dir. Bilgilerinize sunulur." },
+  "malik-kiraci-borcu": { channel: "sms", mode: "malik-kiraci", template: "Sayın <malsahibi>, <blok> Blok <kapino> nolu bağımsız bölümünüzde kiracınız <kiraci> adına <donem> dönemi itibarıyla <borc> ₺ borç bulunmaktadır. Bilgilerinize sunulur." },
+  "hesap-ozeti": { channel: "eposta", mode: "genel", template: "Sayın <adsoyad>, <daire> için güncel hesap özetinizi Sakin uygulamasından (Hesap Özeti ekranı) görüntüleyebilirsiniz. Güncel bakiyeniz: <borc> ₺." },
+  "borc-dokumu": { channel: "eposta", mode: "genel", template: "Sayın <adsoyad>, <daire> için açık borç dökümünüzü Sakin uygulamasından (Borç Dökümü ekranı) görüntüleyebilirsiniz. Güncel bakiyeniz: <borc> ₺." },
+};
+const BULK_MESSAGE_PRESET_LABELS = { serbest: "Serbest Metin", "borc-durumu": "Hazır Şablon: Borç Durumu Bildir (SMS)", "malik-kiraci-borcu": "Hazır Şablon: Maliklere Kiracı Borcu Bildir (SMS)", "hesap-ozeti": "Hazır Şablon: Hesap Özeti Gönder (E-posta)", "borc-dokumu": "Hazır Şablon: Borç Dökümü Gönder (E-posta)" };
+
 async function renderTopluSms(c) {
   const units = await api("/units");
   const blocks = [...new Set(units.map((u) => u.block))].sort();
@@ -3387,7 +3400,8 @@ async function renderTopluSms(c) {
     ${sectionTitle("Toplu SMS/E-posta", "Gerçek gönderim için sağlayıcı entegrasyonu gerekir — bu ekran şablon + alıcı listesini önizler")}
     <div class="card form-card">
       <form id="bulkForm" class="form-row">
-        <div class="field" style="flex:0 0 140px;"><label>Kanal</label><select name="channel"><option value="sms">SMS</option><option value="eposta">E-posta</option></select></div>
+        <div class="field" style="flex:1 1 260px;"><label>Hazır Şablon</label><select id="presetSelect">${Object.entries(BULK_MESSAGE_PRESET_LABELS).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
+        <div class="field" style="flex:0 0 140px;"><label>Kanal</label><select name="channel" id="channelSelect"><option value="sms">SMS</option><option value="eposta">E-posta</option></select></div>
         <div class="field" style="flex:0 0 140px;"><label>Blok</label><select name="block"><option value="">Tüm Bloklar</option>${blocks.map((b) => `<option value="${esc(b)}">${esc(b)}</option>`).join("")}</select></div>
         <div class="field" style="flex:0 0 200px;"><label>Borç Eşiği</label>
           <select name="minDebt">
@@ -3397,13 +3411,20 @@ async function renderTopluSms(c) {
             <option value="1000">1.000 ₺ ve fazla borcu olanlar</option>
           </select>
         </div>
-        <div class="field" style="flex:1 1 320px;"><label>Mesaj Şablonu</label><input name="template" required placeholder="Sayın <adsoyad>, <daire> için güncel borcunuz <borc> ₺'dir." /></div>
+        <div class="field" style="flex:1 1 320px;"><label>Mesaj Şablonu</label><input name="template" id="templateInput" required placeholder="Sayın <adsoyad>, <daire> için güncel borcunuz <borc> ₺'dir." /></div>
+        <input type="hidden" name="mode" id="modeInput" value="genel" />
         <button class="btn btn-primary" type="submit">Alıcıları Önizle</button>
       </form>
-      <div class="small muted" style="margin-top:8px;">Kullanılabilecek parametreler: <code>&lt;adsoyad&gt;</code> <code>&lt;daire&gt;</code> <code>&lt;borc&gt;</code></div>
+      <div class="small muted" style="margin-top:8px;">Kullanılabilecek parametreler: <code>&lt;adsoyad&gt;</code> <code>&lt;daire&gt;</code> <code>&lt;blok&gt;</code> <code>&lt;kapino&gt;</code> <code>&lt;donem&gt;</code> <code>&lt;borc&gt;</code> — "Maliklere Kiracı Borcu Bildir" şablonunda ayrıca <code>&lt;malsahibi&gt;</code> <code>&lt;kiraci&gt;</code>.</div>
     </div>
     <div id="bulkPreview"></div>
   `;
+  document.getElementById("presetSelect").addEventListener("change", (e) => {
+    const preset = BULK_MESSAGE_PRESETS[e.target.value];
+    if (preset.channel) document.getElementById("channelSelect").value = preset.channel;
+    document.getElementById("templateInput").value = preset.template;
+    document.getElementById("modeInput").value = preset.mode;
+  });
   document.getElementById("bulkForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
