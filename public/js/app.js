@@ -1107,6 +1107,84 @@ async function renderPartyHesapHareketleriModal(partyType, partyId, label) {
   `;
 }
 
+// Yonetimcell karsilastirmasi: Uye Listesi'ndeki 3 satir-aksiyonundan biri
+// olan "Borc Dokumu" - Hesap Ozeti'nden (tarihce+acik borc birlikte) farkli
+// olarak SADECE acik borclari gosterir, yaninda dogrudan Tahsil Et/Sms
+// Gonder/Yazdir butonlariyla. Mert'in bu oturumun basindaki asil sikayetiydi.
+async function renderBorcDokumuModal(unit) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(12,32,50,.35);z-index:70;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;";
+  overlay.innerHTML = `
+    <div class="card pad" style="max-width:600px;width:100%;max-height:85vh;overflow-y:auto;">
+      <div class="flex-between" style="margin-bottom:2px;">
+        <h3 class="f-display" style="margin:0;">${esc(unit.block)} - Daire ${esc(unit.no)}</h3>
+        <button class="btn btn-ghost btn-sm" id="borcDokumuClose">Kapat</button>
+      </div>
+      <div class="small muted" style="margin-bottom:14px;">Borç Dökümü — sadece açık borçlar</div>
+      <div id="borcDokumuBody"><div class="empty-row">Yükleniyor…</div></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#borcDokumuClose").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+
+  const [charges, accounts] = await Promise.all([api("/charges?unitId=" + unit.id), api("/accounts")]);
+  const open = charges.filter((c) => c.status !== "paid").sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const totalOpen = open.reduce((s, c) => s + (Number(c.amount) - Number(c.paidAmount)), 0);
+  const netTotal = totalOpen - (unit.creditBalance || 0);
+
+  const body = overlay.querySelector("#borcDokumuBody");
+  body.innerHTML = `
+    <div class="scroll-x">
+      <table class="simple">
+        <thead><tr><th>Vade</th><th>Açıklama</th><th style="text-align:right;">Borç</th><th style="text-align:right;">Ödenen</th><th style="text-align:right;">Kalan</th></tr></thead>
+        <tbody>${open.map((c) => `
+          <tr>
+            <td>${dt(c.dueDate)}</td>
+            <td>${esc(chargeTypeLabel(c))}${c.description ? " — " + esc(c.description) : ""}</td>
+            <td class="f-num" style="text-align:right;">${tl(c.amount)}</td>
+            <td class="f-num" style="text-align:right;">${tl(c.paidAmount)}</td>
+            <td class="f-num" style="text-align:right;font-weight:600;">${tl(Number(c.amount) - Number(c.paidAmount))}</td>
+          </tr>`).join("") || '<tr><td colspan="5" class="empty-row">Açık borç kaydı yok.</td></tr>'}</tbody>
+      </table>
+    </div>
+    ${unit.creditBalance > 0 ? `<div class="small" style="margin-top:8px;color:var(--green);">Alacaklı bakiye: ${tl(unit.creditBalance)}</div>` : ""}
+    <div class="small muted" style="margin-top:8px;">Toplam net bakiye: <b style="color:${netTotal > 0 ? "var(--red)" : "var(--green)"};">${tl(netTotal)}</b></div>
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+      ${netTotal > 0 ? `<button class="btn btn-primary btn-sm" id="bdCollectBtn">Tahsil Et</button>` : ""}
+      <button class="btn btn-ghost btn-sm" id="bdSmsBtn">Sms Gönder</button>
+      <button class="btn btn-ghost btn-sm" id="bdPrintBtn">Yazdır (PDF)</button>
+    </div>
+    <div id="bdCollectForm"></div>
+  `;
+
+  if (netTotal > 0) {
+    body.querySelector("#bdCollectBtn").addEventListener("click", () => {
+      const box = body.querySelector("#bdCollectForm");
+      box.innerHTML = `
+        <form class="form-row" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
+          <div class="field"><label>Tutar (₺)</label><input name="amount" type="number" value="${netTotal}" min="0.01" step="0.01" required /></div>
+          <div class="field"><label>Hesap</label><select name="accountId">${accounts.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></div>
+          <button class="btn btn-primary btn-sm" type="submit">Kaydet</button>
+        </form>`;
+      box.querySelector("form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const f = Object.fromEntries(new FormData(e.target));
+        try {
+          await api("/payments/pay", { method: "POST", body: { unitId: unit.id, method: "Elden", requestId: crypto.randomUUID(), ...f } });
+          toast("Tahsilat kaydedildi.");
+          overlay.remove();
+          renderTab(state.tab);
+        } catch (err) { toast(err.message); }
+      });
+    });
+  }
+  body.querySelector("#bdSmsBtn").addEventListener("click", async () => {
+    try { const r = await api(`/units/${unit.id}/borc-sms`, { method: "POST" }); toast(r.message); }
+    catch (err) { toast(err.message); }
+  });
+  body.querySelector("#bdPrintBtn").addEventListener("click", () => downloadFile(`/documents/borc-dokumu/${unit.id}`, `borc-dokumu-${unit.block}-${unit.no}.pdf`));
+}
+
 function daysSince(d) { return Math.floor((Date.now() - new Date(d).getTime()) / 86400000); }
 
 async function renderKullanicilar(c) {
@@ -1183,7 +1261,7 @@ async function renderDaireler(c) {
     <div class="card tight">
       ${list.map((u) => `
         <div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}${u.tenantName ? " (Kiracı: " + esc(u.tenantName) + ")" : ""}${u.feeGroup ? " · " + esc(u.feeGroup) : ""}${u.landShare ? " · Arsa Payı: " + esc(String(u.landShare)) : ""}</div></div>
-        <div style="display:flex;align-items:center;gap:10px;"><div class="f-num" style="color:${debtColor(u.debt)};font-weight:600;">${tl(Math.abs(u.debt))}</div>${pill(debtStatusLabel(u.debt))}<button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button><button class="btn btn-ghost btn-sm" data-editunit="${u.id}">Düzenle</button></div></div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+        <div style="display:flex;align-items:center;gap:10px;"><div class="f-num" style="color:${debtColor(u.debt)};font-weight:600;">${tl(Math.abs(u.debt))}</div>${pill(debtStatusLabel(u.debt))}<button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button><button class="btn btn-ghost btn-sm" data-borcdokumu="${u.id}" title="Borç Dökümü">📋</button><button class="btn btn-ghost btn-sm" data-editunit="${u.id}">Düzenle</button></div></div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
   `;
   document.getElementById("unitForm").addEventListener("submit", async (e) => {
@@ -1195,6 +1273,10 @@ async function renderDaireler(c) {
   c.querySelectorAll("[data-ozet]").forEach((b) => b.addEventListener("click", () => {
     const u = list.find((x) => x.id === b.dataset.ozet);
     if (u) renderHesapOzetiModal(u);
+  }));
+  c.querySelectorAll("[data-borcdokumu]").forEach((b) => b.addEventListener("click", () => {
+    const u = list.find((x) => x.id === b.dataset.borcdokumu);
+    if (u) renderBorcDokumuModal(u);
   }));
   c.querySelectorAll("[data-editunit]").forEach((b) => b.addEventListener("click", () => {
     const u = list.find((x) => x.id === b.dataset.editunit);
@@ -1345,12 +1427,16 @@ async function renderTahsilat(c) {
     box.innerHTML = filtered.map((u) => `
         <div class="ledger-row" style="flex-wrap:wrap;">
           <div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}</div></div>
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span class="f-num" style="font-weight:600;color:${debtColor(u.debt)};">${tl(Math.abs(u.debt))}</span>${pill(debtStatusLabel(u.debt))}<button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button>${u.creditBalance > 0 ? `<button class="btn btn-ghost btn-sm" data-applycredit="${u.id}" title="Alacaklı bakiyeyi (${tl(u.creditBalance)}) açık borca uygula">💳 Krediyi Uygula</button>` : ""}${u.debt > 0 ? `<button class="btn btn-ghost btn-sm" data-collect="${u.id}">Tahsil Et</button>` : ""}</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span class="f-num" style="font-weight:600;color:${debtColor(u.debt)};">${tl(Math.abs(u.debt))}</span>${pill(debtStatusLabel(u.debt))}<button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button><button class="btn btn-ghost btn-sm" data-borcdokumu="${u.id}" title="Borç Dökümü">📋</button>${u.creditBalance > 0 ? `<button class="btn btn-ghost btn-sm" data-applycredit="${u.id}" title="Alacaklı bakiyeyi (${tl(u.creditBalance)}) açık borca uygula">💳 Krediyi Uygula</button>` : ""}${u.debt > 0 ? `<button class="btn btn-ghost btn-sm" data-collect="${u.id}">Tahsil Et</button>` : ""}</div>
           <div style="width:100%;" id="collect-form-${u.id}"></div>
         </div>`).join("") || '<div class="empty-row">Bu filtreye uyan daire yok.</div>';
     box.querySelectorAll("[data-ozet]").forEach((b) => b.addEventListener("click", () => {
       const u = units.find((x) => x.id === b.dataset.ozet);
       if (u) renderHesapOzetiModal(u);
+    }));
+    box.querySelectorAll("[data-borcdokumu]").forEach((b) => b.addEventListener("click", () => {
+      const u = units.find((x) => x.id === b.dataset.borcdokumu);
+      if (u) renderBorcDokumuModal(u);
     }));
     box.querySelectorAll("[data-applycredit]").forEach((b) => b.addEventListener("click", async () => {
       try { const r = await api("/units/" + b.dataset.applycredit + "/apply-credit", { method: "POST" }); toast(r.message); renderTab("tahsilat"); }

@@ -118,6 +118,43 @@ router.get("/documents/receipt/:paymentId", requireAuth, async (req, res) => {
   res.send(Buffer.from(bytes));
 });
 
+// Tek bir daire icin "Borc Dokumu" - Hesap Ozeti'nden farkli olarak SADECE
+// acik (odenmemis/kismi) borclari listeler, gecmis odemeleri icermez
+// (Yonetimcell karsilastirmasi: Uye Listesi'ndeki "Borc Dokumu" aksiyonu).
+router.get("/documents/borc-dokumu/:unitId", requireAuth, async (req, res) => {
+  const data = await db.load();
+  if (req.user.role === "sakin" && req.user.unitId !== req.params.unitId) return res.status(403).json({ error: "Bu belgeye erişim yetkiniz yok." });
+  const unit = data.units.find((u) => u.id === req.params.unitId);
+  if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
+
+  const openCharges = data.charges
+    .filter((c) => c.unitId === unit.id && c.status !== "paid")
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const total = openCharges.reduce((s, c) => s + (c.amount - c.paidAmount), 0) - (unit.creditBalance || 0);
+
+  const bytes = await buildDocument({
+    heading: "BORÇ DÖKÜMÜ",
+    lines: [
+      `Bağımsız Bölüm: ${unit.block} - Daire ${unit.no}`,
+      `Malik: ${unit.ownerName || "-"}`,
+      "",
+      ...openCharges.map((c) => `${fmtDateTr(c.dueDate)}  ${c.type}  ${c.description || ""}  —  Kalan: ${fmtTL(c.amount - c.paidAmount)}`),
+      openCharges.length ? "" : "Açık borç kaydı bulunmamaktadır.",
+      unit.creditBalance > 0 ? `Alacaklı Bakiye: ${fmtTL(unit.creditBalance)}` : "",
+      "",
+      `TOPLAM NET BAKİYE: ${fmtTL(total)}`,
+    ].filter((l) => l !== undefined),
+    footerNote: "Bu döküm yalnızca açık borçları listeler, geçmiş ödemeler için Hesap Özeti'ne bakınız.",
+  });
+
+  db.logActivity(data, req.user, "document.borc-dokumu", `${unit.block} - Daire ${unit.no} için borç dökümü indirildi.`, unit.id);
+  await db.save(data);
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="borc-dokumu-${unit.block}-${unit.no}.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
 // Ilan panosuna asilabilecek, tum dairelerin guncel borc durumunu gosteren liste.
 // Turkiye'deki apartman yonetimlerinde cok yaygin bir rutin ihtiyactir.
 router.get("/documents/debt-list", requireAuth, requireRole("yonetici"), async (req, res) => {

@@ -185,4 +185,23 @@ router.post("/bulk-messages/send", requireAuth, requireRole("yonetici"), async (
   res.status(202).json({ message: `${recipients.length} alıcı için gönderim denendi. Gerçek sağlayıcı bağlanmadığı için mesajlar konsola loglandı, fiilen iletilmedi (bkz. README "Neler Gerçek, Neler Demo").` });
 });
 
+// Yonetimcell karsilastirmasi: Uye Listesi/Borc Dokumu ekranindaki "Sms
+// Gonder" tekil aksiyonu - toplu SMS akisiyla ayni stub mekanizmasini
+// (sendSms) kullanir, sadece TEK bir daireye, otomatik olusturulan borc
+// metniyle.
+router.post("/units/:id/borc-sms", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const unit = data.units.find((u) => u.id === req.params.id);
+  if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
+  const resident = data.users.find((u) => u.unitId === unit.id && u.role === "sakin");
+  const contact = resident?.phone || unit.ownerPhone || "";
+  if (!contact) return res.status(400).json({ error: "Bu daire için kayıtlı telefon numarası yok." });
+  const debt = db.netDebt(data, unit.id);
+  const text = `Sayın ${unit.ownerName || resident?.name || "-"}, ${unit.block} - Daire ${unit.no} güncel borcunuz ${debt}₺'dir. Bilgilerinize sunulur.`;
+  sendSms(contact, text);
+  db.logActivity(data, req.user, "unit.borc-sms", `${unit.block} - Daire ${unit.no} sakinine borç durumu SMS'i gönderim denemesi yapıldı.`, unit.id);
+  await db.save(data);
+  res.status(202).json({ message: `${contact} numarasına gönderim denendi. Gerçek sağlayıcı bağlanmadığı için mesaj konsola loglandı, fiilen iletilmedi.` });
+});
+
 module.exports = router;

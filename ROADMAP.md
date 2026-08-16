@@ -440,46 +440,52 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   güvenlik testi (tarayıcının kendisi de dosya adındaki yol kısmını
   temizliyor, ek bir güvenlik katmanı) geçiyor.
 
+- ✅ **Borç Dökümü** ekranı — Üye Listesi'ndeki 3 satır-aksiyonundan biri
+  (Hesap Özeti/Borç Dökümü/Tahsilat Ekranı — Mert'in bu oturumun en
+  başındaki asıl şikayeti). "Hesap Özeti"nden farklı: sadece AÇIK
+  borçları (geçmiş ödemeler olmadan) tek tabloda gösterir, yanında
+  doğrudan **Tahsil Et** / **Sms Gönder** / **Yazdır (PDF)** butonları
+  var. `renderBorcDokumuModal` — Daireler ve Aidat Takibi'ndeki her
+  daire satırına yeni "📋" butonuyla açılıyor. Backend: `GET
+  /documents/borc-dokumu/:unitId` (tek dairenin açık borç PDF'i,
+  `buildDocument` helper'ı ile) + `POST /units/:id/borc-sms` (tekil,
+  kişiselleştirilmiş borç durumu SMS'i — toplu SMS'teki `sendSms` stub
+  mekanizmasıyla aynı). `test-borc-dokumu.js` ile regresyon testleri
+  geçiyor. (Hesap Özeti'ndeki satır bazlı makbuz PDF'i ve tüm ekstreyi
+  PDF indirme kısmı bu adıma dahil edilmedi, küçük bir sonraki adım
+  olarak kalabilir.)
+
 **Sırada (henüz yapılmadı, bu sırayla ilerlenecek — menü denetiminden çıkan liste):**
-1. ⏳ **Borç Dökümü** ekranı — Üye Listesi'ndeki 3 satır-aksiyonundan
-   biri (Hesap Özeti/Borç Dökümü/Tahsilat Ekranı — Mert'in bu
-   oturumun en başındaki asıl şikayeti). "Hesap Özeti"nden farklı:
-   sadece AÇIK borçları (geçmiş ödemeler olmadan) tek tabloda gösterir,
-   yanında doğrudan "Tahsil Et" / "Sms Gönder" / "Yazdır-E-Posta"
-   butonları olur. Şu an bizde Hesap Özeti tarihçe+açık borcu
-   birleştiriyor, ayrı bir "sadece açık borç" görünümü yok. Bu adımda
-   ayrıca Hesap Özeti'ndeki her satır için makbuz PDF'i ve "Hesap
-   Özetini Yazdır" ile tüm ekstreyi PDF olarak indirme de ele alınabilir.
-   **Buradan devam et.**
-2. ⏳ **Tahsilat Ekranı zenginleştirme** — aynı kişi birden fazla
+1. ⏳ **Tahsilat Ekranı zenginleştirme** — aynı kişi birden fazla
    taşınmaza sahipse TÜM taşınmazlarındaki borçları tek ekranda
    gösterip seçili borçları (checkbox ile, salt FIFO değil) tahsil
-   edebilme. Bizde tahsilat her zaman tek daire + saf FIFO.
-3. ⏳ **Boş taşınmaz (vacant unit) durumu** — `Occupancy` enum'unda
+   edebilme. Bizde tahsilat her zaman tek daire + saf FIFO. **Buradan
+   devam et.**
+2. ⏳ **Boş taşınmaz (vacant unit) durumu** — `Occupancy` enum'unda
    sadece `owner`/`tenant` var, "boş/kimse oturmuyor" durumu yok.
    Yönetimcell'in "Boş/Dolu Taşınmaz Listesi" raporu bunu ayrı bir
    durum olarak takip ediyor.
-4. ⏳ **Unit.squareMeters (m²) alanı** — "Detaylı Üye Listesi" rapor
+3. ⏳ **Unit.squareMeters (m²) alanı** — "Detaylı Üye Listesi" rapor
    oluşturucusunda görüldü, arsa payının yanında dairenin metrekaresi
    de ayrı bir alan; bizde yok.
-5. ⏳ **Kullanıcıda ikinci telefon/e-posta** — rapor oluşturucuda
+4. ⏳ **Kullanıcıda ikinci telefon/e-posta** — rapor oluşturucuda
    "Cep Telefonu 1/2", "Eposta Adresi 1/2" ayrı alanlar; bizde
    kullanıcı başına tek telefon/tek e-posta var.
-6. ⏳ **Genel Kasa Durumu'na "Borçlar Toplamı" eklenmesi** — Yönetimcell'in
+5. ⏳ **Genel Kasa Durumu'na "Borçlar Toplamı" eklenmesi** — Yönetimcell'in
    genel kasa özetinde Alacaklar (üye borçları) ile yan yana bir de
    toplam "Borçlar" (firma/personel/genel gidere olan borç) kartı var,
    Ana Para/Gecikme kırılımıyla. Bizde dashboard/Kasalar'da sadece
    tahsilat tarafı (totalDebt/totalCredit) var, ödenecek (payables)
    toplamı hiç gösterilmiyor — artık Borç Listesi ile veri hazır, sadece
    toplam bir kart eklemek yeterli.
-7. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
+6. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
    Kebir Defteri, banka entegrasyonu — sadece iskelet/arayüz düzeyinde
    (gerçek banka API'si/mali müşavir entegrasyonu üçüncü taraf
    sözleşmesi gerektirir, Mert'in kararı). Menü denetiminde
    "Muhasebe Raporları" alt menüsü (Tahakkuk Fişleri/Özet Mizan/
    Yevmiye ve Kebir Defteri/Muhasebe Kodları/Firma Mutabakat Mektubu)
    bu maddenin kapsamını doğruladı.
-8. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
+7. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
    sayfasıydı, en düşük öncelik, atlanabilir).
 
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
