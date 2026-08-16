@@ -274,12 +274,10 @@ function ledgerSections(items, payments, start, end, groupKeyFn) {
 }
 function sumRows(rows, field) { return rows.reduce((s, r) => s + r[field], 0); }
 
-router.get("/reports/genel-durum", requireAuth, requireRole("yonetici"), async (req, res) => {
+async function computeGenelDurum(start, end) {
   const data = await db.load();
   const categories = await db.prisma.expenseCategory.findMany();
   const catById = new Map(categories.map((c) => [c.id, c]));
-  const start = req.query.startDate ? new Date(req.query.startDate) : new Date(0);
-  const end = req.query.endDate ? new Date(new Date(req.query.endDate).setHours(23, 59, 59, 999)) : new Date();
   const TYPE_LABEL = { aidat: "Aidat", sayac: "Sayaç", gecikme_faizi: "Gecikme Faizi", diger: "Diğer" };
   const catLabel = (categoryId) => { const c = catById.get(categoryId); return c ? `${c.group} / ${c.name}` : null; };
 
@@ -307,13 +305,65 @@ router.get("/reports/genel-durum", requireAuth, requireRole("yonetici"), async (
     return { label: acc.name, devir, giren, cikan, kalan: devir + giren - cikan };
   });
 
-  res.json({
+  return {
     gelirler: { rows: gelirler, toplam: { devreden: sumRows(gelirler, "devreden"), tahakkukEden: sumRows(gelirler, "tahakkukEden"), tahsilEdilen: sumRows(gelirler, "tahsilEdilen"), kalan: sumRows(gelirler, "kalan") } },
     giderler: { rows: giderler, toplam: { devreden: sumRows(giderler, "devreden"), tahakkukEden: sumRows(giderler, "tahakkukEden"), tahsilEdilen: sumRows(giderler, "tahsilEdilen"), kalan: sumRows(giderler, "kalan") } },
     firmalar: { rows: firmalar, toplam: { devreden: sumRows(firmalar, "devreden"), tahakkukEden: sumRows(firmalar, "tahakkukEden"), tahsilEdilen: sumRows(firmalar, "tahsilEdilen"), kalan: sumRows(firmalar, "kalan") } },
     personeller: { rows: personeller, toplam: { devreden: sumRows(personeller, "devreden"), tahakkukEden: sumRows(personeller, "tahakkukEden"), tahsilEdilen: sumRows(personeller, "tahsilEdilen"), kalan: sumRows(personeller, "kalan") } },
     kasalar: { rows: kasalar, toplam: { devir: sumRows(kasalar, "devir"), giren: sumRows(kasalar, "giren"), cikan: sumRows(kasalar, "cikan"), kalan: sumRows(kasalar, "kalan") } },
-  });
+  };
+}
+
+router.get("/reports/genel-durum", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const start = req.query.startDate ? new Date(req.query.startDate) : new Date(0);
+  const end = req.query.endDate ? new Date(new Date(req.query.endDate).setHours(23, 59, 59, 999)) : new Date();
+  res.json(await computeGenelDurum(start, end));
+});
+
+// Yonetimcell karsilastirmasi: "Denetim Kurulu Raporu" + "Yonetim Faaliyet
+// Raporu" - resmi sablon: mali veri Genel Durum Raporu ile AYNI hesaplamadan
+// CANLI uretilir (saklanmaz), sadece idari inceleme + sonuc serbest metinleri
+// ve baslik/donem OfficialReport'ta saklanir. type: "denetim" | "faaliyet".
+router.get("/reports/official", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const { type } = req.query;
+  if (!["denetim", "faaliyet"].includes(type)) return res.status(400).json({ error: "Geçersiz rapor türü." });
+  const list = await db.prisma.officialReport.findMany({ where: { type }, orderBy: { createdAt: "desc" } });
+  res.json(list);
+});
+
+router.post("/reports/official", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const { type, title, startDate, endDate } = req.body || {};
+  if (!["denetim", "faaliyet"].includes(type)) return res.status(400).json({ error: "Geçersiz rapor türü." });
+  if (!title || !startDate || !endDate) return res.status(400).json({ error: "Başlık, başlangıç ve bitiş tarihi zorunludur." });
+  const report = await db.prisma.officialReport.create({ data: { type, title, startDate: new Date(startDate), endDate: new Date(endDate), createdBy: req.user.id } });
+  res.status(201).json(report);
+});
+
+router.get("/reports/official/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const report = await db.prisma.officialReport.findUnique({ where: { id: req.params.id } });
+  if (!report) return res.status(404).json({ error: "Rapor bulunamadı." });
+  const financials = await computeGenelDurum(report.startDate, new Date(new Date(report.endDate).setHours(23, 59, 59, 999)));
+  let faaliyetler = null;
+  if (report.type === "faaliyet") {
+    faaliyetler = await db.prisma.agendaItem.findMany({ where: { kind: "faaliyet", date: { gte: report.startDate, lte: report.endDate } }, orderBy: { date: "asc" } });
+  }
+  res.json({ ...report, financials, faaliyetler });
+});
+
+router.patch("/reports/official/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const { adminText, resultText, title } = req.body || {};
+  const data = {};
+  if (adminText !== undefined) data.adminText = adminText;
+  if (resultText !== undefined) data.resultText = resultText;
+  if (title !== undefined) data.title = title;
+  const report = await db.prisma.officialReport.update({ where: { id: req.params.id }, data }).catch(() => null);
+  if (!report) return res.status(404).json({ error: "Rapor bulunamadı." });
+  res.json(report);
+});
+
+router.delete("/reports/official/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  await db.prisma.officialReport.deleteMany({ where: { id: req.params.id } });
+  res.json({ message: "Rapor silindi." });
 });
 
 module.exports = router;

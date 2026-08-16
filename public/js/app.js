@@ -297,7 +297,7 @@ const NAV_GROUPS = {
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
     { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"], ["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"]] },
-    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["butce", "Bütçe"]] },
+    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
     { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"], ["bilgibankasi", "Bilgi Bankası"]] },
@@ -645,6 +645,8 @@ async function renderTab(tab) {
     else if (tab === "gidergrubu") await renderGiderGrubuRaporu(c);
     else if (tab === "genelbilanco") await renderGenelBilanco(c);
     else if (tab === "geneldurum") await renderGenelDurumRaporu(c);
+    else if (tab === "denetimraporu") await renderOfficialReport(c, "denetim");
+    else if (tab === "faaliyetraporu") await renderOfficialReport(c, "faaliyet");
     else if (tab === "bilgibankasi") await renderBilgiBankasi(c);
     else if (tab === "toplusms") await renderTopluSms(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
@@ -2074,6 +2076,117 @@ async function renderGenelDurumRaporu(c) {
     try { result = await load(f.startDate, f.endDate); document.getElementById("genelDurumResult").innerHTML = renderResult(); }
     catch (err) { toast(err.message); }
   });
+}
+
+// Yonetimcell karsilastirmasi: "Denetim Kurulu Raporu" + "Yonetim Faaliyet
+// Raporu" - resmi sablon: A) mali veri (Genel Durum Raporu ile ayni canli
+// hesaplama), B) idari inceleme (serbest metin), C) sonuc (serbest metin).
+// Kaydedilen raporlar listede birikir (donem+baslikla).
+async function renderOfficialReport(c, type) {
+  const isFaaliyet = type === "faaliyet";
+  const title = isFaaliyet ? "Yönetim Faaliyet Raporu" : "Denetim Kurulu Raporu";
+  let list = await api("/reports/official?type=" + type);
+  let openId = null;
+  let openDetail = null;
+
+  function renderList() {
+    return `
+      <div class="report-wrap"><table class="report">
+        <thead><tr><th>Dönem</th><th>Başlık</th><th></th></tr></thead>
+        <tbody>
+          ${list.map((r) => `<tr style="cursor:pointer;" data-open="${r.id}"><td>${dt(r.startDate)} — ${dt(r.endDate)}</td><td>${esc(r.title)}</td><td>${openId === r.id ? "▲" : "▼"}</td></tr>`).join("") || '<tr><td colspan="3" class="empty-row">Henüz rapor yok.</td></tr>'}
+        </tbody>
+      </table></div>`;
+  }
+
+  function renderDetail() {
+    if (!openDetail) return "";
+    const d = openDetail;
+    return `
+      <div class="card pad mb-16">
+        <h3 class="f-display" style="margin:0 0 4px;">${esc(d.title)}</h3>
+        <div class="small muted" style="margin-bottom:16px;">${dt(d.startDate)} — ${dt(d.endDate)} döneminde çalışmaları ve faaliyetleri aşağıdaki şekilde gerçekleşmiştir.</div>
+        <div class="ledger-title">A) Mali Yönden İnceleme</div>
+        ${genelDurumSectionTable("Gelirler (Alacaklar)", d.financials.gelirler, { tahsilLabel: "Tahsil Edilen", kalanLabel: "Kalan (Alacak)" })}
+        ${genelDurumSectionTable("Giderler (Ödemeler)", d.financials.giderler, { tahsilLabel: "Ödenen", kalanLabel: "Kalan (Borç)" })}
+        <div class="report-wrap"><table class="report">
+          <thead><tr><th colspan="4">Kasalar</th></tr><tr><th></th><th class="num">Devreden</th><th class="num">Giren</th><th class="num">Çıkan</th></tr></thead>
+          <tbody>${d.financials.kasalar.rows.map((r) => `<tr><td>${esc(r.label)}</td><td class="num f-num">${tl(r.devir)}</td><td class="num f-num" style="color:var(--green);">${tl(r.giren)}</td><td class="num f-num" style="color:var(--red);">${tl(r.cikan)}</td></tr>`).join("")}</tbody>
+          <tfoot><tr><td>TOPLAM (Kalan: ${tl(d.financials.kasalar.toplam.kalan)})</td><td class="num">${tl(d.financials.kasalar.toplam.devir)}</td><td class="num">${tl(d.financials.kasalar.toplam.giren)}</td><td class="num">${tl(d.financials.kasalar.toplam.cikan)}</td></tr></tfoot>
+        </table></div>
+
+        <div class="ledger-title" style="margin-top:16px;">B) İdari Yönden Yapılan ${isFaaliyet ? "Faaliyetler" : "İnceleme"}</div>
+        ${isFaaliyet ? `<button class="btn btn-ghost btn-sm" id="pullAgendaBtn" style="margin-bottom:8px;">📋 Ajandadaki Faaliyetleri Getir (${d.faaliyetler ? d.faaliyetler.length : 0} kayıt)</button>` : ""}
+        <textarea id="adminTextArea" rows="6" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);font-family:inherit;font-size:13px;">${esc(d.adminText || "")}</textarea>
+
+        <div class="ledger-title" style="margin-top:16px;">C) Sonuç</div>
+        <textarea id="resultTextArea" rows="4" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);font-family:inherit;font-size:13px;">${esc(d.resultText || "")}</textarea>
+
+        <div style="display:flex;gap:8px;margin-top:14px;">
+          <button class="btn btn-primary btn-sm" id="saveReportBtn">Kaydet</button>
+          ${isFaaliyet ? `<button class="btn btn-ghost btn-sm" id="publishAnnouncementBtn">📢 Bu Raporu Duyuru Olarak Yayınla</button>` : ""}
+        </div>
+      </div>`;
+  }
+
+  async function openReport(id) {
+    openId = id;
+    openDetail = await api("/reports/official/" + id);
+    render();
+  }
+
+  function render() {
+    c.innerHTML = `
+      ${sectionTitle(title, "Dönem seçip yeni rapor oluşturun; mali veriler canlı hesaplanır")}
+      <div class="report-wrap">
+        <form id="newReportForm" class="report-filter-bar">
+          <div class="field" style="min-width:200px;"><label>Başlık</label><input name="title" placeholder="Örn. 2026 1. Çeyrek ${title}" required /></div>
+          <div class="field"><label>Başlangıç</label><input name="startDate" type="date" required /></div>
+          <div class="field"><label>Bitiş</label><input name="endDate" type="date" required /></div>
+          <button class="btn btn-primary btn-sm" type="submit">Yeni Rapor Oluştur</button>
+        </form>
+      </div>
+      <div id="reportListBox">${renderList()}</div>
+      <div id="reportDetailBox" style="margin-top:16px;">${renderDetail()}</div>
+    `;
+    document.getElementById("newReportForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(e.target));
+      try {
+        const created = await api("/reports/official", { method: "POST", body: { type, ...f } });
+        list = await api("/reports/official?type=" + type);
+        await openReport(created.id);
+        toast("Rapor oluşturuldu.");
+      } catch (err) { toast(err.message); }
+    });
+    c.querySelectorAll("[data-open]").forEach((row) => row.addEventListener("click", () => {
+      const id = row.dataset.open;
+      if (openId === id) { openId = null; openDetail = null; render(); return; }
+      openReport(id);
+    }));
+    if (openDetail) {
+      document.getElementById("saveReportBtn").addEventListener("click", async () => {
+        const adminText = document.getElementById("adminTextArea").value;
+        const resultText = document.getElementById("resultTextArea").value;
+        try { await api("/reports/official/" + openId, { method: "PATCH", body: { adminText, resultText } }); toast("Kaydedildi."); }
+        catch (err) { toast(err.message); }
+      });
+      if (isFaaliyet) {
+        document.getElementById("pullAgendaBtn").addEventListener("click", () => {
+          const box = document.getElementById("adminTextArea");
+          const lines = (openDetail.faaliyetler || []).map((a) => `${dt(a.date)} — ${a.text}`).join("\n");
+          box.value = (box.value ? box.value + "\n\n" : "") + lines;
+        });
+        document.getElementById("publishAnnouncementBtn").addEventListener("click", async () => {
+          const body = document.getElementById("resultTextArea").value || document.getElementById("adminTextArea").value;
+          if (!body.trim()) { toast("Duyuru olarak yayınlamadan önce metni doldurun."); return; }
+          try { await api("/announcements", { method: "POST", body: { title: openDetail.title, body, pinned: false } }); toast("Duyuru olarak yayınlandı."); }
+          catch (err) { toast(err.message); }
+        });
+      }
+    }
+  }
+  render();
 }
 
 const KNOWLEDGE_CATEGORIES = ["Bilgi Bankası", "Örnek Yazışmalar", "Yönetmelikler"];

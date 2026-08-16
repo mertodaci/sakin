@@ -740,6 +740,25 @@ enum AgendaKind {
   faaliyet
 }
 
+// Yonetimcell karsilastirmasi: "Denetim Kurulu Raporu" ve "Yonetim Faaliyet
+// Raporu" - mali veri (Genel Durum Raporu ile ayni hesaplamadan canli
+// uretilir, burada SAKLANMAZ) + iki serbest metin bolumu (idari inceleme +
+// sonuc) icin resmi rapor sablonu. type alaniyla iki rapor turu ayni
+// tabloda tutulur (Ajanda pattern'iyle tutarli).
+model OfficialReport {
+  id         String   @id @default(uuid())
+  type       String   // "denetim" | "faaliyet"
+  title      String
+  startDate  DateTime
+  endDate    DateTime
+  adminText  String   @default("")
+  resultText String   @default("")
+  createdBy  String
+  createdAt  DateTime @default(now())
+
+  @@index([type])
+}
+
 // "Ajanda (Notlar)" ve "Ajanda (Faaliyetler)" Yonetimcell'de ayni arayuzu
 // paylasiyor, sadece cerceveleme (serbest not vs. sitede gerceklesen olay)
 // farkli - bu yuzden tek model + kind alani yeterli, iki ayri tablo gerekmiyor.

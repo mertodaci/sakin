@@ -687,6 +687,21 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   ihtiyacı Genel Durum Raporu karşılıyor kabul edildi — gereksiz
   kopya sayfa açmamak için bilinçli bir tercih.
 
+- ✅ **Denetim Kurulu Raporu + Yönetim Faaliyet Raporu** — yeni
+  `OfficialReport` modeli (`type`: "denetim"/"faaliyet", başlık,
+  dönem, iki serbest metin alanı — mali veri SAKLANMAZ, her açılışta
+  Genel Durum Raporu ile aynı `computeGenelDurum()` fonksiyonundan
+  CANLI hesaplanır). Resmi şablon: A) Mali Yönden İnceleme (otomatik),
+  B) İdari Yönden İnceleme/Faaliyetler (serbest metin, kaydedilebilir),
+  C) Sonuç (serbest metin). Yönetim Faaliyet Raporu'na özel iki
+  entegrasyon: "📋 Ajandadaki Faaliyetleri Getir" (seçili dönemdeki
+  `AgendaItem` kind=faaliyet kayıtlarını B bölümüne ekler) ve
+  "📢 Bu Raporu Duyuru Olarak Yayınla" (mevcut `/announcements`
+  ucunu kullanarak C bölümünü duyuru olarak yayınlar). Finans grubuna
+  2 yeni sekme eklendi. `test-official-report.js` ile (create/list/
+  detail/patch/tip-doğrulama/geçersiz-tip-reddi) ve tarayıcıda görsel
+  olarak doğrulandı.
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı
