@@ -575,6 +575,48 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   (`canSeeUnits` yoksa `Promise.resolve([])`) düzeltildi. Düzeltme
   sonrası üç rolün de her sekmesi hatasız doğrulandı.
 
+- ✅ **Tam site denetimi (2. tur) + "Üye Listesi Seçenekleri" 4 rapor
+  sayfası** — Mert'in ısrarlı talebi üzerine ("isim olarak gördüğün
+  ve bakmadığın her şeye bak") canlı hesaptaki ~50 sayfanın TAMAMI
+  (Raporlar'ın tüm alt dalları + Üyeler/Giderler/Kasalar/Hukuki'nin
+  her leaf sayfası) gerçekten açılıp içeriği (sütun/filtre/örnek veri)
+  incelendi — sadece menü isimlerini toplamak değil. Bulgular
+  `yonetimcell-full-audit.md`'de. Bu turun ilk somut çıktısı olarak
+  "Üyeler > Üye Listesi Seçenekleri" altındaki 4 filtrelenebilir liste
+  sayfası eklendi:
+  - **İkamet Edenler Listesi**: `GET /reports/ikamet-edenler` — her
+    taşınmazın malik/kiracısı + güncel `HouseholdMember` kayıtları tek
+    tabloda (Blok/No/Sıfatı/Yakınlığı/Ad Soyad/Telefon).
+  - **Boş/Dolu Taşınmaz Listesi**: `GET /reports/bos-dolu-tasinmaz` —
+    mevcut `occupancy` alanından üretilen doluluk+bakiye tablosu.
+  - **Tc Kimlik Numarası Listesi**: `GET /reports/tc-kimlik-listesi`
+    — hesabı olan (giriş yapabilen) sakinlerin `nationalId`'si;
+    hesapsız eski/kayıtsız sakinlerin TC no'su sistemde tutulmadığı
+    için kapsam dışı (not olarak sayfada belirtildi).
+  - **Araç Plaka Listesi**: `GET /reports/arac-plaka-listesi` —
+    `Vehicle` modeli zaten kişi başına çoklu kayıt destekliyordu
+    (task #6), sadece site-geneli liste görünümü eksikti.
+  - Dördü de aynı basit paternİ paylaşıyor: arama kutusu (client-side
+    filtre) + tablo + tarayıcı "Yazdır" butonu (`window.print()`) —
+    her biri için ayrı PDF endpoint'i açmak bu ölçekte gereksiz
+    karmaşıklık olurdu. `test-uye-listeleri.js` ile 4 uç + rol
+    kısıtlaması (sakin erişemez) doğrulandı, tarayıcıda görsel olarak
+    da kontrol edildi.
+  - **Tur 2'de bulunan diğer gerçek eksikler** (henüz uygulanmadı,
+    sırada): Genel Durum Raporu ve türevleri (Mizan/Özet Durum/Denetim
+    Kurulu/Yönetim Faaliyet Raporu), Taşınmaz Raporları'nın 3 pivotu
+    (birim×ay, ay×kategori, birim×kategori) + kişi bazlı ikizleri,
+    Tahsilat/Detaylı Gider Raporu (birleşik hareket logu), Günlük/Aylık
+    Özet Bilanço, Gider Grubu Raporu, Genel Bilanço, İşletme Defteri,
+    Dönemsel Gelir-Gider Tablosu, Toplu Tahsilat Makbuzu/Üye Borç
+    Dökümü, toplu Tebligat, İşletme Projesi (m²/arsa payı/eşit
+    paylaşıma göre bütçelenmiş toplu borçlandırma — en büyük efor
+    kalemi), Detaylı Üye Listesi (esnek sütun seçici + cinsiyet/doğum
+    tarihi/kan grubu/sektör/iş yeri/ev adresi gibi yeni alanlar), toplu
+    SMS/e-posta hazır-şablon varyantları, Bütçe Raporları PDF export,
+    ve üç küçük model kontrolü (Personnel'de kurul rolleri, gider
+    kaydına dosya eki, kasalar arası Virman).
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı

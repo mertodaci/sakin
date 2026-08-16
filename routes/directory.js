@@ -98,6 +98,81 @@ router.delete("/household/:id", requireAuth, requireRole("yonetici"), async (req
   res.json({ message: "Kayıt silindi." });
 });
 
+// Yonetimcell karsilastirmasi: "Uyeler > Uye Listesi Secenekleri > Ikamet
+// Edenler Listesi" - tum siteyi tek, aranabilir tabloda gosterir (malik/kiraci
+// kendisi + guncel HouseholdMember kayitlari). Bos daireler listelenmez.
+router.get("/reports/ikamet-edenler", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
+  const data = await db.load();
+  const members = await prisma.householdMember.findMany({ where: { isCurrent: true }, orderBy: { name: "asc" } });
+  const membersByUnit = members.reduce((acc, m) => {
+    (acc[m.unitId] = acc[m.unitId] || []).push(m);
+    return acc;
+  }, {});
+  const rows = [];
+  for (const u of data.units) {
+    if (u.occupancy === "vacant") continue;
+    const sifat = u.occupancy === "tenant" ? "Kiracı" : "Malik";
+    const primaryName = u.occupancy === "tenant" ? u.tenantName : u.ownerName;
+    const primaryPhone = u.occupancy === "tenant" ? u.tenantPhone : u.ownerPhone;
+    if (primaryName) rows.push({ block: u.block, no: u.no, sifat, relationship: "Kendisi", name: primaryName, phone: primaryPhone || "" });
+    for (const m of membersByUnit[u.id] || []) {
+      rows.push({ block: u.block, no: u.no, sifat, relationship: m.relationship, name: m.name, phone: m.phone || "" });
+    }
+  }
+  rows.sort((a, b) => a.block.localeCompare(b.block, "tr") || a.no.localeCompare(b.no, "tr", { numeric: true }));
+  res.json(rows);
+});
+
+// Yonetimcell karsilastirmasi: "Bos/Dolu Tasinmaz Listesi" - her tasinmazin
+// doluluk durumu (bos/malik oturuyor/kiraci oturuyor) tek tabloda, bakiyesiyle.
+router.get("/reports/bos-dolu-tasinmaz", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
+  const data = await db.load();
+  const rows = data.units
+    .map((u) => ({
+      block: u.block,
+      no: u.no,
+      durum: u.occupancy === "vacant" ? "Boş" : "Dolu",
+      malik: u.ownerName || "",
+      kiraci: u.occupancy === "tenant" ? u.tenantName || "" : "",
+      debt: unitDebt(data, u.id),
+    }))
+    .sort((a, b) => a.block.localeCompare(b.block, "tr") || a.no.localeCompare(b.no, "tr", { numeric: true }));
+  res.json(rows);
+});
+
+// Yonetimcell karsilastirmasi: "Tc Kimlik Numarasi Listesi" - hesabi olan
+// (giris yapabilen) sakinlerin TC kimlik no'larini tek tabloda gosterir.
+// Hesabi olmayan eski/kayitsiz sakinlerin TC no'su sistemde tutulmuyor.
+router.get("/reports/tc-kimlik-listesi", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
+  const data = await db.load();
+  const rows = data.users
+    .filter((u) => u.role === "sakin" && u.unitId)
+    .map((u) => {
+      const unit = data.units.find((x) => x.id === u.unitId);
+      if (!unit) return null;
+      return { block: unit.block, no: unit.no, durum: unit.occupancy === "tenant" ? "Kiracı" : "Malik", name: u.name, nationalId: u.nationalId || "" };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.block.localeCompare(b.block, "tr") || a.no.localeCompare(b.no, "tr", { numeric: true }));
+  res.json(rows);
+});
+
+// Yonetimcell karsilastirmasi: "Arac Plaka Listesi" - Vehicle modelinin
+// (mevcut, task #6) tum siteyi kapsayan filtrelenebilir liste gorunumu.
+router.get("/reports/arac-plaka-listesi", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
+  const data = await db.load();
+  const vehicles = await prisma.vehicle.findMany({ orderBy: { plate: "asc" } });
+  const rows = [];
+  for (const v of vehicles) {
+    const u = data.users.find((x) => x.id === v.userId);
+    if (!u) continue;
+    const unit = u.unitId ? data.units.find((x) => x.id === u.unitId) : null;
+    rows.push({ block: unit ? unit.block : "", no: unit ? unit.no : "", durum: unit && unit.occupancy === "tenant" ? "Kiracı" : "Malik", name: u.name, phone: u.phone || "", plate: v.plate, brand: v.brand || "", color: v.color || "" });
+  }
+  rows.sort((a, b) => a.block.localeCompare(b.block, "tr") || a.no.localeCompare(b.no, "tr", { numeric: true }));
+  res.json(rows);
+});
+
 /* ---------------- USERS (Sakinler / Onay / Personel) ---------------- */
 
 router.get("/users", requireAuth, requireRole("yonetici"), async (req, res) => {

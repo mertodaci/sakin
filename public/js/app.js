@@ -31,7 +31,7 @@ function sectionTitle(title, sub) { return `<div class="section-title"><h2>${esc
 function ledgerRow(title, sub, right, color) {
   return `<div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${title}</div><div class="small muted">${sub}</div></div><div class="f-num" style="font-size:14px;font-weight:600;${color ? `color:${color};` : ""}">${right}</div></div>`;
 }
-const PILL_MAP = { "Ödendi": "green", "Borçlu": "red", "Alacaklı": "green", "Açık": "red", "Kısmi": "amber", "İşlemde": "amber", "Çözüldü": "green", "Onaylandı": "green", "depoda": "grey", "zimmetli": "amber", "Teslim Alındı": "amber", "Teslim Edildi": "green", "Güncel": "green", "Bakım Gecikti": "red", "Pasif": "grey", "Aktif": "green", "Boş": "amber" };
+const PILL_MAP = { "Ödendi": "green", "Borçlu": "red", "Alacaklı": "green", "Açık": "red", "Kısmi": "amber", "İşlemde": "amber", "Çözüldü": "green", "Onaylandı": "green", "depoda": "grey", "zimmetli": "amber", "Teslim Alındı": "amber", "Teslim Edildi": "green", "Güncel": "green", "Bakım Gecikti": "red", "Pasif": "grey", "Aktif": "green", "Boş": "amber", "Dolu": "green" };
 // Net bakiye (borc - alacakli bakiye) uc durumlu: pozitif=borclu (kirmizi),
 // negatif=alacakli (yesil), sifir=odendi (yesil).
 function debtStatusLabel(debt) { return debt > 0 ? "Borçlu" : debt < 0 ? "Alacaklı" : "Ödendi"; }
@@ -296,7 +296,7 @@ const NAV_GROUPS = {
   ],
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
-    { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"]] },
+    { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"], ["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"]] },
     { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
@@ -612,6 +612,10 @@ async function renderTab(tab) {
     else if (tab === "pano") await renderPano(c);
     else if (tab === "kullanicilar") await renderKullanicilar(c);
     else if (tab === "daireler") await renderDaireler(c);
+    else if (tab === "ikametedenler") await renderIkametEdenlerListesi(c);
+    else if (tab === "bosdolu") await renderBosDoluListesi(c);
+    else if (tab === "tckimlik") await renderTcKimlikListesi(c);
+    else if (tab === "aracplaka") await renderAracPlakaListesi(c);
     else if (tab === "tahsilat") await renderTahsilat(c);
     else if (tab === "muhasebe") await renderMuhasebe(c);
     else if (tab === "kasalar") await renderKasalar(c);
@@ -1338,6 +1342,81 @@ async function renderDaireler(c) {
     const u = list.find((x) => x.id === b.dataset.editunit);
     if (u) renderUnitEditModal(u);
   }));
+}
+
+// Yonetimcell karsilastirmasi: "Uyeler > Uye Listesi Secenekleri" altindaki 4
+// filtrelenebilir/yazdirilabilir liste sayfasi - hepsi ayni basit patern
+// (arama kutusu + tablo + tarayici yazdirma).
+function simpleListSearchBox(placeholder) {
+  return `<input type="text" id="listSearchInput" placeholder="${esc(placeholder)}" style="width:100%;max-width:320px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);font-size:13px;margin-bottom:12px;" />`;
+}
+function wireListSearch(c, rowSelector, matchFields) {
+  const input = c.querySelector("#listSearchInput");
+  if (!input) return;
+  input.addEventListener("input", () => {
+    const q = input.value.trim().toLowerCase();
+    c.querySelectorAll(rowSelector).forEach((row) => {
+      const text = matchFields.map((f) => row.dataset[f] || "").join(" ").toLowerCase();
+      row.style.display = !q || text.includes(q) ? "" : "none";
+    });
+  });
+}
+
+async function renderIkametEdenlerListesi(c) {
+  const rows = await api("/reports/ikamet-edenler");
+  c.innerHTML = `
+    <div class="flex-between">${sectionTitle("İkamet Edenler Listesi", `${rows.length} kayıt`)}<button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Yazdır</button></div>
+    ${simpleListSearchBox("Ad soyad ile ara…")}
+    <div class="scroll-x"><table class="simple">
+      <thead><tr><th>Blok</th><th>No</th><th>Sıfatı</th><th>Yakınlığı</th><th>Ad Soyad</th><th>Telefon</th></tr></thead>
+      <tbody>
+        ${rows.map((r) => `<tr data-listrow data-name="${esc(r.name)}"><td>${esc(r.block)}</td><td>${esc(r.no)}</td><td>${esc(r.sifat)}</td><td>${esc(r.relationship)}</td><td>${esc(r.name)}</td><td>${esc(r.phone)}</td></tr>`).join("") || '<tr><td colspan="6" class="empty-row">Kayıt yok.</td></tr>'}
+      </tbody>
+    </table></div>`;
+  wireListSearch(c, "[data-listrow]", ["name"]);
+}
+
+async function renderBosDoluListesi(c) {
+  const rows = await api("/reports/bos-dolu-tasinmaz");
+  const bosCount = rows.filter((r) => r.durum === "Boş").length;
+  c.innerHTML = `
+    <div class="flex-between">${sectionTitle("Boş/Dolu Taşınmaz Listesi", `${rows.length} taşınmaz, ${bosCount} boş`)}<button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Yazdır</button></div>
+    ${simpleListSearchBox("Malik/Kiracı adıyla ara…")}
+    <div class="scroll-x"><table class="simple">
+      <thead><tr><th>Blok</th><th>No</th><th>Durum</th><th>Malik</th><th>Kiracı</th><th style="text-align:right;">Bakiye</th></tr></thead>
+      <tbody>
+        ${rows.map((r) => `<tr data-listrow data-name="${esc(r.malik + " " + r.kiraci)}"><td>${esc(r.block)}</td><td>${esc(r.no)}</td><td>${pill(r.durum)}</td><td>${esc(r.malik)}</td><td>${esc(r.kiraci)}</td><td class="f-num" style="text-align:right;color:${debtColor(r.debt)};">${tl(Math.abs(r.debt))} ${r.debt !== 0 ? (r.debt > 0 ? "(B)" : "(A)") : ""}</td></tr>`).join("") || '<tr><td colspan="6" class="empty-row">Kayıt yok.</td></tr>'}
+      </tbody>
+    </table></div>`;
+  wireListSearch(c, "[data-listrow]", ["name"]);
+}
+
+async function renderTcKimlikListesi(c) {
+  const rows = await api("/reports/tc-kimlik-listesi");
+  c.innerHTML = `
+    <div class="flex-between">${sectionTitle("Tc Kimlik Numarası Listesi", `${rows.length} kayıt - sadece giriş hesabı olan sakinler`)}<button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Yazdır</button></div>
+    ${simpleListSearchBox("Ad soyad ile ara…")}
+    <div class="scroll-x"><table class="simple">
+      <thead><tr><th>Blok</th><th>No</th><th>Durum</th><th>Ad Soyad</th><th>Tc Kimlik No</th></tr></thead>
+      <tbody>
+        ${rows.map((r) => `<tr data-listrow data-name="${esc(r.name)}"><td>${esc(r.block)}</td><td>${esc(r.no)}</td><td>${esc(r.durum)}</td><td>${esc(r.name)}</td><td>${esc(r.nationalId) || '<span class="muted">-</span>'}</td></tr>`).join("") || '<tr><td colspan="5" class="empty-row">Kayıt yok.</td></tr>'}
+      </tbody>
+    </table></div>`;
+  wireListSearch(c, "[data-listrow]", ["name"]);
+}
+
+async function renderAracPlakaListesi(c) {
+  const rows = await api("/reports/arac-plaka-listesi");
+  c.innerHTML = `
+    <div class="flex-between">${sectionTitle("Araç Plaka Listesi", `${rows.length} araç`)}<button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Yazdır</button></div>
+    ${simpleListSearchBox("Ad soyad veya plaka ile ara…")}
+    <div class="scroll-x"><table class="simple">
+      <thead><tr><th>Blok</th><th>No</th><th>Durum</th><th>Ad Soyad</th><th>Telefon</th><th>Marka</th><th>Renk</th><th>Plaka</th></tr></thead>
+      <tbody>
+        ${rows.map((r) => `<tr data-listrow data-name="${esc(r.name + " " + r.plate)}"><td>${esc(r.block)}</td><td>${esc(r.no)}</td><td>${esc(r.durum)}</td><td>${esc(r.name)}</td><td>${esc(r.phone)}</td><td>${esc(r.brand)}</td><td>${esc(r.color)}</td><td style="font-weight:600;">${esc(r.plate)}</td></tr>`).join("") || '<tr><td colspan="8" class="empty-row">Kayıt yok.</td></tr>'}
+      </tbody>
+    </table></div>`;
+  wireListSearch(c, "[data-listrow]", ["name"]);
 }
 
 const HOUSEHOLD_RELATIONSHIPS = ["Kendisi", "Eş", "Çocuk", "Anne", "Baba", "Kardeş", "Kiracı", "Ev Arkadaşı", "Misafir", "Diğer"];
