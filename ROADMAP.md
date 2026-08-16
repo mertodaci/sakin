@@ -10,8 +10,13 @@ yardım istediğini anlayabilir.
 ## 🎯 Şu An Neredeyiz
 
 Uygulama **çalışır durumda ve production'a yakın** — demo değil, gerçek bir
-backend'i (Node.js + Express + JSON dosya veritabanı) olan, kayıt/onay,
-ödeme, muhasebe, iptal/düzenleme akışlarının hepsi test edilmiş bir sistem.
+backend'i (Node.js + Express + **PostgreSQL/Prisma**, Docker Compose ile
+local) olan, kayıt/onay, ödeme, muhasebe, iptal/düzenleme akışlarının
+hepsi test edilmiş bir sistem. En kritik/riskli modüller (kimlik
+doğrulama, aidat/ödeme/muhasebe) gerçek Prisma sorgularına taşındı; geri
+kalan ~9 route dosyası hâlâ eski JSON-dizi mantığıyla ama Postgres'e
+yazan/okuyan bir shim (`db.js`) üzerinden çalışıyor — detay için aşağıdaki
+"PostgreSQL Geçişi" bölümüne bak.
 
 **Tamamlanan ana modüller:**
 - Kimlik doğrulama: kayıt/onay akışı, şifremi unuttum, zorunlu şifre değişimi,
@@ -72,58 +77,100 @@ sonra `npm start`, `http://localhost:3000`, demo giriş `yonetici@site.com` /
 - [x] Git entegrasyonu: local repo (`git init`), ilk commit, `.gitignore`
       teyidi (bkz. aşağıdaki "Git Entegrasyonu — Durum" bölümü)
 
-## 🔄 PostgreSQL Geçişi — DEVAM EDİYOR (yarım kaldıysa buradan devam et)
+## ✅ PostgreSQL Geçişi — Bu Oturumun Kapsamı TAMAMLANDI (2026-08-16)
 
 **Plan dosyası:** `C:\Users\mert_\.claude\plans\lazy-popping-hummingbird.md`
 (kapsam, şema kararları, commit sırası orada detaylı).
 
-**Şu ana kadar tamamlanan ve commit'lenen adımlar:**
-1. ✅ Docker Compose ile local Postgres (`docker-compose.yml`, `.env`'de
-   `DATABASE_URL`) — `docker compose up -d` ile ayağa kalkıyor.
-2. ✅ `prisma/schema.prisma` — tüm 27 koleksiyon için tablolar oluşturuldu
-   (`npx prisma migrate dev` ile uygulandı).
-3. ✅ `prisma/seed.js` — eski `buildSeed()` demo verisini birebir üretiyor
-   (`npx prisma db seed`).
-4. ✅ `db.js` Postgres-backed async shim'e çevrildi (`LEGACY_COLLECTIONS` +
-   `READONLY_PASSTHROUGH` deseni), **tüm route dosyaları** async/await'e
-   çevrildi, `middleware/asyncErrors.js` eklendi.
-5. ✅ Auth + kullanıcı yönetimi (`middleware/auth.js`, `routes/auth.js`,
-   `routes/directory.js`'nin 6 kullanıcı-mutasyon ucu) gerçek Prisma
-   sorgularına taşındı. `users` artık `LEGACY_COLLECTIONS`'ta değil,
-   salt-okunur passthrough'ta.
+**Tamamlanan ve commit'lenen adımlar:**
+1. ✅ Docker Compose ile local Postgres.
+2. ✅ `prisma/schema.prisma` — tüm 27 koleksiyon için tablolar.
+3. ✅ `prisma/seed.js` — demo veri.
+4. ✅ `db.js` Postgres-backed async shim (`LEGACY_COLLECTIONS` +
+   `READONLY_PASSTHROUGH`), tüm route dosyaları async/await.
+5. ✅ Auth + kullanıcı yönetimi → Prisma.
+6. ✅ `routes/contacts.js` → Prisma (basit CRUD).
+7. ✅ `routes/finance.js` çekirdek uçları (charges/payments/transactions) →
+   Prisma. `applyPayment` ve iptal akışı `prisma.$transaction` ile atomik
+   (borç güncelleme + `PaymentAllocation` + `Transaction` + `Notification`
+   hep birlikte yazılır/geri alınır). Para hesapları `Prisma.Decimal` ile
+   (`.plus/.minus/.gte`), float yuvarlama riski yok. Idempotency artık
+   `PaymentRequest` tablosunun unique kısıtıyla (`P2002` → 409) sağlanıyor.
 
-**Sırada (henüz yapılmadı):**
-6. ⏳ `routes/contacts.js` → Prisma (basit CRUD, düşük risk).
-7. ⏳ `routes/finance.js` çekirdek uçları (charges/payments/transactions) →
-   Prisma, `applyPayment`/iptal akışı `prisma.$transaction` ile atomik
-   yapılacak. Eşlik eden küçük değişiklikler: `jobs.js`,
-   `routes/accounts.js`'teki `accountBalance()` (muhtemelen değişiklik
-   gerekmeyebilir, READONLY_PASSTHROUGH ile `data.transactions` zaten doğru
-   geliyor — kontrol et), `routes/dashboard.js`, `routes/documents.js`.
-8. ⏳ Bu ilerleme notunu güncelle, son commit'i at.
+   **Planda öngörülenin ötesinde gereken düzeltmeler** (finance.js'in
+   `charges`/`payments`/`transactions`'ı Prisma'ya taşıması, bu tabloları
+   hâlâ **yazan** başka legacy route'ları da zorunlu kıldı — plan bu bağı
+   öngörmemişti):
+   - `jobs.js` (gecikme faizi + otomatik aylık borçlandırma) tamamen
+     Prisma'ya çevrildi — `data.charges`'a push ediyordu, artık
+     salt-okunur passthrough'ta olduğu için sessizce veri kaybına yol
+     açardı.
+   - `routes/ops.js`: sayaç okuması charge oluşturma/silme Prisma'ya
+     taşındı (aynı sessiz veri kaybı riski). Ayrıca `db.load()` sonrası
+     eksik iki `await` bulunup düzeltildi (`GET /facilities`,
+     `GET /decisions` bozuk yanıt dönüyordu — 4. adımdan kalma bug).
+   - `routes/parties.js`: firma/personel ödemesinin oluşturduğu/sildiği
+     `Transaction` kaydı artık doğrudan Prisma'ya yazıyor (aynı sebep).
+     Ayrıca borçlanma silme ucuna `PaymentAllocation` geçmişi kontrolü
+     eklendi — iptal edilmiş bir ödemenin geçmiş kaydı FK Restrict'i
+     ihlal edip genel 500 hatası veriyordu, test sırasında yakalandı.
+   - Borç (charge) silme uçlarına da aynı desende bir kontrol eklendi
+     (`paidAmount>0` YA DA allocation geçmişi varsa engelle) — eski
+     JSON-dizi döneminde bu sessizce/başıboş referans bırakarak
+     "başarılı" olurdu, Postgres FK'sinin bunu genel 500'e çevirmesini
+     önlemek için.
+   - `routes/accounts.js`, `routes/dashboard.js`, `routes/documents.js`:
+     **bilinçli olarak değiştirilmedi.** Üçü de `charges`/`payments`/
+     `transactions`'ı yalnızca **okuyor** (hiç yazmıyor), bu yüzden
+     `READONLY_PASSTHROUGH` üzerinden doğru çalışmaya devam ediyorlar —
+     manuel testle doğrulandı. Bunları da native Prisma'ya çevirmek
+     sadece kozmetik/performans kazancı sağlardı, riski karşılığı
+     yoktu; ileride bir "temizlik" oturumunda ele alınabilir.
+8. ✅ Bu ilerleme notu güncellendi, commit atıldı.
 
-**Nasıl devam edilir:** Sunucuyu test etmeden önce her zaman `docker compose
-ps` ile Postgres'in ayakta olduğunu doğrula. Test için: `npm start`, admin
-girişi `yonetici@site.com` / `Degistir123!` (veya `.env`'deki
+**Bilinçli olarak hâlâ legacy (shim üzerinden) kalanlar** — sonraki bir
+oturuma bırakıldı, plan'ın orijinal kapsamı zaten böyleydi: `ops.js`'in
+geri kalanı (rezervasyon/talep/personel/demirbaş/anahtar/kargo/karar),
+`comms.js`, `directory.js`'nin daire/kullanıcı-listeleme kısmı,
+`parties.js`'in vendor/partyCharge/partyPayment iş mantığı (yalnızca
+yukarıdaki FK düzeltmeleri yapıldı), `settings.js`, `system.js`,
+`finance.js`'teki `budgets` uçları.
+
+**Test yöntemi:** Otomatik test suite yok (projede hiç yok) — bu oturumda
+`npm start` ile gerçek sunucuya karşı çalışan bir Node script'iyle (login,
+charges CRUD, kısmi/tam ödeme, ödeme iptali, idempotency, sayaç
+faturası oluşturma/silme, firma ödemesi/iptali, dashboard/hesaplar/bütçe/
+export uçları) uçtan uca doğrulandı, sonra test verisi temizlendi. Prisma
+Studio (`npx prisma studio`, localhost:5555) ile de gözle kontrol
+edilebilir.
+
+**Nasıl devam edilir (bundan sonraki route'lar için):** Sunucuyu test
+etmeden önce her zaman `docker compose ps` ile Postgres'in ayakta
+olduğunu doğrula. Test için: `npm start`, admin girişi
+`yonetici@site.com` / `Degistir123!` (veya `.env`'deki
 `ADMIN_EMAIL`/`ADMIN_PASSWORD`). Sunucu zaten çalışıyorsa önce portu boşalt
 (`Get-NetTCPConnection -LocalPort 3000` ile PID bulup `Stop-Process`) —
-aksi halde `EADDRINUSE` ile eski/yanlış bir süreç isteklere cevap verebilir
-(bu oturumda tam olarak bu yüzünden kaynaklanan bir hataya düşüldü).
+aksi halde `EADDRINUSE` ile eski/yanlış bir süreç isteklere cevap verebilir.
+Bir koleksiyonu `LEGACY_COLLECTIONS`'tan çıkarmadan önce **o koleksiyona
+yazan tüm route dosyalarını** (sadece "asıl" route'u değil) grep'le —
+bu oturumda tam olarak bu bağın gözden kaçması bir dizi düzeltme
+gerektirdi.
 
 ## 🔜 Bekleyen Roadmap Maddeleri (Öncelik Sırasıyla)
 
 Bu sıralama gelişigüzel değil — her madde bir öncekinin üzerine inşa
 edilecek şekilde planlandı. Sıra değiştirilebilir ama bağımlılıklara dikkat:
 
-1. **PostgreSQL'e geçiş** — bilerek en başa/ayrı tutuldu çünkü:
-   - Şu an JSON dosya tabanlı veritabanı (`db.js`) var; küçük/orta ölçek
-     (tek bina) için yeterli ama eşzamanlı yazmada veri kaybı riski taşıyor.
-   - Her route dosyası (`routes/*.js`) doğrudan `data.xxx` dizilerini
-     manipüle ediyor — bu, gerçek bir DB'ye geçerken **hepsinin** yeniden
-     yazılması demek. Büyük, riskli, dikkatli test gerektiren bir iş.
-   - Önerim: Bu geçişi ayrı, odaklı bir oturumda yapmak — önce şema
-     tasarımı (Prisma/Drizzle ORM önerilir), sonra route route migrate
-     edip her birini test ederek ilerlemek.
+1. ~~**PostgreSQL'e geçiş**~~ — **kısmen tamamlandı** (bkz. yukarıdaki
+   "PostgreSQL Geçişi" bölümü): en riskli/parasal modüller (auth, contacts,
+   finance — charges/payments/transactions, atomik `$transaction`) gerçek
+   Prisma sorgularına taşındı. Geri kalan ~9 route dosyası (ops'un geri
+   kalanı, comms, directory'nin listeleme kısmı, parties'in iş mantığı,
+   settings, system, budgets) hâlâ eski JSON-dizi mantığıyla ama
+   Postgres'e okuyan/yazan bir shim (`db.js`) üzerinden çalışıyor —
+   fonksiyonel olarak doğru ve test edildi, sadece "temiz Prisma" değil.
+   Bunları da native Prisma'ya çevirmek ayrı, düşük riskli bir "temizlik"
+   oturumu olarak yapılabilir, aciliyeti yok.
 2. **Alacaklı/kredi bakiyesi desteği** — bir dairenin fazla ödeme yapıp
    "alacaklı" duruma geçebilmesi (şu an sadece borç/ödendi var, negatif
    bakiye/kredi kavramı yok).
