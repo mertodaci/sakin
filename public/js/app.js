@@ -297,7 +297,7 @@ const NAV_GROUPS = {
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
     { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"], ["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"]] },
-    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["butce", "Bütçe"]] },
+    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
     { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"], ["bilgibankasi", "Bilgi Bankası"]] },
@@ -640,6 +640,8 @@ async function renderTab(tab) {
     else if (tab === "muhasebekod") await renderMuhasebeKodlari(c);
     else if (tab === "mizan") await renderMizanRaporu(c);
     else if (tab === "fisler") await renderTahakkukFisleri(c);
+    else if (tab === "gunlukbilanco") await renderGunlukBilanco(c);
+    else if (tab === "aylikozet") await renderAylikOzetBilanco(c);
     else if (tab === "bilgibankasi") await renderBilgiBankasi(c);
     else if (tab === "toplusms") await renderTopluSms(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
@@ -1832,6 +1834,92 @@ async function renderTahakkukFisleri(c) {
     const f = Object.fromEntries(new FormData(e.target));
     fisler = await load(f.from, f.to);
     document.getElementById("fisTable").innerHTML = renderTable();
+  });
+}
+
+// Yonetimcell karsilastirmasi: "Gunluk Bilanco (Gunluk Kasa Gelir Gider
+// Raporu)" - tek kasa+tek gun icin Devir/Tahsilat/Odeme/Kalan ozeti.
+async function renderGunlukBilanco(c) {
+  const accounts = await api("/accounts");
+  const today = new Date().toISOString().slice(0, 10);
+  async function load(accountId, date) {
+    const qs = new URLSearchParams({ date });
+    if (accountId) qs.set("accountId", accountId);
+    return api("/reports/gunluk-bilanco?" + qs.toString());
+  }
+  let result = await load("", today);
+
+  function renderResult() {
+    const rows = [
+      ["Devir", result.devir],
+      ["Tahsilat Toplamı", result.tahsilat],
+      ["Ödeme Toplamı", -result.odeme],
+      ["Kasa Durumu (Kalan)", result.kalan],
+    ];
+    return `
+      <div class="report-wrap"><table class="report">
+        <tbody>
+          ${rows.map(([label, val]) => `<tr><td>${esc(label)}</td><td class="num f-num" style="color:${val >= 0 ? "var(--green)" : "var(--red)"};font-weight:700;">${tl(val)}</td></tr>`).join("")}
+        </tbody>
+      </table></div>`;
+  }
+
+  c.innerHTML = `
+    ${sectionTitle("Günlük Bilanço", "Tek kasa veya tüm kasaların bir günlük gelir-gider özeti")}
+    <div class="report-wrap">
+      <form id="gunlukForm" class="report-filter-bar">
+        <div class="field"><label>Kasa</label><select name="accountId"><option value="">Tümü</option>${accounts.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></div>
+        <div class="field"><label>Tarihi</label><input name="date" type="date" value="${today}" /></div>
+        <button class="btn btn-primary btn-sm" type="submit">Sorgula</button>
+      </form>
+    </div>
+    <div id="gunlukResult">${renderResult()}</div>
+  `;
+  document.getElementById("gunlukForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    try { result = await load(f.accountId, f.date); document.getElementById("gunlukResult").innerHTML = renderResult(); }
+    catch (err) { toast(err.message); }
+  });
+}
+
+// Yonetimcell karsilastirmasi: "Aylik Ozet Bilanco" - secilen ayin her
+// gunu icin Giren/Cikan/Kalan tablosu (tum kasalar toplami).
+async function renderAylikOzetBilanco(c) {
+  const now = new Date();
+  async function load(year, month) {
+    return api(`/reports/aylik-ozet-bilanco?year=${year}&month=${month}`);
+  }
+  let result = await load(now.getFullYear(), now.getMonth() + 1);
+
+  function renderResult() {
+    return `
+      <div class="report-wrap"><table class="report">
+        <thead><tr><th>Tarih</th><th class="num">Giren</th><th class="num">Çıkan</th><th class="num">Kalan</th></tr></thead>
+        <tbody>
+          ${result.rows.map((r) => `<tr><td>${dt(r.date)}</td><td class="num f-num" style="color:var(--green);">${r.giren ? tl(r.giren) : "-"}</td><td class="num f-num" style="color:var(--red);">${r.cikan ? tl(r.cikan) : "-"}</td><td class="num f-num" style="font-weight:600;">${tl(r.kalan)}</td></tr>`).join("")}
+        </tbody>
+        <tfoot><tr><td>TOPLAM</td><td class="num">${tl(result.totalGiren)}</td><td class="num">${tl(result.totalCikan)}</td><td class="num">${tl(result.totalKalan)}</td></tr></tfoot>
+      </table></div>`;
+  }
+
+  const monthNames = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+  c.innerHTML = `
+    ${sectionTitle("Aylık Özet Bilanço", "Seçilen ayın gün bazlı gelir-gider dökümü")}
+    <div class="report-wrap">
+      <form id="aylikOzetForm" class="report-filter-bar">
+        <div class="field"><label>Yıl</label><select name="year">${[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map((y) => `<option value="${y}">${y}</option>`).join("")}</select></div>
+        <div class="field"><label>Ay</label><select name="month">${monthNames.map((m, i) => `<option value="${i + 1}" ${i + 1 === now.getMonth() + 1 ? "selected" : ""}>${m}</option>`).join("")}</select></div>
+        <button class="btn btn-primary btn-sm" type="submit">Sorgula</button>
+      </form>
+    </div>
+    <div id="aylikOzetResult">${renderResult()}</div>
+  `;
+  document.getElementById("aylikOzetForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    try { result = await load(f.year, f.month); document.getElementById("aylikOzetResult").innerHTML = renderResult(); }
+    catch (err) { toast(err.message); }
   });
 }
 

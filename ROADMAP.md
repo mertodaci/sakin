@@ -632,6 +632,27 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   eşlemesi eklendi; bu, dosyadaki TÜM PDF uçlarını (tekli makbuz dahil)
   aynı riskten koruyor. `test-toplu-makbuz.js` ile doğrulandı.
 
+- ✅ **Ortak rapor görsel bileşeni** (`report-filter-bar` + `table.report`
+  CSS sınıfları, `style.css`) — Mert'in ekran tasarımı geri bildirimi
+  üzerine (Yönetimcell'in koyu başlıklı, filtre/tablo hiyerarşisi net
+  tablolarıyla karşılaştırma), tüm YENİ rapor sayfaları bundan sonra bu
+  bileşenle inşa ediliyor. Mevcut eski ekranlar (basit `table.simple`)
+  şimdilik dokunulmadı — backlog bittikten sonra tek seferde tüm
+  uygulamaya (ve menü yapısına) uygulanacak.
+
+- ✅ **Günlük Bilanço + Aylık Özet Bilanço** — `GET
+  /reports/gunluk-bilanco` (kasa+gün → Devir/Tahsilat/Ödeme/Kalan) ve
+  `GET /reports/aylik-ozet-bilanco` (yıl+ay → ayın her günü için
+  Giren/Çıkan/Kalan + Toplam satırı), yeni rapor CSS'iyle, Finans
+  grubuna eklendi. Mevcut `data.transactions` (her Payment/PartyPayment
+  otomatik bir Transaction'a bağlı) üzerinden hesaplanıyor.
+  **Yol boyunca bulunan gerçek hata**: Aylık Özet Bilanço'da günlük
+  tarih `Date.toISOString().slice(0,10)` ile üretiliyordu — bu UTC'ye
+  çevirir, sunucu saat dilimi UTC'nin ilerisinde (TR +3) olduğu için
+  her gün bir gün ERKEN gösteriliyordu (1 Ağustos yerine 31 Temmuz).
+  Elle `yıl-ay-gün` formatlamaya çevrilip düzeltildi.
+  `test-bilanco.js` ile doğrulandı.
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı
