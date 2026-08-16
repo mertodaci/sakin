@@ -719,6 +719,20 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
     yıl toplamı ile Taşınmaz/Detay'ın (ay filtresiz) toplamı çapraz
     kontrol edilip birbirini tuttuğu doğrulandı.
 
+- ✅ **Üye/Dönem + Üye/Detay Raporu** (`/reports/uye-donem`,
+  `/reports/uye-detay`) — Taşınmaz pivotlarının kişi bazlı ikizi:
+  satırlar taşınmaz değil, GÜNCEL sorumlu kişi (malik veya kiracı,
+  `Unit.occupancy`'ye göre). Aynı kişi birden fazla taşınmaza sahipse
+  isim eşleşmesiyle TEK satırda birleşiyor — test verisinde "Coklu
+  Test Malik" 16 ayrı taşınmaz satırından tek bir ₺2.450'lik satıra
+  düşüyor, doğrulandı. Durumu filtresi (Tümü/Malikler/Kiracılar).
+  **Bilinçli kapsam sınırı**: Yönetimcell'de "Eski Malikler/Eski
+  Kiracılar" diye ayrı durum seçeneği de var — bizde borç taşınmaza
+  bağlı (kişiye değil) olduğundan ve geçmiş sakinlerin borç geçmişini
+  kişi bazında ayrı tutmadığımızdan bu ikisi desteklenmiyor. Uydurma
+  veri eklemek yerine sadece gerçekten hesaplayabildiğimiz (güncel
+  malik/kiracı) filtreler sunuldu. `test-uye-pivot.js` ile doğrulandı.
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı

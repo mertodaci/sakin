@@ -297,7 +297,7 @@ const NAV_GROUPS = {
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
     { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"], ["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"]] },
-    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"], ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["butce", "Bütçe"]] },
+    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"], ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["uyedonem", "Üye/Dönem Raporu"], ["uyedetay", "Üye/Detay Raporu"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
     { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"], ["bilgibankasi", "Bilgi Bankası"]] },
@@ -650,6 +650,8 @@ async function renderTab(tab) {
     else if (tab === "tasinmazdonem") await renderTasinmazPivot(c, "unit-month");
     else if (tab === "donemdetay") await renderTasinmazPivot(c, "month-category");
     else if (tab === "tasinmazdetay") await renderTasinmazPivot(c, "unit-category");
+    else if (tab === "uyedonem") await renderTasinmazPivot(c, "person-month");
+    else if (tab === "uyedetay") await renderTasinmazPivot(c, "person-category");
     else if (tab === "bilgibankasi") await renderBilgiBankasi(c);
     else if (tab === "toplusms") await renderTopluSms(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
@@ -2200,18 +2202,22 @@ const PIVOT_META = {
   "unit-month": { endpoint: "tasinmaz-donem", title: "Taşınmaz/Dönem Raporu", sub: "Her taşınmazın aylık borçlanma/tahsilat dökümü", rowLabel: (r) => `${r.block} / ${r.no}` },
   "month-category": { endpoint: "donem-detay", title: "Dönem/Detay Raporu", sub: "Dönemlerin gider kategorisine göre dökümü", rowLabel: (r) => r.period },
   "unit-category": { endpoint: "tasinmaz-detay", title: "Taşınmaz/Detay Raporu", sub: "Her taşınmazın gider kategorisine göre dökümü (seçilen ay)", rowLabel: (r) => `${r.block} / ${r.no}` },
+  "person-month": { endpoint: "uye-donem", title: "Üye/Dönem Raporu", sub: "Her üyenin (malik/kiracı) aylık borçlanma/tahsilat dökümü — aynı kişinin birden fazla taşınmazı varsa tek satırda birleşir", rowLabel: (r) => r.name, hasDurum: true },
+  "person-category": { endpoint: "uye-detay", title: "Üye/Detay Raporu", sub: "Her üyenin gider kategorisine göre dökümü (seçilen ay)", rowLabel: (r) => r.name, hasDurum: true },
 };
 const METRIC_LABEL = { tahakkuk: "Tahakkuk Eden Tutar", tahsil: "Tahsil Edilen Tutar", net: "Net Hareket (Tahakkuk − Tahsil)" };
 
 async function renderTasinmazPivot(c, pivotType) {
   const meta = PIVOT_META[pivotType];
   const now = new Date();
-  async function load(year, metric, month) {
+  const needsMonth = pivotType === "unit-category" || pivotType === "person-category";
+  async function load(year, metric, month, durum) {
     const qs = new URLSearchParams({ year, metric });
-    if (pivotType === "unit-category" && month !== "" && month !== undefined) qs.set("month", month);
+    if (needsMonth && month !== "" && month !== undefined) qs.set("month", month);
+    if (meta.hasDurum && durum) qs.set("durum", durum);
     return api(`/reports/${meta.endpoint}?` + qs.toString());
   }
-  let result = await load(now.getFullYear(), "tahakkuk", pivotType === "unit-category" ? String(now.getMonth()) : undefined);
+  let result = await load(now.getFullYear(), "tahakkuk", needsMonth ? String(now.getMonth()) : undefined, "");
 
   function renderTable() {
     const cols = result.columns;
@@ -2230,7 +2236,8 @@ async function renderTasinmazPivot(c, pivotType) {
     <div class="report-wrap">
       <form id="pivotForm" class="report-filter-bar">
         <div class="field"><label>Yıl</label><select name="year">${[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map((y) => `<option value="${y}">${y}</option>`).join("")}</select></div>
-        ${pivotType === "unit-category" ? `<div class="field"><label>Ay</label><select name="month">${monthOptions}</select></div>` : ""}
+        ${needsMonth ? `<div class="field"><label>Ay</label><select name="month">${monthOptions}</select></div>` : ""}
+        ${meta.hasDurum ? `<div class="field"><label>Durumu</label><select name="durum"><option value="">Tümü</option><option value="malik">Malikler</option><option value="kiraci">Kiracılar</option></select></div>` : ""}
         <div class="field"><label>Seçim</label><select name="metric">${Object.entries(METRIC_LABEL).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
         <button class="btn btn-primary btn-sm" type="submit">Sorgula</button>
       </form>
@@ -2240,7 +2247,7 @@ async function renderTasinmazPivot(c, pivotType) {
   document.getElementById("pivotForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
-    try { result = await load(f.year, f.metric, f.month); document.getElementById("pivotResult").innerHTML = renderTable(); }
+    try { result = await load(f.year, f.metric, f.month, f.durum); document.getElementById("pivotResult").innerHTML = renderTable(); }
     catch (err) { toast(err.message); }
   });
 }

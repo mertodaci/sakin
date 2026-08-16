@@ -506,6 +506,13 @@ async function loadTasinmazPivotContext(req) {
 
   let units = data.units;
   if (block) units = units.filter((u) => u.block === block);
+  // "Uye" (kisi) bazli raporlar icin: Malikler/Kiraciler durum filtresi.
+  // Yonetimcell'de eski malik/kiraci de cari olarak ayri tutuluyor - bizde
+  // borc Unit'e bagli oldugundan (kisiye degil) o ayrimi yapamiyoruz, bu
+  // yuzden sadece GUNCEL Malik/Kiraci filtrelenebiliyor (dogru olan budur,
+  // uydurma bir "eski sakin borcu" verisi eklemiyoruz).
+  if (req.query.durum === "malik") units = units.filter((u) => u.occupancy !== "tenant");
+  else if (req.query.durum === "kiraci") units = units.filter((u) => u.occupancy === "tenant");
   const unitIds = new Set(units.map((u) => u.id));
   const charges = data.charges.filter((c) => unitIds.has(c.unitId));
   const chargeById = new Map(charges.map((c) => [c.id, c]));
@@ -613,6 +620,48 @@ router.get("/reports/tasinmaz-detay", requireAuth, requireRole("yonetici"), asyn
   const rows = buildMatrix(ctx, (c) => c.unitId, colKeys, colOf);
   const out = rows.map((r) => { const u = ctx.unitById.get(r.row); return { block: u?.block || "-", no: u?.no || "-", ...r.values, total: r.total }; })
     .sort((a, b) => a.block.localeCompare(b.block, "tr") || a.no.localeCompare(b.no, "tr", { numeric: true }));
+  res.json({ columns: colKeys, rows: out });
+});
+
+// Kisi (uye/cari) adini dondurur - Unit'in guncel sorumlusu (malik oturuyorsa
+// malik, kiraci oturuyorsa kiraci). Ayni kisi birden fazla tasinmaza sahipse
+// (isim eslesmesiyle) satirlar burada birlesir - "kisi bazli" ile "taşınmaz
+// bazli" raporlar arasindaki gercek fark budur.
+function personOf(unit) {
+  if (!unit) return null;
+  const name = unit.occupancy === "tenant" ? unit.tenantName : unit.ownerName;
+  return (name || "").trim() || null;
+}
+
+// 4) Üye/Dönem: satir=kisi (malik/kiraci), sutun=Devreden+12 ay
+router.get("/reports/uye-donem", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const ctx = await loadTasinmazPivotContext(req);
+  const colKeys = ["devreden", ...MONTH_NAMES];
+  const colOf = (charge, paymentMonth) => {
+    const m = paymentMonth !== undefined ? paymentMonth : ctx.monthOf(charge.createdAt);
+    if (m === null) return null;
+    return m === -1 ? "devreden" : MONTH_NAMES[m];
+  };
+  const rowKeyFn = (c) => personOf(ctx.unitById.get(c.unitId)) || "Bilinmeyen";
+  const rows = buildMatrix(ctx, rowKeyFn, colKeys, colOf);
+  const out = rows.filter((r) => r.row !== "Bilinmeyen" || r.total !== 0).map((r) => ({ name: r.row, ...r.values, total: r.total })).sort((a, b) => a.name.localeCompare(b.name, "tr"));
+  res.json({ columns: colKeys, rows: out });
+});
+
+// 5) Üye/Detay: tek bir ay+yil icin satir=kisi, sutun=gider kategorisi
+router.get("/reports/uye-detay", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const ctx = await loadTasinmazPivotContext(req);
+  const month = req.query.month !== undefined && req.query.month !== "" ? Number(req.query.month) : null;
+  const colKeys = Array.from(new Set(ctx.charges.map((c) => ctx.catLabel(c)))).sort((a, b) => a.localeCompare(b, "tr"));
+  const colOf = (charge, paymentMonth) => {
+    const m = paymentMonth !== undefined ? paymentMonth : ctx.monthOf(charge.createdAt);
+    if (m === null || m === -1) return null;
+    if (month !== null && m !== month) return null;
+    return ctx.catLabel(charge);
+  };
+  const rowKeyFn = (c) => personOf(ctx.unitById.get(c.unitId)) || "Bilinmeyen";
+  const rows = buildMatrix(ctx, rowKeyFn, colKeys, colOf);
+  const out = rows.filter((r) => r.row !== "Bilinmeyen" || r.total !== 0).map((r) => ({ name: r.row, ...r.values, total: r.total })).sort((a, b) => a.name.localeCompare(b.name, "tr"));
   res.json({ columns: colKeys, rows: out });
 });
 
