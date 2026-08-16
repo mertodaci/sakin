@@ -820,3 +820,20 @@ model ArchiveFile {
 
   @@index([folderId])
 }
+
+// ---------------- Bilgi Bankasi ----------------
+// Yonetimcell karsilastirmasi: Hukuki menusu altinda kategorize edilmis,
+// aranabilir bir bilgi/yardim makaleleri kutuphanesi (Bilgi Bankasi/Ornek
+// Yazismalar/Yonetmelikler). Yonetimcell'de bu icerik onlarin kendi editoryal
+// (telifli) metinleriydi - bizde ayni MEKANIZMA kuruldu, ornek icerikler
+// bagimsiz/orijinal olarak yazildi, yonetici sonradan kendi metinleriyle
+// dolduracak.
+model KnowledgeArticle {
+  id        String   @id @default(uuid())
+  category  String
+  title     String
+  content   String
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+}

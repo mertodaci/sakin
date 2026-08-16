@@ -617,8 +617,12 @@ router.get("/documents/firma-mutabakat/:vendorId", requireAuth, requireRole("yon
   });
   db.logActivity(data, req.user, "document.firma-mutabakat", `${vendor.name} için mutabakat mektubu indirildi.`, null);
   await db.save(data);
+  // Content-Disposition header'i Turkce karakter icerince Node ERR_INVALID_CHAR
+  // firlatir (raw header sadece Latin-1 kabul eder) - dosya adi ASCII'ye
+  // indirgeniyor (trSafe) ve kalan gecersiz karakterler temizleniyor.
+  const safeFileName = trSafe(vendor.name).replace(/[^a-zA-Z0-9 _-]/g, "").trim() || "firma";
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="mutabakat-${vendor.name}.pdf"`);
+  res.setHeader("Content-Disposition", `attachment; filename="mutabakat-${safeFileName}.pdf"`);
   res.send(Buffer.from(bytes));
 });
 

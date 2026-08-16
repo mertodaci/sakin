@@ -543,11 +543,25 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
     gerektiriyor (README'nin "Neler Gerçek, Neler Demo" ayrımı) —
     burada üretilen PDF'ler kullanıcının kendi mali müşavirine
     iletmesi için, resmi e-defter beyanı yerine geçmez.
-**Sırada:**
-1. ⏳ Bilgi Bankası — Mert'in talebi üzerine ("ikisini de öyle yapalım")
-   Yönetimcell'deki gerçek haliyle incelenip aynı şekilde ele alınacak
-   (daha önce "düşük öncelik, atlanabilir" olarak not edilmişti, ama
-   şimdi açıkça isteniyor). **Buradan devam et.**
+- ✅ **Bilgi Bankası** — Mert'in talebi üzerine ("ikisini de öyle
+  yapalım") canlı hesapta Hukuki menüsü altında incelendi (daha önce
+  "düşük öncelik, atlanabilir" not edilmişti ama açıkça istenince ele
+  alındı). Kategorize edilmiş (Bilgi Bankası/Örnek Yazışmalar/
+  Yönetmelikler), aranabilir bir yardım makaleleri kütüphanesi.
+  **Önemli not**: Yönetimcell'deki içerik onların kendi telifli
+  editoryal metinleriydi — o metinler kopyalanmadı, sadece MEKANİZMA
+  (kategori+arama+CRUD) aynı şekilde kuruldu. Yeni `KnowledgeArticle`
+  modeli; `routes/knowledge.js` (okuma tüm rollere açık, yazma sadece
+  yönetici); yeni "Bilgi Bankası" sekmesi hem yönetici (Kurul & Hukuk
+  grubu, tam CRUD) hem sakin (Sistem grubu, salt okunur) tarafında.
+  5 özgün örnek makale (kendi ifadelerimizle, Kat Mülkiyeti Kanunu
+  temel konuları) seed edildi — yönetici bunları düzenleyip
+  genişletebilir. `test-knowledge.js` ile regresyon testleri geçiyor.
+  **Yol boyunca bulunan gerçek hata**: `firma-mutabakat` PDF ucu,
+  firma adı Türkçe karakter içerdiğinde (`Content-Disposition`
+  header'ı sadece Latin-1 kabul ettiği için) `ERR_INVALID_CHAR` ile
+  500 veriyordu — dosya adı `trSafe()` ile ASCII'ye indirgenip
+  düzeltildi.
 
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar

@@ -280,6 +280,7 @@ const NAV_ICON = {
   muhasebekod: '<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="12" y2="11"/><line x1="8" y1="15" x2="14" y2="15"/>',
   mizan: '<path d="M12 3v18"/><path d="M5 8l-3 5a3 3 0 0 0 6 0z"/><path d="M19 8l-3 5a3 3 0 0 0 6 0z"/><path d="M5 8h14"/><path d="M8 21h8"/>',
   fisler: '<path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="5" y="4" width="14" height="17" rx="2"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/>',
+  bilgibankasi: '<circle cx="12" cy="12" r="10"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2 1.8-2 3.5"/><line x1="12" y1="16.5" x2="12" y2="16.5"/>',
   ayarlar: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/>',
 };
 function navIcon(id) { return svgIcon(NAV_ICON[id] || NAV_ICON.ozet); }
@@ -291,7 +292,7 @@ const NAV_GROUPS = {
     { group: "Hesabım", items: [["aidat", "Aidatım"], ["sayac", "Sayaçlarım"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"]] },
     { group: "Hizmetler", items: [["rezervasyon", "Rezervasyon"], ["talep", "Arıza/Talep"], ["kargo", "Kargolarım"]] },
-    { group: "Sistem", items: [["seffaflik", "Şeffaflık"]] },
+    { group: "Sistem", items: [["seffaflik", "Şeffaflık"], ["bilgibankasi", "Bilgi Bankası"]] },
   ],
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
@@ -299,7 +300,7 @@ const NAV_GROUPS = {
     { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
-    { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"]] },
+    { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"], ["bilgibankasi", "Bilgi Bankası"]] },
     { group: "Sistem", items: [["seffaflik", "Şeffaflık"], ["ayarlar", "Ayarlar"]] },
   ],
   personel: [
@@ -635,6 +636,7 @@ async function renderTab(tab) {
     else if (tab === "muhasebekod") await renderMuhasebeKodlari(c);
     else if (tab === "mizan") await renderMizanRaporu(c);
     else if (tab === "fisler") await renderTahakkukFisleri(c);
+    else if (tab === "bilgibankasi") await renderBilgiBankasi(c);
     else if (tab === "toplusms") await renderTopluSms(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
   } catch (err) {
@@ -1751,6 +1753,109 @@ async function renderTahakkukFisleri(c) {
     const f = Object.fromEntries(new FormData(e.target));
     fisler = await load(f.from, f.to);
     document.getElementById("fisTable").innerHTML = renderTable();
+  });
+}
+
+const KNOWLEDGE_CATEGORIES = ["Bilgi Bankası", "Örnek Yazışmalar", "Yönetmelikler"];
+
+// Yonetimcell karsilastirmasi: Hukuki menusu altindaki "Bilgi Bankasi" -
+// kategorize edilmis, aranabilir bir yardim makaleleri kutuphanesi. Okuma
+// tum roller icin acik, yazma sadece yonetici.
+async function renderBilgiBankasi(c) {
+  const isYonetici = state.user.role === "yonetici";
+  async function load(category, search) {
+    const qs = new URLSearchParams();
+    if (category) qs.set("category", category);
+    if (search) qs.set("search", search);
+    return api("/knowledge-articles?" + qs.toString());
+  }
+  let articles = await load();
+  let openId = null;
+
+  function renderList() {
+    const grouped = new Map();
+    articles.forEach((a) => {
+      if (!grouped.has(a.category)) grouped.set(a.category, []);
+      grouped.get(a.category).push(a);
+    });
+    return [...grouped.entries()].map(([cat, list]) => `
+      <div class="card tight mb-16">
+        <div class="ledger-title">${esc(cat)}</div>
+        ${list.map((a) => `
+          <div class="ledger-row" style="flex-wrap:wrap;cursor:pointer;" data-toggle-article="${a.id}">
+            <div style="font-size:14px;font-weight:600;">${esc(a.title)}</div>
+            ${isYonetici ? `<div style="display:flex;gap:8px;"><button class="btn btn-ghost btn-sm" data-edit-article="${a.id}">Düzenle</button><button class="btn-danger" data-del-article="${a.id}">Sil</button></div>` : ""}
+            ${openId === a.id ? `<div style="width:100%;font-size:14px;color:var(--steel);margin-top:8px;white-space:pre-wrap;">${esc(a.content)}</div>` : ""}
+          </div>`).join("")}
+      </div>`).join("") || '<div class="empty-row">Sonuç bulunamadı.</div>';
+  }
+
+  function bindListEvents() {
+    c.querySelectorAll("[data-toggle-article]").forEach((row) => row.addEventListener("click", (e) => {
+      if (e.target.closest("[data-edit-article],[data-del-article]")) return;
+      openId = openId === row.dataset.toggleArticle ? null : row.dataset.toggleArticle;
+      document.getElementById("kbList").innerHTML = renderList();
+      bindListEvents();
+    }));
+    c.querySelectorAll("[data-edit-article]").forEach((b) => b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const article = articles.find((a) => a.id === b.dataset.editArticle);
+      showForm(article);
+    }));
+    c.querySelectorAll("[data-del-article]").forEach((b) => b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!confirm("Bu makale silinsin mi?")) return;
+      try { await api("/knowledge-articles/" + b.dataset.delArticle, { method: "DELETE" }); toast("Makale silindi."); renderTab("bilgibankasi"); }
+      catch (err) { toast(err.message); }
+    }));
+  }
+
+  function showForm(article) {
+    const box = document.getElementById("kbForm");
+    box.innerHTML = `
+      <form id="kbCreateForm" class="card form-card">
+        <div class="field"><label>Kategori</label><select name="category">${KNOWLEDGE_CATEGORIES.map((cat) => `<option value="${esc(cat)}" ${article?.category === cat ? "selected" : ""}>${esc(cat)}</option>`).join("")}</select></div>
+        <div class="field"><label>Başlık</label><input name="title" required value="${esc(article?.title || "")}" /></div>
+        <div class="field"><label>İçerik</label><textarea name="content" rows="4" required>${esc(article?.content || "")}</textarea></div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn btn-ghost" id="kbFormCancel">Vazgeç</button>
+          <button type="submit" class="btn btn-primary">Kaydet</button>
+        </div>
+      </form>`;
+    box.querySelector("#kbFormCancel").addEventListener("click", () => { box.innerHTML = ""; });
+    box.querySelector("#kbCreateForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(e.target));
+      try {
+        if (article) await api("/knowledge-articles/" + article.id, { method: "PATCH", body: f });
+        else await api("/knowledge-articles", { method: "POST", body: f });
+        toast("Makale kaydedildi.");
+        renderTab("bilgibankasi");
+      } catch (err) { toast(err.message); }
+    });
+  }
+
+  c.innerHTML = `
+    <div class="flex-between">${sectionTitle("Bilgi Bankası", "Kategorize edilmiş yardım makaleleri ve örnek yazışmalar")}${isYonetici ? '<button class="btn btn-ghost btn-sm" id="kbNewBtn" style="margin-bottom:16px;">+ Yeni Makale</button>' : ""}</div>
+    <div class="card tight mb-16" style="padding:14px;">
+      <form id="kbFilterForm" class="form-row">
+        <div class="field"><label>Kategori</label><select name="category"><option value="">Tümü</option>${KNOWLEDGE_CATEGORIES.map((cat) => `<option value="${esc(cat)}">${esc(cat)}</option>`).join("")}</select></div>
+        <div class="field" style="flex:1 1 220px;"><label>Ara</label><input name="search" placeholder="Başlık veya içerikte ara…" /></div>
+        <button class="btn btn-ghost btn-sm" type="submit">Ara</button>
+      </form>
+    </div>
+    <div id="kbForm"></div>
+    <div id="kbList">${renderList()}</div>
+  `;
+  bindListEvents();
+  if (isYonetici) document.getElementById("kbNewBtn").addEventListener("click", () => showForm(null));
+  document.getElementById("kbFilterForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    articles = await load(f.category, f.search);
+    openId = null;
+    document.getElementById("kbList").innerHTML = renderList();
+    bindListEvents();
   });
 }
 
