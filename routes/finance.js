@@ -1,205 +1,224 @@
 const express = require("express");
+const { Prisma } = require("@prisma/client");
 const db = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
 const router = express.Router();
-
-function unitDebt(data, unitId) {
-  return data.charges
-    .filter((c) => c.unitId === unitId && c.status !== "paid")
-    .reduce((sum, c) => sum + (c.amount - c.paidAmount), 0);
-}
+const prisma = db.prisma;
 
 function scopedUnitId(req) {
   return req.user.role === "sakin" ? req.user.unitId : null;
 }
 
+async function formatUnit(unitId) {
+  const u = await prisma.unit.findUnique({ where: { id: unitId } });
+  return u ? `${u.block} - Daire ${u.no}` : "Bir daire";
+}
+
 /* ---------------- CHARGES (Borclandirmalar: aidat, sayac, diger) ---------------- */
 
 router.get("/charges", requireAuth, async (req, res) => {
-  const data = await db.load();
-  let list = data.charges;
   const unitFilter = req.query.unitId || scopedUnitId(req);
-  if (unitFilter) list = list.filter((c) => c.unitId === unitFilter);
-  res.json(list.slice().sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate)));
+  const charges = await prisma.charge.findMany({
+    where: unitFilter ? { unitId: unitFilter } : undefined,
+    orderBy: { dueDate: "desc" },
+  });
+  res.json(charges);
 });
 
 // Aylik aidat borclandirmasini tum dairelere otomatik uygular (mukerrer donem atlanir)
 router.post("/charges/generate-month", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   const { period, amount, dueDate } = req.body || {};
   if (!period || !amount) return res.status(400).json({ error: "Dönem (YYYY-MM) ve tutar zorunludur." });
 
-  let created = 0;
-  data.units.forEach((u) => {
-    const exists = data.charges.some((c) => c.unitId === u.id && c.type === "aidat" && c.period === period);
-    if (exists) return;
-    data.charges.push({
-      id: db.uid(),
-      unitId: u.id,
-      type: "aidat",
-      period,
-      amount: Number(amount),
-      dueDate: dueDate || new Date().toISOString(),
-      status: "unpaid",
-      paidAmount: 0,
-      description: `${period} ayı aidatı`,
-      createdAt: new Date().toISOString(),
-    });
-    created++;
-  });
-  data.meta.monthlyDueDefault = Number(amount);
-  db.logActivity(data, req.user, "charge.generate", `${period} dönemi aidat borcu ${created} daireye uygulandı (${amount}₺/daire).`, null);
-  await db.save(data);
-  res.status(201).json({ message: `${created} daire için ${period} dönemi aidat borcu oluşturuldu.` });
+  const units = await prisma.unit.findMany();
+  const existing = await prisma.charge.findMany({ where: { type: "aidat", period }, select: { unitId: true } });
+  const existingUnitIds = new Set(existing.map((c) => c.unitId));
+  const toCreate = units.filter((u) => !existingUnitIds.has(u.id));
+  const dueDateValue = dueDate ? new Date(dueDate) : new Date();
+
+  await prisma.$transaction([
+    prisma.charge.createMany({
+      data: toCreate.map((u) => ({
+        unitId: u.id,
+        type: "aidat",
+        period,
+        amount: new Prisma.Decimal(amount),
+        dueDate: dueDateValue,
+        status: "unpaid",
+        paidAmount: 0,
+        description: `${period} ayı aidatı`,
+      })),
+    }),
+    prisma.settings.update({ where: { id: "singleton" }, data: { monthlyDueDefault: new Prisma.Decimal(amount) } }),
+    prisma.activityLog.create({
+      data: { actorId: req.user.id, actorName: req.user.name, action: "charge.generate", detail: `${period} dönemi aidat borcu ${toCreate.length} daireye uygulandı (${amount}₺/daire).` },
+    }),
+  ]);
+
+  res.status(201).json({ message: `${toCreate.length} daire için ${period} dönemi aidat borcu oluşturuldu.` });
 });
 
 router.post("/charges", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   const { unitId, type, period, amount, dueDate, description } = req.body || {};
   if (!unitId || !amount) return res.status(400).json({ error: "Daire ve tutar zorunludur." });
-  const charge = { id: db.uid(), unitId, type: type || "diger", period: period || "", amount: Number(amount), dueDate: dueDate || new Date().toISOString(), status: "unpaid", paidAmount: 0, lateFeeAppliedPeriods: [], description: description || "", createdAt: new Date().toISOString() };
-  data.charges.push(charge);
-  db.logActivity(data, req.user, "charge.create", `${formatUnit(data, unitId)} için ${amount}₺ borçlandırma eklendi: ${description || "-"}`, unitId);
-  await db.save(data);
+  const charge = await prisma.charge.create({
+    data: {
+      unitId,
+      type: type || "diger",
+      period: period || "",
+      amount: new Prisma.Decimal(amount),
+      dueDate: dueDate ? new Date(dueDate) : new Date(),
+      status: "unpaid",
+      paidAmount: 0,
+      lateFeeAppliedPeriods: [],
+      description: description || "",
+    },
+  });
+  await prisma.activityLog.create({
+    data: { actorId: req.user.id, actorName: req.user.name, action: "charge.create", detail: `${await formatUnit(unitId)} için ${amount}₺ borçlandırma eklendi: ${description || "-"}`, scopeUnitId: unitId },
+  });
   res.status(201).json(charge);
 });
 
-// Bir borc kalemini siler - sadece hic odeme yapilmamissa (paidAmount=0). Kismen veya
-// tamamen odenmis bir borcu silmek istersen once ilgili odemeyi iptal etmen gerekir,
-// aksi halde odeme kaydiyla borc kaydi tutarsiz kalir.
+// Bir borc kalemini siler - sadece hic odeme yapilmamissa (paidAmount=0 VE hicbir
+// PaymentAllocation'a bagli degilse - iptal edilmis kismi bir odemenin gecmis
+// allocation kaydi olabilir, PaymentAllocation->Charge FK'si (onDelete: Restrict)
+// bunu zaten engeller ama once dostane bir Turkce hata donduruyoruz).
 router.delete("/charges/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const charge = data.charges.find((c) => c.id === req.params.id);
+  const charge = await prisma.charge.findUnique({ where: { id: req.params.id } });
   if (!charge) return res.status(404).json({ error: "Borç kaydı bulunamadı." });
-  if (charge.paidAmount > 0) return res.status(400).json({ error: "Bu borca kısmen veya tamamen ödeme yapılmış, önce ilgili ödemeyi Aidat Takibi ekranından iptal edin." });
-  data.charges = data.charges.filter((c) => c.id !== req.params.id);
-  db.logActivity(data, req.user, "charge.delete", `${formatUnit(data, charge.unitId)} için ${charge.amount}₺ borçlandırma silindi: ${charge.description || "-"}`, charge.unitId);
-  await db.save(data);
+  const allocationCount = await prisma.paymentAllocation.count({ where: { chargeId: charge.id } });
+  if (charge.paidAmount.gt(0) || allocationCount > 0) {
+    return res.status(400).json({ error: "Bu borca kısmen veya tamamen ödeme yapılmış, önce ilgili ödemeyi Aidat Takibi ekranından iptal edin." });
+  }
+  await prisma.charge.delete({ where: { id: charge.id } });
+  await prisma.activityLog.create({
+    data: { actorId: req.user.id, actorName: req.user.name, action: "charge.delete", detail: `${await formatUnit(charge.unitId)} için ${charge.amount}₺ borçlandırma silindi: ${charge.description || "-"}`, scopeUnitId: charge.unitId },
+  });
   res.json({ message: "Borç kaydı silindi." });
 });
 
 router.patch("/charges/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const charge = data.charges.find((c) => c.id === req.params.id);
+  const charge = await prisma.charge.findUnique({ where: { id: req.params.id } });
   if (!charge) return res.status(404).json({ error: "Borç kaydı bulunamadı." });
-  if (charge.paidAmount > 0) return res.status(400).json({ error: "Kısmen veya tamamen ödenmiş bir borcun tutarı değiştirilemez." });
+  if (charge.paidAmount.gt(0)) return res.status(400).json({ error: "Kısmen veya tamamen ödenmiş bir borcun tutarı değiştirilemez." });
   const { amount, description, dueDate } = req.body || {};
-  if (amount !== undefined) charge.amount = Number(amount);
-  if (description !== undefined) charge.description = description;
-  if (dueDate !== undefined) charge.dueDate = dueDate;
-  db.logActivity(data, req.user, "charge.update", `${formatUnit(data, charge.unitId)} için borç kaydı düzenlendi.`, charge.unitId);
-  await db.save(data);
-  res.json(charge);
+  const data = {};
+  if (amount !== undefined) data.amount = new Prisma.Decimal(amount);
+  if (description !== undefined) data.description = description;
+  if (dueDate !== undefined) data.dueDate = new Date(dueDate);
+  const updated = await prisma.charge.update({ where: { id: charge.id }, data });
+  await prisma.activityLog.create({
+    data: { actorId: req.user.id, actorName: req.user.name, action: "charge.update", detail: `${await formatUnit(charge.unitId)} için borç kaydı düzenlendi.`, scopeUnitId: charge.unitId },
+  });
+  res.json(updated);
 });
 
 /* ---------------- PAYMENTS ---------------- */
 
+function toAppliedTo(payment) {
+  const { allocations, ...rest } = payment;
+  return { ...rest, appliedTo: allocations.map((a) => ({ chargeId: a.chargeId, amount: a.amount })) };
+}
+
 router.get("/payments", requireAuth, async (req, res) => {
-  const data = await db.load();
-  let list = data.payments;
   const unitFilter = req.query.unitId || scopedUnitId(req);
-  if (unitFilter) list = list.filter((p) => p.unitId === unitFilter);
-  res.json(list.slice().sort((a, b) => new Date(b.date) - new Date(a.date)));
+  const payments = await prisma.payment.findMany({
+    where: unitFilter ? { unitId: unitFilter } : undefined,
+    include: { allocations: true },
+    orderBy: { date: "desc" },
+  });
+  res.json(payments.map(toAppliedTo));
 });
 
 // Odemeyi en eski acik borctan baslayarak dagitir (FIFO); hangi borca ne kadar
-// uygulandigi (appliedTo) ayrica kaydedilir - boylece odeme daha sonra hatasiz
-// iptal edilebilir (kismi tahsilatlar da dahil).
-function applyPayment(data, unitId, amount, method, userId, note, accountId) {
-  let remaining = Number(amount);
+// uygulandigi (PaymentAllocation satirlari) ayrica kaydedilir - boylece odeme daha
+// sonra hatasiz iptal edilebilir (kismi tahsilatlar da dahil). Borc guncelleme +
+// PaymentAllocation + Transaction + Notification hep birlikte tek $transaction
+// icinde yazilir - biri basarisiz olursa hicbiri kalici olmaz.
+async function applyPayment(tx, { unitId, amount, method, userId, userName, note, accountId }) {
+  const amt = new Prisma.Decimal(amount);
+  let remaining = amt;
   const appliedTo = [];
-  const openCharges = data.charges
-    .filter((c) => c.unitId === unitId && c.status !== "paid")
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+  const openCharges = await tx.charge.findMany({
+    where: { unitId, status: { not: "paid" } },
+    orderBy: { dueDate: "asc" },
+  });
 
   for (const c of openCharges) {
-    if (remaining <= 0) break;
-    const owed = c.amount - c.paidAmount;
-    const applied = Math.min(owed, remaining);
-    c.paidAmount += applied;
-    remaining -= applied;
-    c.status = c.paidAmount >= c.amount ? "paid" : "partial";
+    if (remaining.lte(0)) break;
+    const owed = c.amount.minus(c.paidAmount);
+    const applied = Prisma.Decimal.min(owed, remaining);
+    const newPaid = c.paidAmount.plus(applied);
+    await tx.charge.update({ where: { id: c.id }, data: { paidAmount: newPaid, status: newPaid.gte(c.amount) ? "paid" : "partial" } });
+    remaining = remaining.minus(applied);
     appliedTo.push({ chargeId: c.id, amount: applied });
   }
 
-  const resolvedAccountId = accountId || data.meta.defaultAccountId;
-  const transactionId = db.uid();
-  const payment = {
-    id: db.uid(),
-    unitId,
-    userId: userId || null,
-    amount: Number(amount),
-    method: method || "Elden",
-    accountId: resolvedAccountId,
-    date: new Date().toISOString(),
-    note: note || (remaining > 0 ? `${remaining}₺ borç kalmadığı için avans olarak işlendi` : ""),
-    receiptNo: "MK-" + Math.floor(100000 + Math.random() * 899999),
-    appliedTo,
-    transactionId,
-    cancelled: false,
-  };
-  data.payments.unshift(payment);
-  data.transactions.unshift({ id: transactionId, type: "gelir", category: "Aidat Tahsilatı", amount: Number(amount), accountId: resolvedAccountId, date: payment.date, description: `Tahsilat - ${payment.receiptNo}`, createdBy: userId || "sistem" });
+  const settings = await tx.settings.findUniqueOrThrow({ where: { id: "singleton" } });
+  const resolvedAccountId = accountId || settings.defaultAccountId;
+  const receiptNo = "MK-" + Math.floor(100000 + Math.random() * 899999);
 
-  const unit = data.units.find((u) => u.id === unitId);
-  data.notifications.push({ id: db.uid(), userId: "admin1", message: `${unit ? unit.block + " D:" + unit.no : "Bir daire"} ödeme yaptı: ${amount}₺`, read: false, date: payment.date, link: "#/tahsilat" });
+  const transaction = await tx.transaction.create({
+    data: { type: "gelir", category: "Aidat Tahsilatı", amount: amt, accountId: resolvedAccountId, description: `Tahsilat - ${receiptNo}`, createdBy: userId || "sistem" },
+  });
+
+  const payment = await tx.payment.create({
+    data: {
+      unitId,
+      userId: userId || null,
+      amount: amt,
+      method: method || "Elden",
+      accountId: resolvedAccountId,
+      note: note || (remaining.gt(0) ? `${remaining.toString()}₺ borç kalmadığı için avans olarak işlendi` : ""),
+      receiptNo,
+      transactionId: transaction.id,
+      allocations: { create: appliedTo.map((a) => ({ chargeId: a.chargeId, amount: a.amount })) },
+    },
+    include: { allocations: true },
+  });
+
+  const unit = await tx.unit.findUnique({ where: { id: unitId } });
+  await tx.notification.create({
+    data: { userId: "admin1", message: `${unit ? unit.block + " D:" + unit.no : "Bir daire"} ödeme yaptı: ${amount}₺`, read: false, link: "#/tahsilat" },
+  });
+  await tx.activityLog.create({
+    data: { actorId: userId || "sistem", actorName: userName || "Sistem", action: "payment.create", detail: `${unit ? `${unit.block} - Daire ${unit.no}` : "Bir daire"} için ${amount}₺ ödeme kaydedildi (${payment.method}, makbuz ${payment.receiptNo}).`, scopeUnitId: unitId },
+  });
 
   return payment;
 }
 
 // Cift-tiklama / ag tekrarindan kaynaklanan cift odeme sikayetlerine karsi:
 // istemci her odeme denemesinde benzersiz bir requestId gonderir, ayni id
-// ikinci kez islenmez (idempotency key deseni).
+// ikinci kez islenmez (idempotency key deseni - PaymentRequest tablosunda unique
+// constraint, mukerrer istek Prisma P2002 hatasiyla yakalanip 409 donduruluyor).
 router.post("/payments/pay", requireAuth, async (req, res) => {
-  const data = await db.load();
   const unitId = req.user.role === "sakin" ? req.user.unitId : req.body.unitId;
   const { amount, method, requestId, accountId } = req.body || {};
   if (!unitId || !amount || Number(amount) <= 0) return res.status(400).json({ error: "Geçerli bir daire ve tutar giriniz." });
 
-  if (requestId) {
-    if (data.usedPaymentRequestIds.includes(requestId)) {
-      return res.status(409).json({ error: "Bu ödeme isteği zaten işlendi (mükerrer istek engellendi)." });
-    }
-    data.usedPaymentRequestIds.push(requestId);
-    if (data.usedPaymentRequestIds.length > 5000) data.usedPaymentRequestIds.splice(0, 1000);
+  try {
+    const payment = await prisma.$transaction(async (tx) => {
+      if (requestId) {
+        try {
+          await tx.paymentRequest.create({ data: { id: requestId } });
+        } catch (e) {
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+            throw Object.assign(new Error("DUPLICATE_REQUEST"), { isDuplicate: true });
+          }
+          throw e;
+        }
+      }
+      return applyPayment(tx, { unitId, amount, method, userId: req.user.id, userName: req.user.name, accountId });
+    });
+    res.status(201).json(toAppliedTo(payment));
+  } catch (e) {
+    if (e.isDuplicate) return res.status(409).json({ error: "Bu ödeme isteği zaten işlendi (mükerrer istek engellendi)." });
+    throw e;
   }
-
-  const payment = applyPayment(data, unitId, amount, method, req.user.id, "", accountId);
-  db.logActivity(data, req.user, "payment.create", `${formatUnit(data, unitId)} için ${amount}₺ ödeme kaydedildi (${payment.method}, makbuz ${payment.receiptNo}).`, unitId);
-  await db.save(data);
-  res.status(201).json(payment);
-});
-
-function formatUnit(data, unitId) {
-  const u = data.units.find((x) => x.id === unitId);
-  return u ? `${u.block} - Daire ${u.no}` : "Bir daire";
-}
-
-// Bir odemeyi iptal eder: ilgili borclardaki paidAmount'lari geri duser (appliedTo
-// kaydina gore, kismi tahsilatlarda dahil dogru calisir), bagli muhasebe hareketini
-// siler ve odemeyi "iptal edildi" olarak isaretler (kayit izlenebilirlik icin silinmez).
-router.post("/payments/:id/cancel", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const payment = data.payments.find((p) => p.id === req.params.id);
-  if (!payment) return res.status(404).json({ error: "Ödeme bulunamadı." });
-  if (payment.cancelled) return res.status(400).json({ error: "Bu ödeme zaten iptal edilmiş." });
-
-  (payment.appliedTo || []).forEach(({ chargeId, amount }) => {
-    const charge = data.charges.find((c) => c.id === chargeId);
-    if (!charge) return;
-    charge.paidAmount = Math.max(0, charge.paidAmount - amount);
-    charge.status = charge.paidAmount <= 0 ? "unpaid" : charge.paidAmount >= charge.amount ? "paid" : "partial";
-  });
-
-  data.transactions = data.transactions.filter((t) => t.id !== payment.transactionId);
-  payment.cancelled = true;
-  payment.cancelledAt = new Date().toISOString();
-  payment.cancelledBy = req.user.id;
-
-  db.logActivity(data, req.user, "payment.cancel", `${formatUnit(data, payment.unitId)} için ${payment.amount}₺ tutarındaki ödeme (makbuz ${payment.receiptNo}) iptal edildi.`, payment.unitId);
-  await db.save(data);
-  res.json({ message: "Ödeme iptal edildi, ilgili borç yeniden açıldı." });
 });
 
 // Odeme altyapisina hazir ama bu surumde pasif uc (bkz README - gercek kredi karti icin
@@ -208,59 +227,115 @@ router.post("/pay-online", requireAuth, async (req, res) => {
   res.status(501).json({ error: "Online kredi kartı ödemesi bu sürümde aktif değil. Bir ödeme kuruluşu (iyzico, PayTR vb.) entegrasyonu gereklidir - bkz. README." });
 });
 
+// Bir odemeyi iptal eder: ilgili borclardaki paidAmount'lari geri duser (allocation
+// kaydina gore, kismi tahsilatlarda dahil dogru calisir), bagli muhasebe hareketini
+// siler ve odemeyi "iptal edildi" olarak isaretler (kayit izlenebilirlik icin silinmez).
+router.post("/payments/:id/cancel", requireAuth, requireRole("yonetici"), async (req, res) => {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.findUnique({ where: { id: req.params.id }, include: { allocations: true } });
+      if (!payment) throw Object.assign(new Error("NOT_FOUND"), { httpStatus: 404, msg: "Ödeme bulunamadı." });
+      if (payment.cancelled) throw Object.assign(new Error("ALREADY_CANCELLED"), { httpStatus: 400, msg: "Bu ödeme zaten iptal edilmiş." });
+
+      for (const a of payment.allocations) {
+        const charge = await tx.charge.findUnique({ where: { id: a.chargeId } });
+        if (!charge) continue;
+        const newPaid = Prisma.Decimal.max(0, charge.paidAmount.minus(a.amount));
+        const status = newPaid.lte(0) ? "unpaid" : newPaid.gte(charge.amount) ? "paid" : "partial";
+        await tx.charge.update({ where: { id: charge.id }, data: { paidAmount: newPaid, status } });
+      }
+
+      if (payment.transactionId) {
+        await tx.transaction.delete({ where: { id: payment.transactionId } });
+      }
+
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { cancelled: true, cancelledAt: new Date(), cancelledBy: req.user.id, transactionId: null },
+      });
+
+      const unit = await tx.unit.findUnique({ where: { id: payment.unitId } });
+      await tx.activityLog.create({
+        data: { actorId: req.user.id, actorName: req.user.name, action: "payment.cancel", detail: `${unit ? `${unit.block} - Daire ${unit.no}` : "Bir daire"} için ${payment.amount}₺ tutarındaki ödeme (makbuz ${payment.receiptNo}) iptal edildi.`, scopeUnitId: payment.unitId },
+      });
+    });
+    res.json({ message: "Ödeme iptal edildi, ilgili borç yeniden açıldı." });
+  } catch (e) {
+    if (e.httpStatus) return res.status(e.httpStatus).json({ error: e.msg });
+    throw e;
+  }
+});
+
 /* ---------------- TRANSACTIONS (Muhasebe: gelir/gider) ---------------- */
 
 router.get("/transactions", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  res.json(data.transactions.slice().sort((a, b) => new Date(b.date) - new Date(a.date)));
+  const transactions = await prisma.transaction.findMany({ orderBy: { date: "desc" } });
+  res.json(transactions);
 });
 
 router.post("/transactions", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   const { type, category, amount, description, date, accountId } = req.body || {};
   if (!type || !category || !amount) return res.status(400).json({ error: "Tür, kategori ve tutar zorunludur." });
-  const t = { id: db.uid(), type, category, amount: Number(amount), accountId: accountId || data.meta.defaultAccountId, date: date || new Date().toISOString(), description: description || "", createdBy: req.user.id };
-  data.transactions.unshift(t);
-  db.logActivity(data, req.user, "transaction.create", `${type === "gelir" ? "Gelir" : "Gider"} kaydı: ${category} — ${amount}₺ (${description || "-"})`, null);
-  await db.save(data);
+  let resolvedAccountId = accountId;
+  if (!resolvedAccountId) {
+    const settings = await prisma.settings.findUniqueOrThrow({ where: { id: "singleton" } });
+    resolvedAccountId = settings.defaultAccountId;
+  }
+  const t = await prisma.transaction.create({
+    data: { type, category, amount: new Prisma.Decimal(amount), accountId: resolvedAccountId, date: date ? new Date(date) : new Date(), description: description || "", createdBy: req.user.id },
+  });
+  await prisma.activityLog.create({
+    data: { actorId: req.user.id, actorName: req.user.name, action: "transaction.create", detail: `${type === "gelir" ? "Gelir" : "Gider"} kaydı: ${category} — ${amount}₺ (${description || "-"})` },
+  });
   res.status(201).json(t);
 });
 
 // Yalnizca elle girilmis (bir odemeye bagli olmayan) hareketler duzenlenebilir.
 // Tahsilat/firma odemesiyle olusan hareketler icin ilgili odemeyi iptal etmek gerekir -
 // aksi halde odeme kaydiyla muhasebe kaydi tutarsiz kalir.
-function isLinkedToPayment(data, transactionId) {
-  return data.payments.some((p) => p.transactionId === transactionId) || data.partyPayments.some((p) => p.transactionId === transactionId);
+async function isLinkedToPayment(transactionId) {
+  const [p, pp] = await Promise.all([
+    prisma.payment.count({ where: { transactionId } }),
+    prisma.partyPayment.count({ where: { transactionId } }),
+  ]);
+  return p > 0 || pp > 0;
 }
 
 router.patch("/transactions/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const t = data.transactions.find((x) => x.id === req.params.id);
+  const t = await prisma.transaction.findUnique({ where: { id: req.params.id } });
   if (!t) return res.status(404).json({ error: "Hareket bulunamadı." });
-  if (isLinkedToPayment(data, t.id)) return res.status(400).json({ error: "Bu hareket bir ödeme kaydına bağlı, doğrudan düzenlenemez. İlgili ödemeyi iptal edip yeniden oluşturun." });
+  if (await isLinkedToPayment(t.id)) return res.status(400).json({ error: "Bu hareket bir ödeme kaydına bağlı, doğrudan düzenlenemez. İlgili ödemeyi iptal edip yeniden oluşturun." });
   const { type, category, amount, description, date, accountId } = req.body || {};
-  if (type !== undefined) t.type = type;
-  if (category !== undefined) t.category = category;
-  if (amount !== undefined) t.amount = Number(amount);
-  if (description !== undefined) t.description = description;
-  if (date !== undefined) t.date = date;
-  if (accountId !== undefined) t.accountId = accountId;
-  db.logActivity(data, req.user, "transaction.update", `Hareket düzenlendi: ${t.category} — ${t.amount}₺`, null);
-  await db.save(data);
-  res.json(t);
+  const data = {};
+  if (type !== undefined) data.type = type;
+  if (category !== undefined) data.category = category;
+  if (amount !== undefined) data.amount = new Prisma.Decimal(amount);
+  if (description !== undefined) data.description = description;
+  if (date !== undefined) data.date = new Date(date);
+  if (accountId !== undefined) data.accountId = accountId;
+  const updated = await prisma.transaction.update({ where: { id: t.id }, data });
+  await prisma.activityLog.create({
+    data: { actorId: req.user.id, actorName: req.user.name, action: "transaction.update", detail: `Hareket düzenlendi: ${updated.category} — ${updated.amount}₺` },
+  });
+  res.json(updated);
 });
 
 router.delete("/transactions/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const t = data.transactions.find((x) => x.id === req.params.id);
-  if (t && isLinkedToPayment(data, t.id)) return res.status(400).json({ error: "Bu hareket bir ödeme kaydına bağlı, doğrudan silinemez. İlgili ödemeyi iptal edin." });
-  data.transactions = data.transactions.filter((x) => x.id !== req.params.id);
-  if (t) db.logActivity(data, req.user, "transaction.delete", `Hareket silindi: ${t.category} — ${t.amount}₺ (${t.description || "-"})`, null);
-  await db.save(data);
+  const t = await prisma.transaction.findUnique({ where: { id: req.params.id } });
+  if (t && (await isLinkedToPayment(t.id))) return res.status(400).json({ error: "Bu hareket bir ödeme kaydına bağlı, doğrudan silinemez. İlgili ödemeyi iptal edin." });
+  if (t) {
+    await prisma.transaction.delete({ where: { id: t.id } });
+    await prisma.activityLog.create({
+      data: { actorId: req.user.id, actorName: req.user.name, action: "transaction.delete", detail: `Hareket silindi: ${t.category} — ${t.amount}₺ (${t.description || "-"})` },
+    });
+  }
   res.json({ message: "Hareket silindi." });
 });
 
 /* ---------------- BUDGET (Yillik Butce Planlama) ---------------- */
+// Bu oturumun kapsami disinda: legacy db.load()/save() deseniyle kalir, ayrintili
+// muhasebe hareketi (data.transactions) okumasi icin db.js'teki READONLY_PASSTHROUGH
+// uzerinden hala erisilebilir.
 
 router.get("/budgets", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();

@@ -135,10 +135,7 @@ const LEGACY_COLLECTIONS = [
   { name: "personnel", model: "personnel", load: simple("personnel") },
   { name: "equipment", model: "equipment", load: loadEquipment, children: [{ field: "maintenanceHistory", model: "maintenanceRecord", parentField: "equipmentId" }] },
   { name: "meters", model: "meter", load: simple("meter") },
-  { name: "charges", model: "charge", load: simple("charge") },
   { name: "meterReadings", model: "meterReading", load: simple("meterReading") },
-  { name: "transactions", model: "transaction", load: simple("transaction") },
-  { name: "payments", model: "payment", load: loadPayments, children: [{ field: "appliedTo", model: "paymentAllocation", parentField: "paymentId", mapCreate: (a, parentId) => ({ paymentId: parentId, chargeId: a.chargeId, amount: a.amount }) }] },
   { name: "partyCharges", model: "partyCharge", load: simple("partyCharge") },
   { name: "partyPayments", model: "partyPayment", load: loadPartyPayments, children: [{ field: "appliedTo", model: "partyPaymentAllocation", parentField: "partyPaymentId", mapCreate: (a, parentId) => ({ partyPaymentId: parentId, partyChargeId: a.chargeId, amount: a.amount }) }] },
   { name: "transfers", model: "transfer", load: simple("transfer") },
@@ -171,6 +168,15 @@ const READONLY_PASSTHROUGH = [
   // contacts: routes/contacts.js artik dogrudan Prisma kullaniyor. Burada
   // sadece system.js'nin /export ucu icin salt-okunur olarak sunuluyor.
   { name: "contacts", load: simple("contact") },
+  // charges/payments/transactions: routes/finance.js'in cekirdek uclari artik
+  // dogrudan Prisma kullaniyor. Burada hala data.charges/data.payments/
+  // data.transactions okuyan legacy route'lar (directory.js unitDebt,
+  // finance.js /budgets, system.js /export) icin salt-okunur olarak
+  // sunuluyor. YAZMA icin kullanilmamali - jobs.js, ops.js, parties.js
+  // gibi yazma yapan legacy route'lar dogrudan Prisma cagrisina cevrildi.
+  { name: "charges", load: simple("charge") },
+  { name: "payments", load: loadPayments },
+  { name: "transactions", load: simple("transaction") },
 ];
 
 async function load() {

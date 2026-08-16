@@ -1,4 +1,5 @@
 const express = require("express");
+const { Prisma } = require("@prisma/client");
 const db = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
@@ -12,7 +13,7 @@ function unitLabel(data, unitId) {
 /* ---------------- FACILITIES & RESERVATIONS ---------------- */
 
 router.get("/facilities", requireAuth, async (req, res) => {
-  res.json(db.load().facilities);
+  res.json((await db.load()).facilities);
 });
 
 router.get("/reservations", requireAuth, async (req, res) => {
@@ -210,29 +211,31 @@ router.get("/meter-readings", requireAuth, async (req, res) => {
   res.json(list.slice().sort((a, b) => new Date(b.date) - new Date(a.date)));
 });
 
-// Sayac okuma girisi otomatik olarak borclandirma (charge) olusturur
+// Sayac okuma girisi otomatik olarak borclandirma (charge) olusturur. Charge artik
+// finance.js gibi dogrudan Prisma'da yasiyor (LEGACY_COLLECTIONS'ta degil) - once
+// gercek satiri olusturup id'sini aliyoruz, meterReading'e (hala legacy) o id'yi
+// referans olarak yaziyoruz ki db.save() sirasinda FK saglansin.
 router.post("/meter-readings", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();
   const { meterId, period, value, unitCost } = req.body || {};
   const meter = data.meters.find((m) => m.id === meterId);
   if (!meter) return res.status(404).json({ error: "Sayaç bulunamadı." });
   const amount = Number(value) * Number(unitCost);
-  const chargeId = db.uid();
-  const reading = { id: db.uid(), meterId, period, value: Number(value), unitCost: Number(unitCost), amount, date: new Date().toISOString(), chargeId };
-  data.meterReadings.unshift(reading);
-  data.charges.push({
-    id: chargeId,
-    unitId: meter.unitId,
-    type: "sayac",
-    period,
-    amount,
-    dueDate: new Date().toISOString(),
-    status: "unpaid",
-    paidAmount: 0,
-    lateFeeAppliedPeriods: [],
-    description: `${period} ${meter.type} tüketimi (${value} birim x ${unitCost}₺)`,
-    createdAt: new Date().toISOString(),
+  const charge = await db.prisma.charge.create({
+    data: {
+      unitId: meter.unitId,
+      type: "sayac",
+      period,
+      amount: new Prisma.Decimal(amount),
+      dueDate: new Date(),
+      status: "unpaid",
+      paidAmount: 0,
+      lateFeeAppliedPeriods: [],
+      description: `${period} ${meter.type} tüketimi (${value} birim x ${unitCost}₺)`,
+    },
   });
+  const reading = { id: db.uid(), meterId, period, value: Number(value), unitCost: Number(unitCost), amount, date: new Date().toISOString(), chargeId: charge.id };
+  data.meterReadings.unshift(reading);
   await db.save(data);
   res.status(201).json(reading);
 });
@@ -243,12 +246,12 @@ router.delete("/meter-readings/:id", requireAuth, requireRole("yonetici"), async
   const data = await db.load();
   const reading = data.meterReadings.find((r) => r.id === req.params.id);
   if (!reading) return res.status(404).json({ error: "Okuma kaydı bulunamadı." });
-  const charge = reading.chargeId ? data.charges.find((c) => c.id === reading.chargeId) : null;
-  if (charge && charge.paidAmount > 0) return res.status(400).json({ error: "Bu faturaya ait borca ödeme yapılmış, önce ilgili ödemeyi iptal edin." });
+  const charge = reading.chargeId ? await db.prisma.charge.findUnique({ where: { id: reading.chargeId } }) : null;
+  if (charge && charge.paidAmount.gt(0)) return res.status(400).json({ error: "Bu faturaya ait borca ödeme yapılmış, önce ilgili ödemeyi iptal edin." });
   data.meterReadings = data.meterReadings.filter((r) => r.id !== req.params.id);
-  if (charge) data.charges = data.charges.filter((c) => c.id !== charge.id);
   db.logActivity(data, req.user, "meter.delete", `Sayaç okuması silindi: ${reading.period} - ${reading.amount}₺`, meter_unit(data, reading.meterId));
   await db.save(data);
+  if (charge) await db.prisma.charge.delete({ where: { id: charge.id } });
   res.json({ message: "Sayaç okuması ve bağlı borç silindi." });
 });
 function meter_unit(data, meterId) {
@@ -306,7 +309,7 @@ router.delete("/packages/:id", requireAuth, requireRole("yonetici", "personel"),
 /* ---------------- DECISIONS (Karar Defteri) ---------------- */
 
 router.get("/decisions", requireAuth, async (req, res) => {
-  res.json(db.load().decisions.slice().sort((a, b) => b.decisionNo - a.decisionNo));
+  res.json((await db.load()).decisions.slice().sort((a, b) => b.decisionNo - a.decisionNo));
 });
 
 router.post("/decisions", requireAuth, requireRole("yonetici"), async (req, res) => {

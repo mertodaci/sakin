@@ -1,4 +1,5 @@
 const express = require("express");
+const { Prisma } = require("@prisma/client");
 const db = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
@@ -98,12 +99,16 @@ router.post("/party-payments/pay", requireAuth, requireRole("yonetici"), async (
     appliedTo.push({ chargeId: c.id, amount: applied });
   }
 
-  const transactionId = db.uid();
-  const payment = { id: db.uid(), partyType, partyId, amount: Number(amount), accountId: resolvedAccountId, method: method || "Havale/EFT", description: description || "", date: new Date().toISOString(), createdBy: req.user.id, appliedTo, transactionId, cancelled: false };
-  data.partyPayments.unshift(payment);
-
+  // transactions artik finance.js gibi dogrudan Prisma'da yasiyor (LEGACY_COLLECTIONS'ta
+  // degil) - once gercek satiri olusturup id'sini aliyoruz, partyPayment'e (hala legacy)
+  // o id'yi referans olarak yaziyoruz ki db.save() sirasinda FK saglansin.
   const categoryLabel = partyType === "firma" ? "Firma Ödemesi" : "Personel Ödemesi";
-  data.transactions.unshift({ id: transactionId, type: "gider", category: categoryLabel, amount: Number(amount), accountId: resolvedAccountId, date: payment.date, description: `${partyName(data, partyType, partyId)} - ${description || categoryLabel}`, createdBy: req.user.id });
+  const transaction = await db.prisma.transaction.create({
+    data: { type: "gider", category: categoryLabel, amount: new Prisma.Decimal(amount), accountId: resolvedAccountId, description: `${partyName(data, partyType, partyId)} - ${description || categoryLabel}`, createdBy: req.user.id },
+  });
+
+  const payment = { id: db.uid(), partyType, partyId, amount: Number(amount), accountId: resolvedAccountId, method: method || "Havale/EFT", description: description || "", date: new Date().toISOString(), createdBy: req.user.id, appliedTo, transactionId: transaction.id, cancelled: false };
+  data.partyPayments.unshift(payment);
 
   db.logActivity(data, req.user, "party.payment", `${partyName(data, partyType, partyId)} tarafına ${amount}₺ ödeme yapıldı.`, null);
   await db.save(data);
@@ -124,7 +129,12 @@ router.post("/party-payments/:id/cancel", requireAuth, requireRole("yonetici"), 
     charge.paidAmount = Math.max(0, charge.paidAmount - amount);
     charge.status = charge.paidAmount <= 0 ? "unpaid" : charge.paidAmount >= charge.amount ? "paid" : "partial";
   });
-  data.transactions = data.transactions.filter((t) => t.id !== payment.transactionId);
+  if (payment.transactionId) {
+    await db.prisma.transaction.delete({ where: { id: payment.transactionId } }).catch((e) => {
+      if (e.code !== "P2025") throw e;
+    });
+  }
+  payment.transactionId = null;
   payment.cancelled = true;
   payment.cancelledAt = new Date().toISOString();
   payment.cancelledBy = req.user.id;
@@ -134,12 +144,17 @@ router.post("/party-payments/:id/cancel", requireAuth, requireRole("yonetici"), 
   res.json({ message: "Ödeme iptal edildi, ilgili borç yeniden açıldı." });
 });
 
-// Firma/personele borclanma kaydini siler - sadece hic odeme yapilmamissa (paidAmount=0)
+// Firma/personele borclanma kaydini siler - sadece hic odeme yapilmamissa (paidAmount=0
+// VE hicbir PartyPaymentAllocation'a bagli degilse - iptal edilmis kismi bir odemenin
+// gecmis allocation kaydi olabilir, bu PartyPaymentAllocation->PartyCharge FK'sini
+// (onDelete: Restrict) ihlal edip genel bir 500 hatasina yol acardi; once dostane bir
+// Turkce hata donduruyoruz).
 router.delete("/party-charges/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();
   const charge = data.partyCharges.find((c) => c.id === req.params.id);
   if (!charge) return res.status(404).json({ error: "Kayıt bulunamadı." });
-  if (charge.paidAmount > 0) return res.status(400).json({ error: "Bu borca kısmen veya tamamen ödeme yapılmış, önce ilgili ödemeyi iptal edin." });
+  const allocationCount = await db.prisma.partyPaymentAllocation.count({ where: { partyChargeId: charge.id } });
+  if (charge.paidAmount > 0 || allocationCount > 0) return res.status(400).json({ error: "Bu borca kısmen veya tamamen ödeme yapılmış, önce ilgili ödemeyi iptal edin." });
   data.partyCharges = data.partyCharges.filter((c) => c.id !== req.params.id);
   db.logActivity(data, req.user, "party.charge.delete", `${partyName(data, charge.partyType, charge.partyId)} için borçlandırma silindi: ${charge.description}`, null);
   await db.save(data);
