@@ -495,22 +495,29 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   iletişim alanı). `test-sqm-contact.js` ile regresyon testleri
   (oluşturma, güncelleme, temizleme) geçiyor.
 
+- ✅ **Dashboard/Kasalar'a Borçlar Toplamı kartı** — Yönetimcell'in
+  genel kasa özetinde Alacaklar (üye borçları) ile yan yana bir toplam
+  "Borçlar" (firma/personel/genel gidere olan açık borç) kartı vardı,
+  bizde sadece tahsilat tarafı gösteriliyordu. `GET /dashboard` artık
+  `totalPayables` döndürüyor (`data.partyCharges`'ın açık kayıtları
+  toplamı — Borç Listesi'nin topladığı veriyle aynı kaynak). Genel
+  Özet'e "TOPLAM BORÇ (ÖDENECEK)" kartı, Kasalar'a ise "TOPLAM KASA
+  BAKİYESİ"nin yanına "ALACAKLAR (ÜYE BORÇLARI)"/"BORÇLAR (ÖDENECEK)"
+  kartları eklendi (Yönetimcell'in Genel Kasa Durumu'ndaki üç-kart
+  düzenine daha yakın). **Bilinçli sadeleştirme**: Ana Para/Gecikme
+  kırılımı bu adıma dahil edilmedi (gecikme faizi zaten ayrı bir
+  `Charge.type` olarak var, istenirse ayrıca hesaplanabilir).
+  `test-payables-card.js` ile regresyon testi geçiyor.
+
 **Sırada (henüz yapılmadı, bu sırayla ilerlenecek — menü denetiminden çıkan liste):**
-1. ⏳ **Genel Kasa Durumu'na "Borçlar Toplamı" eklenmesi** — Yönetimcell'in
-   genel kasa özetinde Alacaklar (üye borçları) ile yan yana bir de
-   toplam "Borçlar" (firma/personel/genel gidere olan borç) kartı var,
-   Ana Para/Gecikme kırılımıyla. Bizde dashboard/Kasalar'da sadece
-   tahsilat tarafı (totalDebt/totalCredit) var, ödenecek (payables)
-   toplamı hiç gösterilmiyor — artık Borç Listesi ile veri hazır, sadece
-   toplam bir kart eklemek yeterli. **Buradan devam et.**
-2. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
+1. ⏳ Muhasebe kodu eşleme (Tekdüzen Hesap Planı) + Mizan + Yevmiye/
    Kebir Defteri, banka entegrasyonu — sadece iskelet/arayüz düzeyinde
    (gerçek banka API'si/mali müşavir entegrasyonu üçüncü taraf
    sözleşmesi gerektirir, Mert'in kararı). Menü denetiminde
    "Muhasebe Raporları" alt menüsü (Tahakkuk Fişleri/Özet Mizan/
    Yevmiye ve Kebir Defteri/Muhasebe Kodları/Firma Mutabakat Mektubu)
-   bu maddenin kapsamını doğruladı.
-3. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
+   bu maddenin kapsamını doğruladı. **Buradan devam et.**
+2. ⏳ Bilgi Bankası (Yönetimcell'de statik yardım/şablon linkleri
    sayfasıydı, en düşük öncelik, atlanabilir).
 
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama

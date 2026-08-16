@@ -37,6 +37,11 @@ router.get("/dashboard", requireAuth, async (req, res) => {
   const unitNetDebts = data.units.map((u) => (openSumByUnit.get(u.id) || 0) - (u.creditBalance || 0));
   const totalDebt = unitNetDebts.reduce((s, d) => s + Math.max(0, d), 0);
   const totalCredit = unitNetDebts.reduce((s, d) => s + Math.max(0, -d), 0);
+  // Yonetimcell karsilastirmasi: "Genel Kasa Durumu"nda Alacaklar (uye
+  // borclari) ile yan yana bir de toplam "Borclar" karti var - sitenin
+  // firma/personel/genel gidere olan acik borcu (Borc Listesi'nin
+  // topladigi PartyCharge'lar).
+  const totalPayables = data.partyCharges.filter((c) => c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0);
   const income = data.transactions.filter((t) => t.type === "gelir").reduce((s, t) => s + t.amount, 0);
   const expense = data.transactions.filter((t) => t.type === "gider").reduce((s, t) => s + t.amount, 0);
   // Genel kasa durumu: tum hesaplarin (banka/nakit/pos) toplam bakiyesi (acilis bakiyeleri dahil)
@@ -50,6 +55,7 @@ router.get("/dashboard", requireAuth, async (req, res) => {
     kasa,
     totalDebt,
     totalCredit,
+    totalPayables,
     income,
     expense,
     openTickets,

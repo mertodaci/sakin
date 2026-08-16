@@ -969,6 +969,7 @@ async function renderManagerOzet(c) {
     <div class="grid cols-3 mb-16">
       <div class="card stat-card clickable" data-goto="kasalar"><div class="stat-label">KASA BAKİYESİ</div><div class="f-num stat-value" style="color:${dash.kasa >= 0 ? "var(--green)" : "var(--red)"};">${tl(dash.kasa)}</div></div>
       <div class="card stat-card clickable" data-goto="tahsilat"><div class="stat-label">TOPLAM ALACAK</div><div class="f-num stat-value" style="color:var(--red);">${tl(dash.totalDebt)}</div></div>
+      <div class="card stat-card clickable" data-goto="borclistesi"><div class="stat-label">TOPLAM BORÇ (ÖDENECEK)</div><div class="f-num stat-value" style="color:var(--amber);">${tl(dash.totalPayables)}</div></div>
       <div class="card stat-card clickable" data-goto="tahsilat"><div class="stat-label">AİDATI ÖDENEN</div><div class="stat-value">${dash.paidUnits}/${dash.unitCount}</div></div>
     </div>
     <div class="grid cols-3 mb-16">
@@ -1586,15 +1587,25 @@ async function renderMuhasebe(c) {
 }
 
 async function renderKasalar(c) {
-  const accounts = await api("/accounts");
+  const [accounts, dash] = await Promise.all([api("/accounts"), api("/dashboard")]);
   const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
   const typeLabel = { banka: "Banka", nakit: "Nakit", pos: "POS/Kredi Kartı", diger: "Diğer" };
   c.innerHTML = `
     <div class="flex-between">${sectionTitle("Kasalar", "Banka, nakit ve POS hesaplarının ayrı ayrı takibi")}<button class="btn btn-ghost btn-sm" id="transferBtn" style="margin-bottom:16px;">⇄ Hesaplar Arası Transfer</button></div>
     <div id="transferForm"></div>
-    <div class="card pad mb-16">
-      <div class="stat-label">TOPLAM KASA BAKİYESİ</div>
-      <div class="f-num stat-value" style="color:${totalBalance >= 0 ? "var(--green)" : "var(--red)"};font-size:28px;">${tl(totalBalance)}</div>
+    <div class="grid cols-3 mb-16">
+      <div class="card pad">
+        <div class="stat-label">TOPLAM KASA BAKİYESİ</div>
+        <div class="f-num stat-value" style="color:${totalBalance >= 0 ? "var(--green)" : "var(--red)"};font-size:28px;">${tl(totalBalance)}</div>
+      </div>
+      <div class="card pad clickable" data-goto="tahsilat">
+        <div class="stat-label">ALACAKLAR (ÜYE BORÇLARI)</div>
+        <div class="f-num stat-value" style="color:var(--red);font-size:28px;">${tl(dash.totalDebt)}</div>
+      </div>
+      <div class="card pad clickable" data-goto="borclistesi">
+        <div class="stat-label">BORÇLAR (ÖDENECEK)</div>
+        <div class="f-num stat-value" style="color:var(--amber);font-size:28px;">${tl(dash.totalPayables)}</div>
+      </div>
     </div>
     <div class="grid" id="accountsGrid">
       ${accounts.map((a) => `
@@ -1622,6 +1633,7 @@ async function renderKasalar(c) {
       </form>
     </div>
   `;
+  c.querySelectorAll("[data-goto]").forEach((el) => el.addEventListener("click", () => goToTab(el.dataset.goto)));
   document.getElementById("accForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
