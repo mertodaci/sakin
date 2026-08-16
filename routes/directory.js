@@ -55,9 +55,45 @@ router.get("/users", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();
   const list = data.users.map((u) => {
     const unit = u.unitId ? data.units.find((x) => x.id === u.unitId) : null;
-    return { id: u.id, name: u.name, email: u.email, phone: u.phone, role: u.role, unitId: u.unitId, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, department: u.department || null, isApproved: u.isApproved, isActive: u.isActive !== false, createdAt: u.createdAt, resetRequestedAt: u.resetRequestedAt || null };
+    return { id: u.id, name: u.name, email: u.email, phone: u.phone, role: u.role, unitId: u.unitId, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, department: u.department || null, nationalId: u.nationalId || null, isApproved: u.isApproved, isActive: u.isActive !== false, createdAt: u.createdAt, resetRequestedAt: u.resetRequestedAt || null };
   });
   res.json(list);
+});
+
+// Ad/telefon/TC kimlik no gibi temel profil alanlarini duzenler (Yonetimcell
+// karsilastirmasindan: "Detayli Uye Listesi" alan seti - bu oturumda sadece
+// TC kimlik no eklendi, digerleri sonraki bir oturuma birakildi).
+router.patch("/users/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
+  const { name, phone, nationalId } = req.body || {};
+  const data = {};
+  if (name !== undefined) data.name = name;
+  if (phone !== undefined) data.phone = phone;
+  if (nationalId !== undefined) data.nationalId = nationalId || null;
+  const updated = await prisma.user.update({ where: { id: user.id }, data });
+  res.json({ id: updated.id, name: updated.name, phone: updated.phone, nationalId: updated.nationalId });
+});
+
+/* ---------------- ARAÇ PLAKALARI ---------------- */
+
+router.get("/users/:id/vehicles", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const vehicles = await prisma.vehicle.findMany({ where: { userId: req.params.id } });
+  res.json(vehicles);
+});
+
+router.post("/users/:id/vehicles", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
+  const { plate, brand, color } = req.body || {};
+  if (!plate) return res.status(400).json({ error: "Plaka zorunludur." });
+  const vehicle = await prisma.vehicle.create({ data: { userId: user.id, plate, brand: brand || "", color: color || "" } });
+  res.status(201).json(vehicle);
+});
+
+router.delete("/vehicles/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
+  await prisma.vehicle.deleteMany({ where: { id: req.params.id } });
+  res.json({ message: "Plaka kaydı silindi." });
 });
 
 router.patch("/users/:id/approve", requireAuth, requireRole("yonetici"), async (req, res) => {

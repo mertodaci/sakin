@@ -105,6 +105,7 @@ model User {
   unitId              String?
   unit                Unit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
   department          String?
+  nationalId          String?
   isApproved          Boolean   @default(false)
   mustChangePassword  Boolean   @default(false)
   resetRequestedAt    DateTime?
@@ -122,6 +123,18 @@ model User {
   classifieds    Classifieds[]
   notifications  Notification[]
   surveyVotes    SurveyVote[]
+  vehicles       Vehicle[]
+}
+
+// Yonetimcell karsilastirmasindan: guvenlik/kapi gorevlisinin gozle
+// tanimasi icin plaka yaninda marka/renk de tutuluyor.
+model Vehicle {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plate  String
+  brand  String
+  color  String
 }
 
 // ---------------- Kasa / Banka Hesabi ----------------

@@ -347,6 +347,66 @@ function renderChangePasswordModal() {
   });
 }
 
+async function renderUserEditModal(u) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(12,32,50,.35);z-index:70;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;";
+  overlay.innerHTML = `
+    <div class="card pad" style="max-width:420px;width:100%;">
+      <h3 class="f-display" style="margin:0 0 12px;">${esc(u.name)}</h3>
+      <form id="userEditForm">
+        <div class="field"><label>Ad Soyad</label><input name="name" value="${esc(u.name)}" required /></div>
+        <div class="field"><label>Telefon</label><input name="phone" value="${esc(u.phone || "")}" /></div>
+        <div class="field"><label>TC Kimlik No</label><input name="nationalId" value="${esc(u.nationalId || "")}" maxlength="11" pattern="[0-9]{11}" title="11 haneli TC kimlik numarası" /></div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button type="button" class="btn btn-ghost" id="userEditCancel" style="flex:1;">Kapat</button>
+          <button type="submit" class="btn btn-primary" style="flex:1;">Kaydet</button>
+        </div>
+      </form>
+      <div class="ledger-title" style="padding-top:18px;">Araç Plakaları</div>
+      <div id="vehicleList" class="small muted">Yükleniyor…</div>
+      <form id="vehicleForm" class="form-row" style="margin-top:10px;">
+        <div class="field" style="flex:1 1 100px;"><label>Plaka</label><input name="plate" required /></div>
+        <div class="field" style="flex:1 1 100px;"><label>Marka</label><input name="brand" /></div>
+        <div class="field" style="flex:1 1 100px;"><label>Renk</label><input name="color" /></div>
+        <button class="btn btn-ghost btn-sm" type="submit">Ekle</button>
+      </form>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#userEditCancel").addEventListener("click", () => overlay.remove());
+  overlay.querySelector("#userEditForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    try {
+      await api("/users/" + u.id, { method: "PATCH", body: Object.fromEntries(f) });
+      toast("Kullanıcı bilgileri güncellendi.");
+      overlay.remove();
+      renderTab("kullanicilar");
+    } catch (err) { toast(err.message); }
+  });
+
+  async function loadVehicles() {
+    const vehicles = await api("/users/" + u.id + "/vehicles");
+    const box = overlay.querySelector("#vehicleList");
+    box.innerHTML = vehicles.length
+      ? vehicles.map((v) => `<div class="ledger-row" style="padding:6px 0;"><span>${esc(v.plate)}${v.brand ? " · " + esc(v.brand) : ""}${v.color ? " · " + esc(v.color) : ""}</span><button class="btn-danger" data-delveh="${v.id}">Sil</button></div>`).join("")
+      : '<div class="empty-row" style="padding:4px 0;">Kayıtlı plaka yok.</div>';
+    box.querySelectorAll("[data-delveh]").forEach((b) => b.addEventListener("click", async () => {
+      try { await api("/vehicles/" + b.dataset.delveh, { method: "DELETE" }); loadVehicles(); } catch (err) { toast(err.message); }
+    }));
+  }
+  loadVehicles();
+
+  overlay.querySelector("#vehicleForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    try {
+      await api("/users/" + u.id + "/vehicles", { method: "POST", body: Object.fromEntries(f) });
+      e.target.reset();
+      loadVehicles();
+    } catch (err) { toast(err.message); }
+  });
+}
+
 function toggleSidebar() {
   document.getElementById("sidebar")?.classList.toggle("open");
   document.getElementById("sidebarOverlay")?.classList.toggle("visible");
@@ -820,7 +880,7 @@ async function renderKullanicilar(c) {
       <button class="btn btn-primary btn-sm" data-reset="${u.id}">Geçici Şifre Oluştur</button></div>`).join("")}</div>` : ""}
     <div class="card tight mb-16"><div class="ledger-title">Sakinler &amp; Personel</div>${approved.map((u) => `
       <div class="ledger-row" style="${u.isActive === false ? "opacity:.55;" : ""}"><div><div style="font-size:14px;font-weight:600;">${esc(u.name)} ${u.role === "yonetici" ? "👑" : ""} ${u.isActive === false ? pill("Pasif") : ""}</div><div class="small muted">${esc(u.email)} · ${u.role === "sakin" ? esc(u.unitLabel || "-") : u.role === "personel" ? esc(u.department || "Personel") : "Yönetici"}</div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">${u.role !== "yonetici" ? `<button class="btn btn-ghost btn-sm" data-reset="${u.id}">Şifre Sıfırla</button>` : ""}${u.role !== "yonetici" && u.id !== state.user.id ? (u.isActive === false ? `<button class="btn btn-ghost btn-sm" data-reactivate="${u.id}">Aktif Et</button>` : `<button class="btn btn-ghost btn-sm" data-deactivate="${u.id}">Pasife Al</button>`) : ""}${u.id !== state.user.id ? `<button class="btn-danger" data-deluser="${u.id}">Kalıcı Sil</button>` : ""}</div></div>`).join("")}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-ghost btn-sm" data-edit="${u.id}">Düzenle</button>${u.role !== "yonetici" ? `<button class="btn btn-ghost btn-sm" data-reset="${u.id}">Şifre Sıfırla</button>` : ""}${u.role !== "yonetici" && u.id !== state.user.id ? (u.isActive === false ? `<button class="btn btn-ghost btn-sm" data-reactivate="${u.id}">Aktif Et</button>` : `<button class="btn btn-ghost btn-sm" data-deactivate="${u.id}">Pasife Al</button>`) : ""}${u.id !== state.user.id ? `<button class="btn-danger" data-deluser="${u.id}">Kalıcı Sil</button>` : ""}</div></div>`).join("")}</div>
     <div class="card form-card">
       <div class="ledger-title" style="padding:0 0 10px;">Yeni Personel Ekle</div>
       <form id="perForm" class="form-row">
@@ -837,6 +897,10 @@ async function renderKullanicilar(c) {
   c.querySelectorAll("[data-deluser]").forEach((b) => b.addEventListener("click", async () => { if (!confirm("Kalıcı olarak silinsin mi? Bu işlem geri alınamaz, geçmiş kayıtlar için 'Pasife Al' seçeneğini kullanmanız önerilir.")) return; try { await api("/users/" + b.dataset.deluser, { method: "DELETE" }); renderTab("kullanicilar"); } catch (err) { toast(err.message); } }));
   c.querySelectorAll("[data-deactivate]").forEach((b) => b.addEventListener("click", async () => { if (!confirm("Kullanıcı pasife alınsın mı? Geçmiş kayıtları korunur, sadece giriş yapamaz hale gelir.")) return; try { await api("/users/" + b.dataset.deactivate + "/deactivate", { method: "PATCH" }); toast("Kullanıcı pasife alındı."); renderTab("kullanicilar"); } catch (err) { toast(err.message); } }));
   c.querySelectorAll("[data-reactivate]").forEach((b) => b.addEventListener("click", async () => { try { await api("/users/" + b.dataset.reactivate + "/reactivate", { method: "PATCH" }); toast("Kullanıcı aktif edildi."); renderTab("kullanicilar"); } catch (err) { toast(err.message); } }));
+  c.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => {
+    const u = list.find((x) => x.id === b.dataset.edit);
+    if (u) renderUserEditModal(u);
+  }));
   c.querySelectorAll("[data-reset]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm("Bu kullanıcı için geçici bir şifre oluşturulsun mu?")) return;
     try {
@@ -894,17 +958,20 @@ async function renderTahsilat(c) {
         <button class="btn btn-primary" type="submit">Tüm Dairelere Uygula</button>
       </form>
     </div>
-    <div class="card pad mb-16">
-      <div class="field" style="margin-bottom:0;"><label>Tahsilatın işleneceği hesap</label><select id="collectAccount">${accounts.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></div>
+    <div class="card pad mb-16" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
+      <div class="field" style="margin-bottom:0;flex:1 1 220px;"><label>Tahsilatın işleneceği hesap</label><select id="collectAccount">${accounts.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></div>
+      <div class="field" style="margin-bottom:0;flex:1 1 220px;"><label>Borç durumu</label>
+        <select id="debtFilter">
+          <option value="0">Tümü</option>
+          <option value="1">Borcu olan</option>
+          <option value="500">500 ₺ ve daha fazla borcu olan</option>
+          <option value="1000">1.000 ₺ ve daha fazla borcu olan</option>
+          <option value="2000">2.000 ₺ ve daha fazla borcu olan</option>
+          <option value="5000">5.000 ₺ ve daha fazla borcu olan</option>
+        </select>
+      </div>
     </div>
-    <div class="card tight mb-16">
-      ${units.map((u) => `
-        <div class="ledger-row" style="flex-wrap:wrap;">
-          <div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}</div></div>
-          <div style="display:flex;align-items:center;gap:10px;"><span class="f-num" style="font-weight:600;color:${u.debt > 0 ? "var(--red)" : "var(--green)"};">${tl(u.debt)}</span>${pill(u.debt > 0 ? "Borçlu" : "Ödendi")}${u.debt > 0 ? `<button class="btn btn-ghost btn-sm" data-collect="${u.id}">Tahsil Et</button>` : ""}</div>
-          <div style="width:100%;" id="collect-form-${u.id}"></div>
-        </div>`).join("")}
-    </div>
+    <div class="card tight mb-16" id="unitsListBox"></div>
     <div class="card tight">
       <div class="ledger-title">Son Tahsilatlar</div>
       ${payments.slice(0, 15).map((p) => {
@@ -925,24 +992,41 @@ async function renderTahsilat(c) {
     try { const r = await api("/charges/generate-month", { method: "POST", body: Object.fromEntries(f) }); toast(r.message); renderTab("tahsilat"); }
     catch (err) { toast(err.message); }
   });
-  c.querySelectorAll("[data-collect]").forEach((b) => b.addEventListener("click", () => {
-    const unitId = b.dataset.collect;
-    const unit = units.find((u) => u.id === unitId);
-    const box = document.getElementById("collect-form-" + unitId);
-    box.innerHTML = `
-      <form class="form-row" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;width:100%;">
-        <div class="field"><label>Tahsil Edilecek Tutar (₺)</label><input name="amount" type="number" value="${unit.debt}" max="${unit.debt}" min="0.01" step="0.01" required /></div>
-        <button class="btn btn-primary btn-sm" type="submit">Tahsilatı Kaydet</button>
-        <span class="small muted">Borcun tamamından azını girerek kısmi tahsilat yapabilirsiniz.</span>
-      </form>`;
-    box.querySelector("form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const amount = Number(new FormData(e.target).get("amount"));
-      const accountId = document.getElementById("collectAccount").value;
-      try { await api("/payments/pay", { method: "POST", body: { unitId, amount, method: "Elden", accountId, requestId: crypto.randomUUID() } }); toast("Tahsilat kaydedildi."); renderTab("tahsilat"); }
-      catch (err) { toast(err.message); }
-    });
-  }));
+
+  // Yönetimcell karşılaştırmasından: borç eşiği filtresi (birçok ekranda
+  // tekrar eden bir kalıp - "1.000 ₺ ve daha fazla borcu olan" gibi).
+  function renderUnitsListBox() {
+    const threshold = Number(document.getElementById("debtFilter").value || 0);
+    const filtered = threshold <= 0 ? units : threshold === 1 ? units.filter((u) => u.debt > 0) : units.filter((u) => u.debt >= threshold);
+    const box = document.getElementById("unitsListBox");
+    box.innerHTML = filtered.map((u) => `
+        <div class="ledger-row" style="flex-wrap:wrap;">
+          <div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")}</div></div>
+          <div style="display:flex;align-items:center;gap:10px;"><span class="f-num" style="font-weight:600;color:${u.debt > 0 ? "var(--red)" : "var(--green)"};">${tl(u.debt)}</span>${pill(u.debt > 0 ? "Borçlu" : "Ödendi")}${u.debt > 0 ? `<button class="btn btn-ghost btn-sm" data-collect="${u.id}">Tahsil Et</button>` : ""}</div>
+          <div style="width:100%;" id="collect-form-${u.id}"></div>
+        </div>`).join("") || '<div class="empty-row">Bu filtreye uyan daire yok.</div>';
+    box.querySelectorAll("[data-collect]").forEach((b) => b.addEventListener("click", () => {
+      const unitId = b.dataset.collect;
+      const unit = units.find((u) => u.id === unitId);
+      const formBox = document.getElementById("collect-form-" + unitId);
+      formBox.innerHTML = `
+        <form class="form-row" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;width:100%;">
+          <div class="field"><label>Tahsil Edilecek Tutar (₺)</label><input name="amount" type="number" value="${unit.debt}" max="${unit.debt}" min="0.01" step="0.01" required /></div>
+          <button class="btn btn-primary btn-sm" type="submit">Tahsilatı Kaydet</button>
+          <span class="small muted">Borcun tamamından azını girerek kısmi tahsilat yapabilirsiniz.</span>
+        </form>`;
+      formBox.querySelector("form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const amount = Number(new FormData(e.target).get("amount"));
+        const accountId = document.getElementById("collectAccount").value;
+        try { await api("/payments/pay", { method: "POST", body: { unitId, amount, method: "Elden", accountId, requestId: crypto.randomUUID() } }); toast("Tahsilat kaydedildi."); renderTab("tahsilat"); }
+        catch (err) { toast(err.message); }
+      });
+    }));
+  }
+  renderUnitsListBox();
+  document.getElementById("debtFilter").addEventListener("change", renderUnitsListBox);
+
   c.querySelectorAll("[data-cancel-payment]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm("Bu ödeme iptal edilsin mi? İlgili borç yeniden açılacaktır.")) return;
     try { await api("/payments/" + b.dataset.cancelPayment + "/cancel", { method: "POST" }); toast("Ödeme iptal edildi."); renderTab("tahsilat"); }
