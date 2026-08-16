@@ -744,6 +744,21 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   eklenmedi (uydurma buton yerine dürüst eksiklik). `test-hareket-
   loglari.js` ile doğrulandı.
 
+- ✅ **Aylık Bilanço** (`/reports/aylik-bilanco`) — seçilen ay için tek
+  sayfada: (1) her üyenin Kalan Borç + o ayki Tahsilatı, (2) gider
+  kategorisi bazlı Ödeme dökümü, (3) Devir/Tahsilat Toplamı/Ödeme
+  Toplamı/Kasa Durumu özeti. Mevcut Aidat Takibi/Giderler/Kasalar
+  ekranlarının ay-bazlı kesitini tek yerde birleştiriyor.
+  `test-aylik-bilanco.js` ile doğrulandı.
+  **Aynı grupta karar verilen 2 madde**: Dönemsel Gelir-Gider Tablosu
+  (Genel Durum Raporu'nun Tahakkuk Eden/Tahsil Edilen sütunlarıyla
+  zaten aynı veriyi gösteriyor — Mizan/Özet Durum'da verilen kararla
+  aynı gerekçeyle ayrı inşa edilmedi) ve İşletme Defteri (mevcut
+  Yevmiye/Kebir Defteri ile aynı temel veri — tek fark Gelir/Gider'in
+  kronolojik yerine iki ayrı sütunda gösterilmesi, üçüncü neredeyse-
+  kopya bir defter formatı açmak yerine mevcut defterlerin kapsadığı
+  kabul edildi).
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı

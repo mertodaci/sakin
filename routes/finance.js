@@ -728,4 +728,44 @@ router.get("/reports/gider-raporu", requireAuth, requireRole("yonetici"), async 
   res.json({ rows: filtered, total: filtered.reduce((s, r) => s + r.tutar, 0) });
 });
 
+// Yonetimcell karsilastirmasi: "Aylık Bilanço (Aylık Gelir Gider Raporu)" -
+// secilen ay icin (1) her uyenin kalan borcu + o ayki tahsilati, (2) gider
+// kategorisi bazli odeme dokumu, (3) Devir/Tahsilat/Odeme/Kalan/Kasa Durumu
+// ozeti - tek sayfada. Mevcut ekranlarin (Aidat Takibi, Giderler, Kasalar)
+// kesitlerini bir araya getirir.
+router.get("/reports/aylik-bilanco", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const month = Number(req.query.month) || new Date().getMonth() + 1; // 1-12
+  const start = new Date(year, month - 1, 1, 0, 0, 0);
+  const end = new Date(year, month, 0, 23, 59, 59, 999);
+
+  const uyeler = data.units.filter((u) => u.occupancy !== "vacant").map((u) => {
+    const kalanBorc = data.charges.filter((c) => c.unitId === u.id && c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0);
+    const tahsilat = data.payments.filter((p) => !p.cancelled && p.unitId === u.id && new Date(p.date) >= start && new Date(p.date) <= end).reduce((s, p) => s + p.amount, 0);
+    return { block: u.block, no: u.no, durum: u.occupancy === "tenant" ? "Kiracı" : "Malik", name: u.occupancy === "tenant" ? (u.tenantName || "-") : (u.ownerName || "-"), kalanBorc, tahsilat };
+  }).sort((a, b) => a.block.localeCompare(b.block, "tr") || a.no.localeCompare(b.no, "tr", { numeric: true }));
+
+  const giderTotals = new Map();
+  data.transactions.filter((t) => t.type === "gider" && new Date(t.date) >= start && new Date(t.date) <= end).forEach((t) => {
+    giderTotals.set(t.category, (giderTotals.get(t.category) || 0) + t.amount);
+  });
+  const giderler = Array.from(giderTotals.entries()).map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount);
+
+  const devir = data.accounts.reduce((s, acc) => {
+    const before = (field) => data.transactions.filter((t) => t.accountId === acc.id && t.type === field && new Date(t.date) < start).reduce((sum, t) => sum + t.amount, 0);
+    const transfersBefore = data.transfers.filter((tr) => new Date(tr.date) < start);
+    const inn = transfersBefore.filter((tr) => tr.toAccountId === acc.id).reduce((sum, tr) => sum + tr.amount, 0);
+    const out = transfersBefore.filter((tr) => tr.fromAccountId === acc.id).reduce((sum, tr) => sum + tr.amount, 0);
+    return s + acc.openingBalance + before("gelir") - before("gider") + inn - out;
+  }, 0);
+  const tahsilatToplami = data.transactions.filter((t) => t.type === "gelir" && new Date(t.date) >= start && new Date(t.date) <= end).reduce((s, t) => s + t.amount, 0);
+  const odemeToplami = data.transactions.filter((t) => t.type === "gider" && new Date(t.date) >= start && new Date(t.date) <= end).reduce((s, t) => s + t.amount, 0);
+
+  res.json({
+    uyeler, giderler,
+    ozet: { devir, tahsilatToplami, odemeToplami, kalan: devir + tahsilatToplami - odemeToplami },
+  });
+});
+
 module.exports = router;

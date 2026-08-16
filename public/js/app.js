@@ -297,7 +297,7 @@ const NAV_GROUPS = {
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
     { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"], ["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"]] },
-    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"], ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["uyedonem", "Üye/Dönem Raporu"], ["uyedetay", "Üye/Detay Raporu"], ["tahsilatraporu", "Tahsilat Raporu"], ["giderraporu", "Detaylı Gider Raporu"], ["butce", "Bütçe"]] },
+    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"], ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["uyedonem", "Üye/Dönem Raporu"], ["uyedetay", "Üye/Detay Raporu"], ["tahsilatraporu", "Tahsilat Raporu"], ["giderraporu", "Detaylı Gider Raporu"], ["aylikbilanco", "Aylık Bilanço"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
     { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"], ["bilgibankasi", "Bilgi Bankası"]] },
@@ -654,6 +654,7 @@ async function renderTab(tab) {
     else if (tab === "uyedetay") await renderTasinmazPivot(c, "person-category");
     else if (tab === "tahsilatraporu") await renderHareketLogu(c, "tahsilat");
     else if (tab === "giderraporu") await renderHareketLogu(c, "gider");
+    else if (tab === "aylikbilanco") await renderAylikBilanco(c);
     else if (tab === "bilgibankasi") await renderBilgiBankasi(c);
     else if (tab === "toplusms") await renderTopluSms(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
@@ -2302,6 +2303,57 @@ async function renderHareketLogu(c, kind) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
     try { result = await load(f); document.getElementById("hareketResult").innerHTML = renderTable(); wirePrint(); }
+    catch (err) { toast(err.message); }
+  });
+}
+
+// Yonetimcell karsilastirmasi: "Aylık Bilanço (Aylık Gelir Gider Raporu)" -
+// secilen ay icin uye tahsilat/borc, gider kategori dokumu, kasa ozeti tek sayfada.
+async function renderAylikBilanco(c) {
+  const now = new Date();
+  async function load(year, month) { return api(`/reports/aylik-bilanco?year=${year}&month=${month}`); }
+  let result = await load(now.getFullYear(), now.getMonth() + 1);
+
+  function renderResult() {
+    return `
+      <div class="report-wrap"><table class="report">
+        <thead><tr><th colspan="6">Üyeler</th></tr><tr><th>Blok</th><th>No</th><th>Durum</th><th>Ad Soyad</th><th class="num">Kalan Borç</th><th class="num">Tahsilat</th></tr></thead>
+        <tbody>
+          ${result.uyeler.map((u) => `<tr><td>${esc(u.block)}</td><td>${esc(u.no)}</td><td>${esc(u.durum)}</td><td>${esc(u.name)}</td><td class="num f-num" style="color:${u.kalanBorc > 0 ? "var(--red)" : "var(--green)"};">${tl(u.kalanBorc)}</td><td class="num f-num" style="color:var(--green);">${u.tahsilat ? tl(u.tahsilat) : "-"}</td></tr>`).join("") || '<tr><td colspan="6" class="empty-row">Kayıt yok.</td></tr>'}
+        </tbody>
+      </table></div>
+      <div class="report-wrap"><table class="report">
+        <thead><tr><th colspan="2">Giderler</th></tr><tr><th>Gider Kategorisi</th><th class="num">Ödeme</th></tr></thead>
+        <tbody>
+          ${result.giderler.map((g) => `<tr><td>${esc(g.category)}</td><td class="num f-num">${tl(g.amount)}</td></tr>`).join("") || '<tr><td colspan="2" class="empty-row">Kayıt yok.</td></tr>'}
+        </tbody>
+      </table></div>
+      <div class="report-wrap"><table class="report">
+        <tbody>
+          <tr><td>Devir</td><td class="num f-num">${tl(result.ozet.devir)}</td></tr>
+          <tr><td>Tahsilat Toplamı</td><td class="num f-num" style="color:var(--green);">${tl(result.ozet.tahsilatToplami)}</td></tr>
+          <tr><td>Ödeme Toplamı</td><td class="num f-num" style="color:var(--red);">${tl(result.ozet.odemeToplami)}</td></tr>
+          <tr><td style="font-weight:700;">Kasa Durumu (Kalan)</td><td class="num f-num" style="font-weight:700;">${tl(result.ozet.kalan)}</td></tr>
+        </tbody>
+      </table></div>`;
+  }
+
+  const monthOptions = MONTH_NAMES_TR.map((m, i) => `<option value="${i + 1}" ${i + 1 === now.getMonth() + 1 ? "selected" : ""}>${m}</option>`).join("");
+  c.innerHTML = `
+    ${sectionTitle("Aylık Bilanço", "Seçilen ayın üye tahsilat/borç + gider + kasa özeti")}
+    <div class="report-wrap">
+      <form id="aylikBilancoForm" class="report-filter-bar">
+        <div class="field"><label>Yıl</label><select name="year">${[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map((y) => `<option value="${y}">${y}</option>`).join("")}</select></div>
+        <div class="field"><label>Ay</label><select name="month">${monthOptions}</select></div>
+        <button class="btn btn-primary btn-sm" type="submit">Sorgula</button>
+      </form>
+    </div>
+    <div id="aylikBilancoResult">${renderResult()}</div>
+  `;
+  document.getElementById("aylikBilancoForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    try { result = await load(f.year, f.month); document.getElementById("aylikBilancoResult").innerHTML = renderResult(); }
     catch (err) { toast(err.message); }
   });
 }
