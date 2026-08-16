@@ -9,8 +9,8 @@ const router = express.Router();
 // karakterleri (ğ, ı, ş, İ) desteklemez. Resmi belgede hata firlatmamak icin
 // bu karakterleri en yakin ASCII karsiligina donusturuyoruz (yalnizca PDF ciktisinda).
 function trSafe(text) {
-  const map = { ğ: "g", Ğ: "G", ı: "i", İ: "I", ş: "s", Ş: "S", ç: "c", Ç: "C", ö: "o", Ö: "O", ü: "u", Ü: "U" };
-  return String(text ?? "").replace(/[ğĞışŞçÇöÖüÜİ]/g, (m) => map[m] || m);
+  const map = { ğ: "g", Ğ: "G", ı: "i", İ: "I", ş: "s", Ş: "S", ç: "c", Ç: "C", ö: "o", Ö: "O", ü: "u", Ü: "U", "₺": "TL" };
+  return String(text ?? "").replace(/[ğĞışŞçÇöÖüÜİ₺]/g, (m) => map[m] || m);
 }
 
 function fmtDateTr(d) {
@@ -115,6 +115,63 @@ router.get("/documents/receipt/:paymentId", requireAuth, async (req, res) => {
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="makbuz-${payment.receiptNo}.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
+// Yonetimcell karsilastirmasi: "Toplu Tahsilat Makbuzu Dokumu" - secilen
+// tarih araligindaki (opsiyonel kasa filtreli) TUM makbuzlari tek PDF'de
+// arka arkaya basar (her odeme bir sayfa).
+router.get("/documents/toplu-makbuz", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const { startDate, endDate, accountId } = req.query;
+  const start = startDate ? new Date(startDate) : null;
+  const end = endDate ? new Date(new Date(endDate).setHours(23, 59, 59, 999)) : null;
+  const payments = data.payments
+    .filter((p) => !p.cancelled)
+    .filter((p) => !start || new Date(p.date) >= start)
+    .filter((p) => !end || new Date(p.date) <= end)
+    .filter((p) => !accountId || p.accountId === accountId)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (!payments.length) return res.status(404).json({ error: "Seçilen kriterlere uyan tahsilat bulunamadı." });
+
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const navy = rgb(0.078, 0.188, 0.29);
+  const grey = rgb(0.43, 0.5, 0.56);
+
+  for (const payment of payments) {
+    const unit = data.units.find((u) => u.id === payment.unitId);
+    const page = doc.addPage([595, 842]);
+    let y = 780;
+    page.drawText(trSafe("SAKIN"), { x: 50, y, size: 22, font: bold, color: navy });
+    page.drawText(trSafe("Site \ Apartman Yonetimi"), { x: 50, y: y - 18, size: 10, font, color: grey });
+    page.drawLine({ start: { x: 50, y: y - 32 }, end: { x: 545, y: y - 32 }, thickness: 1, color: rgb(0.87, 0.9, 0.93) });
+    y -= 70;
+    page.drawText(trSafe("ÖDEME MAKBUZU"), { x: 50, y, size: 15, font: bold, color: navy });
+    y -= 34;
+    const lines = [
+      `Makbuz No: ${payment.receiptNo}`,
+      `Tarih: ${fmtDateTr(payment.date)}`,
+      `Bağımsız Bölüm: ${unit ? unit.block + " - Daire " + unit.no : "-"}`,
+      `Ödeyen: ${unit ? unit.ownerName || "-" : "-"}`,
+      `Ödeme Yöntemi: ${payment.method}`,
+      "",
+      `Tutar: ${fmtTL(payment.amount)}`,
+      payment.note ? `Not: ${payment.note}` : "",
+    ].filter((l) => l !== undefined);
+    lines.forEach((line) => {
+      if (line === "") { y -= 12; return; }
+      page.drawText(trSafe(line), { x: 50, y, size: 11, font, color: rgb(0.06, 0.11, 0.15) });
+      y -= 20;
+    });
+    page.drawLine({ start: { x: 50, y: 130 }, end: { x: 545, y: 130 }, thickness: 1, color: rgb(0.87, 0.9, 0.93) });
+    page.drawText(trSafe("Bu makbuz elektronik ortamda uretilmistir, islak imza gerekmez."), { x: 50, y: 110, size: 9, font, color: grey });
+  }
+
+  const bytes = await doc.save();
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="toplu-makbuz.pdf"`);
   res.send(Buffer.from(bytes));
 });
 

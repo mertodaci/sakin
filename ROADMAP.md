@@ -615,7 +615,22 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
     tarihi/kan grubu/sektör/iş yeri/ev adresi gibi yeni alanlar), toplu
     SMS/e-posta hazır-şablon varyantları, Bütçe Raporları PDF export,
     ve üç küçük model kontrolü (Personnel'de kurul rolleri, gider
-    kaydına dosya eki, kasalar arası Virman).
+    kaydına dosya eki, kasalar arası Virman — bu sonuncusu meğer zaten
+    "Kasalar" ekranındaki "⇄ Hesaplar Arası Transfer" ile karşılanıyormuş,
+    ayrıca iş çıkmadı).
+
+- ✅ **Toplu Tahsilat Makbuzu Dökümü** — `GET /documents/toplu-makbuz`
+  (yalnızca yönetici): tarih aralığı + opsiyonel kasa filtresiyle
+  seçilen dönemdeki tüm ödeme makbuzlarını TEK PDF'de arka arkaya
+  basar (her makbuz bir sayfa, mevcut tekli makbuz şablonuyla aynı
+  görünüm). Kasalar ekranına "🖨️ Toplu Tahsilat Makbuzu" butonu +
+  inline tarih/kasa formu eklendi.
+  **Yol boyunca bulunan gerçek hata**: `trSafe()` (PDF'te Türkçe
+  karakterleri WinAnsi'ye indirgeyen helper) ₺ işaretini
+  tanımıyordu — bir ödeme notu ₺ sembolü içerdiğinde `pdf-lib`
+  "WinAnsi cannot encode ₺" hatasıyla 500 veriyordu. `trSafe`'e ₺→"TL"
+  eşlemesi eklendi; bu, dosyadaki TÜM PDF uçlarını (tekli makbuz dahil)
+  aynı riskten koruyor. `test-toplu-makbuz.js` ile doğrulandı.
 
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar

@@ -1943,8 +1943,9 @@ async function renderKasalar(c) {
   const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
   const typeLabel = { banka: "Banka", nakit: "Nakit", pos: "POS/Kredi Kartı", diger: "Diğer" };
   c.innerHTML = `
-    <div class="flex-between">${sectionTitle("Kasalar", "Banka, nakit ve POS hesaplarının ayrı ayrı takibi")}<button class="btn btn-ghost btn-sm" id="transferBtn" style="margin-bottom:16px;">⇄ Hesaplar Arası Transfer</button></div>
+    <div class="flex-between">${sectionTitle("Kasalar", "Banka, nakit ve POS hesaplarının ayrı ayrı takibi")}<div style="display:flex;gap:8px;margin-bottom:16px;"><button class="btn btn-ghost btn-sm" id="transferBtn">⇄ Hesaplar Arası Transfer</button><button class="btn btn-ghost btn-sm" id="topluMakbuzBtn">🖨️ Toplu Tahsilat Makbuzu</button></div></div>
     <div id="transferForm"></div>
+    <div id="topluMakbuzForm"></div>
     <div class="grid cols-3 mb-16">
       <div class="card pad">
         <div class="stat-label">TOPLAM KASA BAKİYESİ</div>
@@ -2006,6 +2007,21 @@ async function renderKasalar(c) {
       const f = new FormData(e.target);
       try { await api("/accounts/transfer", { method: "POST", body: Object.fromEntries(f) }); toast("Transfer tamamlandı."); renderTab("kasalar"); }
       catch (err) { toast(err.message); }
+    });
+  });
+  document.getElementById("topluMakbuzBtn").addEventListener("click", () => {
+    document.getElementById("topluMakbuzForm").innerHTML = `
+      <form id="topluMakbuzCreateForm" class="card form-card form-row">
+        <div class="field"><label>Başlangıç Tarihi</label><input name="startDate" type="date" required /></div>
+        <div class="field"><label>Bitiş Tarihi</label><input name="endDate" type="date" required /></div>
+        <div class="field"><label>Kasa</label><select name="accountId"><option value="">Tümü</option>${accounts.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></div>
+        <button class="btn btn-primary" type="submit">İndir (PDF)</button>
+      </form>`;
+    document.getElementById("topluMakbuzCreateForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(e.target));
+      const qs = new URLSearchParams(Object.fromEntries(Object.entries(f).filter(([, v]) => v))).toString();
+      await downloadFile("/documents/toplu-makbuz?" + qs, "toplu-makbuz.pdf");
     });
   });
   c.querySelectorAll("[data-ledger]").forEach((b) => b.addEventListener("click", async () => {
