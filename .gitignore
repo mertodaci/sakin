@@ -3,3 +3,4 @@ data/db.json
 .env
 server.log
 .claude/settings.local.json
+uploads/

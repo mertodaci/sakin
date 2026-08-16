@@ -276,6 +276,7 @@ const NAV_ICON = {
   giderler: '<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/>',
   borclistesi: '<path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="5" y="4" width="14" height="17" rx="2"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="16" y2="15"/>',
   tekrarlayan: '<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>',
+  arsiv: '<path d="M2 4h20v4H2z"/><path d="M4 8v12h16V8"/><line x1="10" y1="13" x2="14" y2="13"/>',
   ayarlar: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/>',
 };
 function navIcon(id) { return svgIcon(NAV_ICON[id] || NAV_ICON.ozet); }
@@ -295,7 +296,7 @@ const NAV_GROUPS = {
     { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
-    { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"]] },
+    { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"]] },
     { group: "Sistem", items: [["seffaflik", "Şeffaflık"], ["ayarlar", "Ayarlar"]] },
   ],
   personel: [
@@ -625,6 +626,7 @@ async function renderTab(tab) {
     else if (tab === "mesajlar") await renderMesajlar(c);
     else if (tab === "icra") await renderIcraTakibi(c);
     else if (tab === "belgeler") await renderBelgeSablonlari(c);
+    else if (tab === "arsiv") await renderDosyaArsivi(c);
     else if (tab === "toplusms") await renderTopluSms(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
   } catch (err) {
@@ -2227,6 +2229,107 @@ async function renderBelgeSablonlari(c) {
   c.querySelectorAll("[data-tebligat]").forEach((b) => b.addEventListener("click", () => {
     downloadFile(`/documents/tebligat/${b.dataset.tebligat}?tier=${b.dataset.tier}`, `${b.dataset.tier}.pdf`);
   }));
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+// Yonetimcell karsilastirmasi: "Dosya Arsivi" - klasor bazli genel evrak
+// yukleme/saklama (Personel Evraklari, Maas Bordrolari, SGK Odemeleri,
+// Uye Evraklari gibi). Bizde daha once hic yoktu - her sey ya veritabani
+// kaydi ya da anlik uretilen PDF'ti; bu gercek dosya yuklemeyi destekler.
+async function renderDosyaArsivi(c) {
+  let openFolder = null;
+
+  async function renderFolderList() {
+    const folders = await api("/archive/folders");
+    c.innerHTML = `
+      ${sectionTitle("Dosya Arşivi", "Klasör bazlı genel evrak/dosya saklama")}
+      <div class="card form-card">
+        <form id="newFolderForm" class="form-row">
+          <div class="field" style="flex:1 1 240px;"><label>Yeni Klasör Adı</label><input name="name" required placeholder="Personel Evrakları, Üye Evrakları…" /></div>
+          <button class="btn btn-primary btn-sm" type="submit">+ Klasör Ekle</button>
+        </form>
+      </div>
+      <div class="grid cols-3">
+        ${folders.map((f) => `
+          <div class="card pad clickable" data-openfolder="${f.id}" style="cursor:pointer;">
+            <div class="flex-between">
+              <div style="font-weight:700;">📁 ${esc(f.name)}</div>
+              <button class="btn-danger" data-delfolder="${f.id}" title="Klasörü sil">Sil</button>
+            </div>
+            <div class="small muted" style="margin-top:6px;">${f.fileCount} dosya</div>
+          </div>`).join("") || '<div class="empty-row">Henüz klasör yok.</div>'}
+      </div>
+    `;
+    document.getElementById("newFolderForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(e.target));
+      try { await api("/archive/folders", { method: "POST", body: f }); toast("Klasör eklendi."); renderFolderList(); }
+      catch (err) { toast(err.message); }
+    });
+    c.querySelectorAll("[data-delfolder]").forEach((b) => b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!confirm("Bu klasör ve içindeki tüm dosyalar silinecek. Emin misiniz?")) return;
+      try { await api("/archive/folders/" + b.dataset.delfolder, { method: "DELETE" }); toast("Klasör silindi."); renderFolderList(); }
+      catch (err) { toast(err.message); }
+    }));
+    c.querySelectorAll("[data-openfolder]").forEach((card) => card.addEventListener("click", () => {
+      openFolder = folders.find((f) => f.id === card.dataset.openfolder);
+      renderFolderDetail();
+    }));
+  }
+
+  async function renderFolderDetail() {
+    const files = await api(`/archive/folders/${openFolder.id}/files`);
+    c.innerHTML = `
+      <div class="flex-between">${sectionTitle("📁 " + openFolder.name, "Dosya Arşivi")}<button class="btn btn-ghost btn-sm" id="backToFolders" style="margin-bottom:16px;">← Klasörlere Dön</button></div>
+      <div class="card form-card">
+        <div class="ledger-title" style="padding:0 0 10px;">Yeni Dosya Ekle</div>
+        <form id="uploadForm" class="form-row">
+          <div class="field" style="flex:1 1 260px;"><label>Dosya</label><input type="file" name="file" required /></div>
+          <button class="btn btn-primary btn-sm" type="submit">Yükle</button>
+        </form>
+      </div>
+      <div class="card tight">
+        ${files.map((f) => `
+          <div class="ledger-row">
+            <div><div style="font-size:14px;font-weight:600;">📄 ${esc(f.originalName)}</div><div class="small muted">${formatFileSize(f.size)} · ${dt(f.uploadedAt)}</div></div>
+            <div style="display:flex;gap:8px;"><button class="btn btn-ghost btn-sm" data-dlfile="${f.id}" data-fname="${esc(f.originalName)}">İndir</button><button class="btn-danger" data-delfile="${f.id}">Sil</button></div>
+          </div>`).join("") || '<div class="empty-row">Bu klasörde dosya yok.</div>'}
+      </div>
+    `;
+    document.getElementById("backToFolders").addEventListener("click", () => { openFolder = null; renderFolderList(); });
+    document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fileInput = e.target.querySelector('input[name="file"]');
+      if (!fileInput.files.length) return;
+      const fd = new FormData();
+      fd.append("file", fileInput.files[0]);
+      try {
+        const res = await fetch(API_BASE + `/archive/folders/${openFolder.id}/files`, {
+          method: "POST",
+          headers: { Authorization: "Bearer " + state.token },
+          body: fd,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Yükleme başarısız oldu.");
+        toast("Dosya yüklendi.");
+        renderFolderDetail();
+      } catch (err) { toast(err.message); }
+    });
+    c.querySelectorAll("[data-dlfile]").forEach((b) => b.addEventListener("click", () => downloadFile("/archive/files/" + b.dataset.dlfile + "/download", b.dataset.fname)));
+    c.querySelectorAll("[data-delfile]").forEach((b) => b.addEventListener("click", async () => {
+      if (!confirm("Bu dosyayı silmek istediğinize emin misiniz?")) return;
+      try { await api("/archive/files/" + b.dataset.delfile, { method: "DELETE" }); toast("Dosya silindi."); renderFolderDetail(); }
+      catch (err) { toast(err.message); }
+    }));
+  }
+
+  renderFolderList();
 }
 
 async function renderKarar(c) {

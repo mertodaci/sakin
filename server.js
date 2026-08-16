@@ -18,6 +18,7 @@ const { router: accountsRoutes } = require("./routes/accounts");
 const partiesRoutes = require("./routes/parties");
 const workspaceRoutes = require("./routes/workspace");
 const legalRoutes = require("./routes/legal");
+const archiveRoutes = require("./routes/archive");
 const { runMaintenanceTasks } = require("./jobs");
 
 const app = express();
@@ -38,6 +39,7 @@ app.use("/api", accountsRoutes);
 app.use("/api", partiesRoutes);
 app.use("/api", workspaceRoutes);
 app.use("/api", legalRoutes);
+app.use("/api", archiveRoutes);
 
 app.use(express.static(path.join(__dirname, "public")));
 app.get("*", (req, res) => {

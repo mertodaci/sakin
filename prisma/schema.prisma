@@ -771,3 +771,32 @@ model Message {
 
   @@index([date])
 }
+
+// ---------------- Dosya Arsivi ----------------
+// Yonetimcell karsilastirmasi: klasor bazli genel evrak/dosya yukleme-saklama
+// sistemi (Personel Evraklari, Maas Bordrolari, SGK Odemeleri, Uye Evraklari
+// gibi). Gercek dosyalar yerel diskte (uploads/archive/) UUID adiyla
+// saklanir - orijinal dosya adi asla disk yolu olarak kullanilmaz (path
+// traversal riskini onlemek icin), sadece indirirken oneri adi olarak gosterilir.
+model ArchiveFolder {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  createdBy String
+
+  files ArchiveFile[]
+}
+
+model ArchiveFile {
+  id           String        @id @default(uuid())
+  folderId     String
+  folder       ArchiveFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  storedName   String
+  originalName String
+  mimeType     String
+  size         Int
+  uploadedBy   String
+  uploadedAt   DateTime      @default(now())
+
+  @@index([folderId])
+}
