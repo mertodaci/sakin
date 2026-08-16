@@ -97,6 +97,7 @@ model Unit {
   activityLogs     ActivityLog[]
   internalTasks    InternalTask[]
   householdMembers HouseholdMember[]
+  legalCases       LegalCase[]
 }
 
 // Yonetimcell karsilastirmasindan: "Ikamet Edenler Listesi" - o dairede
@@ -124,6 +125,22 @@ model UserNote {
   authorId  String
   text      String
   createdAt DateTime @default(now())
+}
+
+// ---------------- Hukuki (Icra Takibi) ----------------
+// Yonetimcell karsilastirmasindan: "Icradaki Uyeler Listesi" ve "Icradaki
+// Dosyalar Listesi" ayni verinin iki farkli filtrelemesi - tek model yeterli.
+model LegalCase {
+  id          String    @id @default(uuid())
+  unitId      String
+  unit        Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  caseNumber  String
+  court       String
+  status      String    @default("Açık")
+  description String
+  openedAt    DateTime  @default(now())
+  closedAt    DateTime?
+  createdBy   String
 }
 
 model User {

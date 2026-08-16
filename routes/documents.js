@@ -195,4 +195,194 @@ router.get("/documents/debt-list.csv", requireAuth, requireRole("yonetici"), asy
   res.send(csv);
 });
 
+/* ================= HUKUKİ BELGE ŞABLONLARI ================= */
+/* Yönetimcell karşılaştırmasından: gerçek metinleriyle çıkarılan iki
+   kademeli tahsilat baskısı (Ödeme Çağrısı / İhtarname) ve standart
+   genel kurul/vekaletname/hazirun/antetli evrak/adres etiketi şablonları. */
+
+// Once nazik hatirlatma, sonra resmi ihtarname (7 gun sureli, icra tehditli).
+router.get("/documents/tebligat/:unitId", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const unit = data.units.find((u) => u.id === req.params.unitId);
+  if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
+  const debt = data.charges.filter((c) => c.unitId === unit.id && c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0);
+  const tier = req.query.tier === "ihtarname" ? "ihtarname" : "call";
+
+  const lines = tier === "ihtarname"
+    ? [
+        `Sayın ${unit.ownerName || "İlgili"},`,
+        "",
+        `${data.meta.buildingName} Yöneticiliği'ne aşağıda dökümü mevcut borcunuz bulunmaktadır.`,
+        "",
+        `Bağımsız Bölüm: ${unit.block} - Daire ${unit.no}`,
+        `Güncel Borç: ${fmtTL(debt)}`,
+        "",
+        "İşbu ihtarın tarafınıza tebliğini takip eden 7 (yedi) gün içerisinde vadesi geçmiş",
+        "borcunuzu site/apartman yönetimine nakden ödemenizi, belirtilen süre içerisinde",
+        "ödeme yapmamanız halinde borç bakiyesinin faiz ve ferileri ile birlikte tahsili için",
+        "yasal yollara başvurulacağını, hakkınızda icra takibi başlatılabileceğini, yapılacak",
+        "yasal işlemler nedeniyle oluşacak tüm masraf, yargılama gideri ve vekalet ücretinin",
+        "de tarafınızdan tahsil edileceğini ihtaren bildiririz.",
+      ]
+    : [
+        `Sayın ${unit.ownerName || "İlgili"},`,
+        "",
+        `${unit.block} - Daire ${unit.no} nolu bağımsız bölümünüzün güncel aidat/ortak gider`,
+        `bakiyesi ${fmtTL(debt)} olarak görünmektedir.`,
+        "",
+        "En kısa sürede ödemenizi rica eder, herhangi bir itirazınız varsa yönetime",
+        "bildirmenizi dileriz.",
+      ];
+
+  const bytes = await buildDocument({
+    heading: tier === "ihtarname" ? "İHTARNAME" : "ÖDEME ÇAĞRISI",
+    lines,
+    footerNote: tier === "ihtarname" ? "Bu belge resmi bir hukuki uyarı niteliğindedir." : undefined,
+  });
+
+  db.logActivity(data, req.user, "document.tebligat", `${unit.block} - Daire ${unit.no} için ${tier === "ihtarname" ? "ihtarname" : "ödeme çağrısı"} oluşturuldu.`, unit.id);
+  await db.save(data);
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${tier}-${unit.block}-${unit.no}.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
+router.get("/documents/genel-kurul-cagrisi", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const { birinciTarih, birinciSaat, ikinciTarih, ikinciSaat, adres } = req.query;
+  const bytes = await buildDocument({
+    heading: "GENEL KURUL ÇAĞRISI",
+    lines: [
+      `${data.meta.buildingName} yönetim kurulumuzun almış olduğu karar neticesinde`,
+      "genel kurulumuz olağan/olağanüstü toplanacaktır.",
+      "",
+      `Toplantı, ${adres || data.meta.address || "…"} adresinde yapılacaktır.`,
+      "",
+      "Birinci toplantıda çoğunluk sağlanamadığı takdirde ikinci toplantı aşağıdaki",
+      "tarih ve saatte aynı adreste yapılacaktır. İkinci toplantıda çoğunluk",
+      "aranmaksızın toplantı açılarak kararlar alınacaktır.",
+      "",
+      `Birinci Toplantı: ${birinciTarih || "…/…/……"} Saat: ${birinciSaat || "…:…"}`,
+      `İkinci Toplantı: ${ikinciTarih || "…/…/……"} Saat: ${ikinciSaat || "…:…"}`,
+      "",
+      "Toplantıya katılımınızı bekler, gereğini rica ederiz.",
+    ],
+  });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="genel-kurul-cagrisi.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
+router.get("/documents/vekaletname", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const bytes = await buildDocument({
+    heading: "VEKALETNAME ÖRNEĞİ",
+    lines: [
+      "Ben aşağıda kimlik bilgileri yazılı bağımsız bölüm maliki;",
+      "",
+      "Adı Soyadı: …………………………………………",
+      "Bağımsız Bölüm: …………………………………………",
+      "",
+      "…………………………………………………… tarihinde yapılacak genel kurul toplantısında",
+      "beni temsil etmek, oy kullanmak ve toplantıya ilişkin her türlü işlemi",
+      "benim adıma yapmak üzere;",
+      "",
+      "Adı Soyadı: …………………………………………",
+      "",
+      "kişiyi vekil tayin ettiğimi beyan ederim.",
+      "",
+      "Vekalet Veren Adı / İmza: ……………………………………",
+    ],
+  });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="vekaletname-ornegi.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
+router.get("/documents/antetli-evrak", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const bytes = await buildDocument({
+    heading: "",
+    lines: ["", "", "", "Konu: …………………………………………", "", ""],
+    footerNote: data.meta.address || undefined,
+  });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="antetli-evrak.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
+// Genel kurul yoklama tutanagi: tum bagimsiz bolumlerin malik adi ve arsa
+// payi ile imza icin bosluk birakilmis liste.
+router.get("/documents/hazirun-cetveli", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const rows = data.units.slice().sort((a, b) => `${a.block}${a.no}`.localeCompare(`${b.block}${b.no}`, "tr"));
+
+  const doc = await PDFDocument.create();
+  let page = doc.addPage([595, 842]);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const navy = rgb(0.078, 0.188, 0.29);
+  const grey = rgb(0.43, 0.5, 0.56);
+
+  let y = 780;
+  const drawHeader = () => {
+    page.drawText(trSafe("SAKIN"), { x: 50, y, size: 22, font: bold, color: navy });
+    page.drawText(trSafe(data.meta.buildingName + " - Genel Kurul Hazirun (Yoklama) Cetveli"), { x: 50, y: y - 18, size: 10, font, color: grey });
+    page.drawLine({ start: { x: 50, y: y - 32 }, end: { x: 545, y: y - 32 }, thickness: 1, color: rgb(0.87, 0.9, 0.93) });
+    let hy = y - 60;
+    page.drawText(trSafe("Bagimsiz Bolum"), { x: 50, y: hy, size: 10, font: bold, color: grey });
+    page.drawText(trSafe("Malik"), { x: 180, y: hy, size: 10, font: bold, color: grey });
+    page.drawText(trSafe("Arsa Payi"), { x: 370, y: hy, size: 10, font: bold, color: grey });
+    page.drawText(trSafe("Imza"), { x: 460, y: hy, size: 10, font: bold, color: grey });
+    hy -= 14;
+    page.drawLine({ start: { x: 50, y: hy }, end: { x: 545, y: hy }, thickness: 1, color: rgb(0.87, 0.9, 0.93) });
+    return hy - 18;
+  };
+  y = drawHeader();
+
+  rows.forEach((u) => {
+    if (y < 80) { page = doc.addPage([595, 842]); y = 780; y = drawHeader(); }
+    page.drawText(trSafe(`${u.block} - Daire ${u.no}`), { x: 50, y, size: 10, font, color: rgb(0.06, 0.11, 0.15) });
+    page.drawText(trSafe(u.ownerName || "-"), { x: 180, y, size: 10, font, color: rgb(0.06, 0.11, 0.15) });
+    page.drawText(trSafe(u.landShare != null ? String(u.landShare) : "-"), { x: 370, y, size: 10, font, color: rgb(0.06, 0.11, 0.15) });
+    page.drawLine({ start: { x: 460, y: y - 3 }, end: { x: 545, y: y - 3 }, thickness: 0.7, color: rgb(0.7, 0.76, 0.82) });
+    y -= 20;
+  });
+
+  const bytes = await doc.save();
+  db.logActivity(data, req.user, "document.hazirun", "Hazirun (yoklama) cetveli oluşturuldu.", null);
+  await db.save(data);
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="hazirun-cetveli.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
+// Adres etiketleri: hazir yapiskan etiket sablonu degil (kagit olcusu belirsiz),
+// kesilip zarfa yapistirilabilecek tek sutunluk adres listesi.
+router.get("/documents/adres-etiketleri", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const rows = data.units.slice().sort((a, b) => `${a.block}${a.no}`.localeCompare(`${b.block}${b.no}`, "tr"));
+
+  const doc = await PDFDocument.create();
+  let page = doc.addPage([595, 842]);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  let y = 780;
+
+  rows.forEach((u) => {
+    if (y < 90) { page = doc.addPage([595, 842]); y = 780; }
+    page.drawRectangle({ x: 50, y: y - 60, width: 495, height: 55, borderColor: rgb(0.8, 0.84, 0.88), borderWidth: 0.7 });
+    page.drawText(trSafe(u.ownerName || "İlgili"), { x: 62, y: y - 22, size: 12, font: bold, color: rgb(0.06, 0.11, 0.15) });
+    page.drawText(trSafe(`${u.block} - Daire ${u.no}`), { x: 62, y: y - 38, size: 10, font, color: rgb(0.35, 0.4, 0.45) });
+    page.drawText(trSafe(data.meta.address || ""), { x: 62, y: y - 52, size: 9, font, color: rgb(0.35, 0.4, 0.45) });
+    y -= 68;
+  });
+
+  const bytes = await doc.save();
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="adres-etiketleri.pdf"`);
+  res.send(Buffer.from(bytes));
+});
+
 module.exports = router;

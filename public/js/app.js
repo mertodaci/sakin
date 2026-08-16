@@ -243,7 +243,7 @@ const NAV_GROUPS = {
     { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
-    { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"]] },
+    { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"]] },
     { group: "Sistem", items: [["seffaflik", "Şeffaflık"], ["ayarlar", "Ayarlar"]] },
   ],
   personel: [
@@ -541,6 +541,8 @@ async function renderTab(tab) {
     else if (tab === "ajanda") await renderAjanda(c);
     else if (tab === "istakibi") await renderIsTakibi(c);
     else if (tab === "mesajlar") await renderMesajlar(c);
+    else if (tab === "icra") await renderIcraTakibi(c);
+    else if (tab === "belgeler") await renderBelgeSablonlari(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
   } catch (err) {
     c.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
@@ -1623,6 +1625,91 @@ async function renderMesajlar(c) {
   c.querySelectorAll("[data-readmsg]").forEach((b) => b.addEventListener("click", async () => {
     try { await api("/messages/" + b.dataset.readmsg + "/read", { method: "PATCH" }); renderTab("mesajlar"); }
     catch (err) { toast(err.message); }
+  }));
+}
+
+/* ================= HUKUKİ: İCRA TAKİBİ / BELGE ŞABLONLARI ================= */
+
+async function renderIcraTakibi(c) {
+  const [cases, units] = await Promise.all([api("/legal-cases"), api("/units")]);
+  const STATUSES = ["Açık", "Kapandı"];
+  c.innerHTML = `
+    ${sectionTitle("İcra Takibi", "Yasal takip sürecindeki daireler/dosyalar")}
+    <div class="card form-card">
+      <div class="ledger-title" style="padding:0 0 10px;">Yeni Dosya Ekle</div>
+      <form id="legalForm" class="form-row">
+        <div class="field" style="flex:1 1 200px;"><label>Daire</label><select name="unitId">${units.map((u) => `<option value="${u.id}">${esc(u.block)} - Daire ${esc(u.no)}</option>`).join("")}</select></div>
+        <div class="field" style="flex:1 1 160px;"><label>Dosya No</label><input name="caseNumber" required /></div>
+        <div class="field" style="flex:1 1 200px;"><label>İcra Dairesi/Mahkeme</label><input name="court" /></div>
+        <div class="field" style="flex:1 1 260px;"><label>Açıklama</label><input name="description" /></div>
+        <button class="btn btn-primary" type="submit">Ekle</button>
+      </form>
+    </div>
+    <div class="card tight">
+      ${cases.map((lc) => `
+        <div class="ledger-row" style="flex-wrap:wrap;">
+          <div><div style="font-size:14px;font-weight:600;">${esc(lc.unitLabel)} — Dosya No: ${esc(lc.caseNumber)}</div><div class="small muted">${esc(lc.court || "-")}${lc.ownerName ? " · " + esc(lc.ownerName) : ""} · Açılış: ${dt(lc.openedAt)}</div>${lc.description ? `<div class="small muted">${esc(lc.description)}</div>` : ""}</div>
+          <select data-legalstatus="${lc.id}">${STATUSES.map((s) => `<option value="${s}" ${s === lc.status ? "selected" : ""}>${s}</option>`).join("")}</select>
+        </div>`).join("") || '<div class="empty-row">Kayıtlı dosya yok.</div>'}
+    </div>
+  `;
+  document.getElementById("legalForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    try { await api("/legal-cases", { method: "POST", body: Object.fromEntries(f) }); toast("Dosya eklendi."); renderTab("icra"); }
+    catch (err) { toast(err.message); }
+  });
+  c.querySelectorAll("[data-legalstatus]").forEach((sel) => sel.addEventListener("change", async () => {
+    try { await api("/legal-cases/" + sel.dataset.legalstatus, { method: "PATCH", body: { status: sel.value } }); toast("Durum güncellendi."); renderTab("icra"); }
+    catch (err) { toast(err.message); }
+  }));
+}
+
+async function renderBelgeSablonlari(c) {
+  const units = await api("/units");
+  const debtors = units.filter((u) => u.debt > 0).sort((a, b) => b.debt - a.debt);
+  c.innerHTML = `
+    ${sectionTitle("Belge Şablonları", "Genel kurul, tebligat ve resmi evrak şablonları")}
+    <div class="card pad mb-16">
+      <div class="ledger-title" style="padding:0 0 10px;">Genel Kurul Çağrısı</div>
+      <form id="gkForm" class="form-row">
+        <div class="field" style="flex:1 1 180px;"><label>Birinci Toplantı Tarih</label><input type="date" name="birinciTarih" /></div>
+        <div class="field" style="flex:0 0 110px;"><label>Saat</label><input type="time" name="birinciSaat" /></div>
+        <div class="field" style="flex:1 1 180px;"><label>İkinci Toplantı Tarih</label><input type="date" name="ikinciTarih" /></div>
+        <div class="field" style="flex:0 0 110px;"><label>Saat</label><input type="time" name="ikinciSaat" /></div>
+        <div class="field" style="flex:1 1 260px;"><label>Toplantı Adresi</label><input name="adres" placeholder="Boş bırakılırsa site adresi kullanılır" /></div>
+        <button class="btn btn-primary btn-sm" type="submit">PDF Oluştur</button>
+      </form>
+    </div>
+    <div class="grid cols-3 mb-16">
+      <button class="card pad clickable" id="btnVekalet" style="text-align:left;border:none;"><div style="font-weight:700;">📄 Vekaletname Örneği</div><div class="small muted">Genel kurul için hazır şablon</div></button>
+      <button class="card pad clickable" id="btnHazirun" style="text-align:left;border:none;"><div style="font-weight:700;">📋 Hazirun Cetveli</div><div class="small muted">Tüm daireler, arsa payı, imza alanı</div></button>
+      <button class="card pad clickable" id="btnAntetli" style="text-align:left;border:none;"><div style="font-weight:700;">📃 Antetli Evrak</div><div class="small muted">Boş, markalı resmi yazı kağıdı</div></button>
+      <button class="card pad clickable" id="btnEtiket" style="text-align:left;border:none;"><div style="font-weight:700;">🏷️ Adres Etiketleri</div><div class="small muted">Tüm daireler için zarf etiketi listesi</div></button>
+    </div>
+    <div class="card tight">
+      <div class="ledger-title">Borçlu Dairelere Tebligat (Ödeme Çağrısı / İhtarname)</div>
+      ${debtors.map((u) => `
+        <div class="ledger-row">
+          <div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)}</div><div class="small muted">${esc(u.ownerName || "-")} · ${tl(u.debt)}</div></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" data-tebligat="${u.id}" data-tier="call">Ödeme Çağrısı</button>
+            <button class="btn-danger" data-tebligat="${u.id}" data-tier="ihtarname">İhtarname</button>
+          </div>
+        </div>`).join("") || '<div class="empty-row">Borçlu daire yok.</div>'}
+    </div>
+  `;
+  document.getElementById("gkForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const params = new URLSearchParams(Object.fromEntries(new FormData(e.target)));
+    downloadFile("/documents/genel-kurul-cagrisi?" + params.toString(), "genel-kurul-cagrisi.pdf");
+  });
+  document.getElementById("btnVekalet").addEventListener("click", () => downloadFile("/documents/vekaletname", "vekaletname-ornegi.pdf"));
+  document.getElementById("btnHazirun").addEventListener("click", () => downloadFile("/documents/hazirun-cetveli", "hazirun-cetveli.pdf"));
+  document.getElementById("btnAntetli").addEventListener("click", () => downloadFile("/documents/antetli-evrak", "antetli-evrak.pdf"));
+  document.getElementById("btnEtiket").addEventListener("click", () => downloadFile("/documents/adres-etiketleri", "adres-etiketleri.pdf"));
+  c.querySelectorAll("[data-tebligat]").forEach((b) => b.addEventListener("click", () => {
+    downloadFile(`/documents/tebligat/${b.dataset.tebligat}?tier=${b.dataset.tier}`, `${b.dataset.tier}.pdf`);
   }));
 }
 
