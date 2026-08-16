@@ -458,6 +458,11 @@ model PartyCharge {
   date        DateTime     @default(now())
   dueDate     DateTime
   createdBy   String
+  // Yonetimcell karsilastirmasi: "Borc Listesi"nde her satira fatura/makbuz
+  // dosyasi eklenebiliyordu - diskte UUID adiyla saklanir (bkz. archive.js
+  // pattern), orijinal ad sadece indirirken oneri olarak kullanilir.
+  attachmentStoredName   String?
+  attachmentOriginalName String?
 
   allocations PartyPaymentAllocation[]
 

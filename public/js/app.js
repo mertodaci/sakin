@@ -1285,7 +1285,7 @@ async function renderKullanicilar(c) {
         <div class="field"><label>Ad Soyad</label><input name="name" required /></div>
         <div class="field"><label>E-posta</label><input type="email" name="email" required /></div>
         <div class="field"><label>Telefon</label><input name="phone" /></div>
-        <div class="field"><label>Departman</label><input name="department" placeholder="Temizlik, Güvenlik, Bakım…" /></div>
+        <div class="field"><label>Departman / Görev</label><input name="department" list="personnelRoleList" placeholder="Temizlik, Güvenlik, Bakım… veya Yönetim Kurulu Üyesi" /><datalist id="personnelRoleList">${PERSONNEL_ROLE_SUGGESTIONS.map((r) => `<option value="${esc(r)}"></option>`).join("")}</datalist></div>
         <div class="field"><label>Şifre</label><input type="password" name="password" required minlength="8" /></div>
         <button class="btn btn-primary" type="submit">Ekle</button>
       </form>
@@ -1434,6 +1434,13 @@ async function renderAracPlakaListesi(c) {
     </table></div>`;
   wireListSearch(c, "[data-listrow]", ["name"]);
 }
+
+// Yonetimcell karsilastirmasi: "Personel (Ödeme ve Borçlanma)" ekraninda
+// gorev alani sabit ~34 kalemlik bir listeydi - teknik roller YANI SIRA
+// yonetim/denetim kurulu rolleri de ayni "Personel" kaydinda tutuluyordu
+// (ayri bir "kurul uyesi" modeli yok). Bizde department serbest metin
+// kalsin (daha esnek) ama bu datalist ile ayni rehberligi sunuyoruz.
+const PERSONNEL_ROLE_SUGGESTIONS = ["Aşçı", "Bahçevan", "Çaycı", "Danışma", "Direktör", "Elektrikçi", "Güvenlik", "Halkla İlişkiler", "Havuz Bakımcı", "İdari Yönetici", "İnşaat Teknisyeni", "Kaloriferci", "Kapıcı", "Mekanikçi", "Mali Müşavir", "Malzemeci", "Muhasebe", "Personel Şefi", "Sağlıkçı", "Sekreter", "Site Görevlisi", "Site Müdürü", "Su Tesisatçısı", "Şöför", "Teknik", "Temizlik Görevlisi", "Denetçi", "Muhasip Üye", "Yönetim Kurulu Başkanı", "Yönetim Kurulu Başkan Yardımcısı", "Yönetim Kurulu Üyesi", "Yönetim Kurulu Danışmanı", "Diğer"];
 
 const HOUSEHOLD_RELATIONSHIPS = ["Kendisi", "Eş", "Çocuk", "Anne", "Baba", "Kardeş", "Kiracı", "Ev Arkadaşı", "Misafir", "Diğer"];
 
@@ -2890,6 +2897,7 @@ async function renderBorcListesi(c) {
     return api("/party-charges?" + qs);
   }
   const accounts = await api("/accounts");
+  let currentFilters = {};
   let charges = await load({});
 
   function partyLabel(ch) {
@@ -2909,19 +2917,42 @@ async function renderBorcListesi(c) {
         <td class="f-num">${tl(ch.amount)}</td>
         <td class="f-num">${tl(ch.paidAmount)}</td>
         <td class="f-num" style="font-weight:600;">${tl(kalan)}</td>
+        <td>
+          ${ch.attachmentOriginalName
+            ? `<button class="btn btn-ghost btn-sm" data-download-attachment="${ch.id}" title="${esc(ch.attachmentOriginalName)}">📎</button>`
+            : `<label class="btn btn-ghost btn-sm" style="cursor:pointer;" title="Fatura/makbuz ekle">📎<input type="file" data-upload-attachment="${ch.id}" style="display:none;" /></label>`}
+        </td>
         <td><button class="btn btn-ghost btn-sm" data-pay-charge="${ch.id}|${kalan}">Öde</button></td>
       </tr>
-      <tr id="bl-pay-${ch.id}" style="display:none;"><td colspan="8"></td></tr>`;
+      <tr id="bl-pay-${ch.id}" style="display:none;"><td colspan="9"></td></tr>`;
   }
 
   function renderTable() {
     return `
       <div class="scroll-x">
         <table class="simple">
-          <thead><tr><th>Vade</th><th>Fatura No</th><th>Taraf / Kategori</th><th>Açıklama</th><th>Borç</th><th>Ödenen</th><th>Kalan</th><th></th></tr></thead>
-          <tbody>${charges.map(row).join("") || '<tr><td colspan="8" class="empty-row">Açık borç yok.</td></tr>'}</tbody>
+          <thead><tr><th>Vade</th><th>Fatura No</th><th>Taraf / Kategori</th><th>Açıklama</th><th>Borç</th><th>Ödenen</th><th>Kalan</th><th>Ek</th><th></th></tr></thead>
+          <tbody>${charges.map(row).join("") || '<tr><td colspan="9" class="empty-row">Açık borç yok.</td></tr>'}</tbody>
         </table>
       </div>`;
+  }
+
+  function bindAttachmentActions() {
+    c.querySelectorAll("[data-download-attachment]").forEach((b) => b.addEventListener("click", () => downloadFile("/party-charges/" + b.dataset.downloadAttachment + "/attachment", "ek-dosya")));
+    c.querySelectorAll("[data-upload-attachment]").forEach((input) => input.addEventListener("change", async () => {
+      if (!input.files.length) return;
+      const fd = new FormData();
+      fd.append("file", input.files[0]);
+      try {
+        const res = await fetch(API_BASE + "/party-charges/" + input.dataset.uploadAttachment + "/attachment", { method: "POST", headers: { Authorization: "Bearer " + state.token }, body: fd });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || "Yükleme başarısız oldu.");
+        toast("Dosya eklendi.");
+        charges = await load(currentFilters);
+        document.getElementById("blTable").innerHTML = renderTable();
+        bindRowActions(); bindAttachmentActions();
+      } catch (err) { toast(err.message); }
+    }));
   }
 
   function bindRowActions() {
@@ -2957,6 +2988,7 @@ async function renderBorcListesi(c) {
     <div id="blTable">${renderTable()}</div>
   `;
   bindRowActions();
+  bindAttachmentActions();
 
   document.getElementById("blFilterForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -2965,9 +2997,11 @@ async function renderBorcListesi(c) {
     if (f.partyType) filters.partyType = f.partyType;
     if (f.dueFrom) filters.dueFrom = f.dueFrom;
     if (f.dueTo) filters.dueTo = f.dueTo;
+    currentFilters = filters;
     charges = await load(filters);
     document.getElementById("blTable").innerHTML = renderTable();
     bindRowActions();
+    bindAttachmentActions();
   });
 }
 

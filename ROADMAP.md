@@ -787,6 +787,23 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   reddediliyor. Test sırasında oluşan gerçek `Charge` kayıtları ve
   proje, demo veriyi kirletmemek için temizlendi.
 
+- ✅ **Küçük model düzeltmeleri (3 madde)**:
+  - **Personnel görev listesi**: `department` alanını sabit enum'a
+    çevirmek yerine (daha esnek olsun diye) Yönetimcell'in ~34
+    kalemlik gerçek görev listesini (teknik roller + Yönetim Kurulu
+    Başkanı/Üyesi/Danışmanı, Denetçi, Muhasip Üye gibi kurul rolleri
+    dahil) `<datalist>` önerisi olarak ekledik — hem rehberlik
+    sağlıyor hem serbest metin esnekliğini koruyor.
+  - **Gider kaydına dosya eki**: Yeni `PartyCharge.attachmentStoredName/
+    attachmentOriginalName` alanları + `archive.js` ile aynı güvenli
+    UUID-dosya-adı deseniyle 3 uç (`POST/GET/DELETE
+    /party-charges/:id/attachment`). Borç Listesi ekranına her satıra
+    📎 butonu eklendi (yoksa yükle, varsa indir). `test-attachment.js`
+    ile yükle/indir(içerik eşleşmesi)/sil/sil-sonrası-404 doğrulandı.
+  - **Kasalar arası Virman**: kontrol edildi, zaten Kasalar ekranındaki
+    "⇄ Hesaplar Arası Transfer" ile karşılanıyormuş — ekstra iş
+    gerekmedi (task 46'da da not edildi).
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı

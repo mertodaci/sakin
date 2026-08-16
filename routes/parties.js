@@ -1,10 +1,28 @@
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
+const multer = require("multer");
+const { randomUUID } = require("crypto");
 const { Prisma } = require("@prisma/client");
 const db = require("../db");
 const { materializeRecurringPartyCharges } = require("../jobs");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
 const router = express.Router();
+
+// Yonetimcell karsilastirmasi: "Borc Listesi"nde her gider kaydina fatura/
+// makbuz dosyasi eklenebiliyordu. archive.js ile ayni guvenlik pattern'i:
+// disk dosya adi her zaman UUID, kullanicinin gonderdigi orijinal ad asla
+// disk yolu olarak kullanilmaz (path traversal riski).
+const ATTACHMENT_DIR = path.join(__dirname, "..", "uploads", "party-charge-attachments");
+fs.mkdirSync(ATTACHMENT_DIR, { recursive: true });
+const attachmentUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, ATTACHMENT_DIR),
+    filename: (req, file, cb) => cb(null, randomUUID() + path.extname(file.originalname).slice(0, 10)),
+  }),
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
 
 function partyDebt(data, partyType, partyId) {
   return data.partyCharges
@@ -157,6 +175,37 @@ router.post("/party-charges", requireAuth, requireRole("yonetici"), async (req, 
   db.logActivity(data, req.user, "party.charge", `${label} için ${amount}₺ borçlandırma kaydedildi (fatura ${charge.invoiceNo}): ${description || "-"}`, null);
   await db.save(data);
   res.status(201).json(charge);
+});
+
+router.post("/party-charges/:id/attachment", requireAuth, requireRole("yonetici"), attachmentUpload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Dosya zorunludur." });
+  const data = await db.load();
+  const charge = data.partyCharges.find((c) => c.id === req.params.id);
+  if (!charge) { fs.unlink(req.file.path, () => {}); return res.status(404).json({ error: "Borç kaydı bulunamadı." }); }
+  // Eski dosya varsa diskten temizle (ayni kayda yeni dosya yuklenirse birikmesin).
+  if (charge.attachmentStoredName) fs.unlink(path.join(ATTACHMENT_DIR, charge.attachmentStoredName), () => {});
+  charge.attachmentStoredName = req.file.filename;
+  charge.attachmentOriginalName = req.file.originalname;
+  await db.save(data);
+  res.json({ attachmentStoredName: charge.attachmentStoredName, attachmentOriginalName: charge.attachmentOriginalName });
+});
+
+router.get("/party-charges/:id/attachment", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const charge = data.partyCharges.find((c) => c.id === req.params.id);
+  if (!charge || !charge.attachmentStoredName) return res.status(404).json({ error: "Ek dosya bulunamadı." });
+  res.download(path.join(ATTACHMENT_DIR, charge.attachmentStoredName), charge.attachmentOriginalName || "ek-dosya");
+});
+
+router.delete("/party-charges/:id/attachment", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const charge = data.partyCharges.find((c) => c.id === req.params.id);
+  if (!charge) return res.status(404).json({ error: "Borç kaydı bulunamadı." });
+  if (charge.attachmentStoredName) fs.unlink(path.join(ATTACHMENT_DIR, charge.attachmentStoredName), () => {});
+  charge.attachmentStoredName = null;
+  charge.attachmentOriginalName = null;
+  await db.save(data);
+  res.json({ message: "Ek dosya kaldırıldı." });
 });
 
 /* ---------------- PARTY PAYMENTS (Firma/Personele Odeme) ---------------- */
