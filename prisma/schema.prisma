@@ -164,6 +164,16 @@ model User {
   unit                Unit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
   department          String?
   nationalId          String?
+  // Yonetimcell karsilastirmasi: "Detayli Uye Listesi Dokumu" rapor
+  // olusturucusunda gorulen ek uye bilgileri - hepsi opsiyonel, sadece
+  // bilgi amacli.
+  gender              String?
+  birthDate           DateTime?
+  bloodType           String?
+  sector              String?
+  workplace           String?
+  workAddress         String?
+  homeAddress         String?
   isApproved          Boolean   @default(false)
   mustChangePassword  Boolean   @default(false)
   resetRequestedAt    DateTime?

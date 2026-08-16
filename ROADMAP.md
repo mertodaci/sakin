@@ -804,6 +804,25 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
     "⇄ Hesaplar Arası Transfer" ile karşılanıyormuş — ekstra iş
     gerekmedi (task 46'da da not edildi).
 
+- ✅ **Detaylı Üye Listesi (esnek sütun seçici) + yeni üye alanları** —
+  `User`'a cinsiyet/doğum tarihi/kan grubu/sektör/iş yeri/iş adresi/
+  ev adresi eklendi (Kullanıcı Düzenle modaline forma da işlendi).
+  Yeni `GET /reports/detayli-uye-listesi` taşınmaz+üye bilgisini
+  (sayaç no'ları dahil, mevcut `Meter.type`'a göre) tek satırda
+  birleştirip TÜM alanları döner; frontend'te checkbox'larla hangi
+  sütunların gösterileceği seçiliyor (Yönetimcell'deki "hangi
+  sütunları göstereyim" sütun seçici deseni, client-side — ayrı bir
+  filtreleme ucu gerekmedi). Varsayılan olarak Blok/No/Durum/Ad
+  Soyad/Telefon açık, geri kalanı isteğe bağlı.
+  **Yol boyunca bulunan gerçek hata (kendi kendime yakalandı, hiç
+  sunucuya çıkmadı)**: `PATCH /users/:id`'yi genişletirken ilk yazdığım
+  haliyle `res.json(updated)` tüm Prisma User nesnesini (passwordHash,
+  tokenVersion, failedLoginAttempts, lockedUntil dahil) istemciye geri
+  döndürüyordu — commit'ten önce fark edip şifre hash'i ve diğer
+  hassas alanları response'tan çıkardım. `test-detayli-uye.js` bu
+  düzeltmenin gerçekten çalıştığını (`"passwordHash" in response ===
+  false`) doğruluyor.
+
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar
 ("Maliklere Kiracı Borcunu Bildir" — malik/kiracı ilişkisine duyarlı

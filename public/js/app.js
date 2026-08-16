@@ -296,7 +296,7 @@ const NAV_GROUPS = {
   ],
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
-    { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"], ["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"]] },
+    { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"], ["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"], ["detayliuyelistesi", "Detaylı Üye Listesi"]] },
     { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"], ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["uyedonem", "Üye/Dönem Raporu"], ["uyedetay", "Üye/Detay Raporu"], ["tahsilatraporu", "Tahsilat Raporu"], ["giderraporu", "Detaylı Gider Raporu"], ["aylikbilanco", "Aylık Bilanço"], ["isletmeprojesi", "İşletme Projesi"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
@@ -442,6 +442,13 @@ async function renderUserEditModal(u) {
         <div class="field"><label>İkinci Telefon</label><input name="phone2" value="${esc(u.phone2 || "")}" /></div>
         <div class="field"><label>İkinci E-posta</label><input name="email2" type="email" value="${esc(u.email2 || "")}" /></div>
         <div class="field"><label>TC Kimlik No</label><input name="nationalId" value="${esc(u.nationalId || "")}" maxlength="11" pattern="[0-9]{11}" title="11 haneli TC kimlik numarası" /></div>
+        <div class="field"><label>Cinsiyet</label><select name="gender"><option value="">Belirtilmedi</option><option value="Erkek" ${u.gender === "Erkek" ? "selected" : ""}>Erkek</option><option value="Kadın" ${u.gender === "Kadın" ? "selected" : ""}>Kadın</option></select></div>
+        <div class="field"><label>Doğum Tarihi</label><input name="birthDate" type="date" value="${u.birthDate ? String(u.birthDate).slice(0, 10) : ""}" /></div>
+        <div class="field"><label>Kan Grubu</label><select name="bloodType"><option value="">Belirtilmedi</option>${["A Rh+", "A Rh-", "B Rh+", "B Rh-", "AB Rh+", "AB Rh-", "0 Rh+", "0 Rh-"].map((bg) => `<option value="${bg}" ${u.bloodType === bg ? "selected" : ""}>${bg}</option>`).join("")}</select></div>
+        <div class="field"><label>Sektör</label><input name="sector" value="${esc(u.sector || "")}" /></div>
+        <div class="field"><label>İş Yeri</label><input name="workplace" value="${esc(u.workplace || "")}" /></div>
+        <div class="field"><label>İş Adresi</label><input name="workAddress" value="${esc(u.workAddress || "")}" /></div>
+        <div class="field"><label>Ev Adresi</label><input name="homeAddress" value="${esc(u.homeAddress || "")}" /></div>
         <div style="display:flex;gap:8px;margin-top:12px;">
           <button type="button" class="btn btn-ghost" id="userEditCancel" style="flex:1;">Kapat</button>
           <button type="submit" class="btn btn-primary" style="flex:1;">Kaydet</button>
@@ -616,6 +623,7 @@ async function renderTab(tab) {
     else if (tab === "bosdolu") await renderBosDoluListesi(c);
     else if (tab === "tckimlik") await renderTcKimlikListesi(c);
     else if (tab === "aracplaka") await renderAracPlakaListesi(c);
+    else if (tab === "detayliuyelistesi") await renderDetayliUyeListesi(c);
     else if (tab === "tahsilat") await renderTahsilat(c);
     else if (tab === "muhasebe") await renderMuhasebe(c);
     else if (tab === "kasalar") await renderKasalar(c);
@@ -1441,6 +1449,70 @@ async function renderAracPlakaListesi(c) {
 // (ayri bir "kurul uyesi" modeli yok). Bizde department serbest metin
 // kalsin (daha esnek) ama bu datalist ile ayni rehberligi sunuyoruz.
 const PERSONNEL_ROLE_SUGGESTIONS = ["Aşçı", "Bahçevan", "Çaycı", "Danışma", "Direktör", "Elektrikçi", "Güvenlik", "Halkla İlişkiler", "Havuz Bakımcı", "İdari Yönetici", "İnşaat Teknisyeni", "Kaloriferci", "Kapıcı", "Mekanikçi", "Mali Müşavir", "Malzemeci", "Muhasebe", "Personel Şefi", "Sağlıkçı", "Sekreter", "Site Görevlisi", "Site Müdürü", "Su Tesisatçısı", "Şöför", "Teknik", "Temizlik Görevlisi", "Denetçi", "Muhasip Üye", "Yönetim Kurulu Başkanı", "Yönetim Kurulu Başkan Yardımcısı", "Yönetim Kurulu Üyesi", "Yönetim Kurulu Danışmanı", "Diğer"];
+
+// Yonetimcell karsilastirmasi: "Detaylı Üye Listesi Dökümü" - checkbox'larla
+// hangi sutunlarin gorunecegine karar verilen esnek rapor. Backend TUM
+// alanlari doner, secim client-side (basit, ayri bir filtreleme ucu
+// gerekmez).
+const DETAYLI_UYE_COLUMNS = [
+  { key: "block", label: "Blok", group: "Taşınmaz Bilgileri", checked: true },
+  { key: "no", label: "Kapı No", group: "Taşınmaz Bilgileri", checked: true },
+  { key: "durum", label: "Durum", group: "Taşınmaz Bilgileri", checked: true },
+  { key: "feeGroup", label: "Aidat Grubu", group: "Taşınmaz Bilgileri" },
+  { key: "floor", label: "Kat", group: "Taşınmaz Bilgileri" },
+  { key: "squareMeters", label: "Metrekare", group: "Taşınmaz Bilgileri" },
+  { key: "landShare", label: "Arsa Payı", group: "Taşınmaz Bilgileri" },
+  { key: "yakitSayacNo", label: "Yakıt Sayaç No", group: "Taşınmaz Bilgileri" },
+  { key: "sicakSuSayacNo", label: "Sıcak Su Sayaç No", group: "Taşınmaz Bilgileri" },
+  { key: "sogukSuSayacNo", label: "Soğuk Su Sayaç No", group: "Taşınmaz Bilgileri" },
+  { key: "elektrikSayacNo", label: "Elektrik Sayaç No", group: "Taşınmaz Bilgileri" },
+  { key: "gender", label: "Cinsiyet", group: "Üye Bilgileri" },
+  { key: "name", label: "Ad Soyad", group: "Üye Bilgileri", checked: true },
+  { key: "birthDate", label: "Doğum Tarihi", group: "Üye Bilgileri" },
+  { key: "bloodType", label: "Kan Grubu", group: "Üye Bilgileri" },
+  { key: "nationalId", label: "Tc Kimlik No", group: "Üye Bilgileri" },
+  { key: "phone", label: "Cep Telefonu 1", group: "Üye Bilgileri", checked: true },
+  { key: "phone2", label: "Cep Telefonu 2", group: "Üye Bilgileri" },
+  { key: "email", label: "E-posta Adresi 1", group: "Üye Bilgileri" },
+  { key: "email2", label: "E-posta Adresi 2", group: "Üye Bilgileri" },
+  { key: "sector", label: "Sektör", group: "Üye Bilgileri" },
+  { key: "workplace", label: "İş Yeri", group: "Üye Bilgileri" },
+  { key: "workAddress", label: "İş Adresi", group: "Üye Bilgileri" },
+  { key: "homeAddress", label: "Ev Adresi", group: "Üye Bilgileri" },
+];
+
+async function renderDetayliUyeListesi(c) {
+  const rows = await api("/reports/detayli-uye-listesi");
+  function formatCell(row, key) {
+    const v = row[key];
+    if (v === null || v === undefined || v === "") return "-";
+    if (key === "birthDate") return dt(v);
+    if (key === "squareMeters" || key === "landShare") return String(v);
+    return esc(String(v));
+  }
+  function renderTable() {
+    const active = DETAYLI_UYE_COLUMNS.filter((col) => document.getElementById("col-" + col.key)?.checked ?? col.checked);
+    return `
+      <div class="scroll-x"><table class="report">
+        <thead><tr>${active.map((col) => `<th>${esc(col.label)}</th>`).join("")}</tr></thead>
+        <tbody>${rows.map((r) => `<tr>${active.map((col) => `<td>${formatCell(r, col.key)}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${active.length}" class="empty-row">Kayıt yok.</td></tr>`}</tbody>
+      </table></div>`;
+  }
+  const groups = Array.from(new Set(DETAYLI_UYE_COLUMNS.map((col) => col.group)));
+  c.innerHTML = `
+    ${sectionTitle("Detaylı Üye Listesi", `${rows.length} kayıt — göstermek istediğiniz sütunları seçin`)}
+    <div class="card pad mb-16">
+      ${groups.map((g) => `
+        <div class="small muted" style="font-weight:700;margin:10px 0 6px;">${esc(g)}</div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;">
+          ${DETAYLI_UYE_COLUMNS.filter((col) => col.group === g).map((col) => `<label style="font-size:13px;display:flex;align-items:center;gap:5px;"><input type="checkbox" id="col-${col.key}" data-col-toggle ${col.checked ? "checked" : ""} />${esc(col.label)}</label>`).join("")}
+        </div>`).join("")}
+      <button class="btn btn-primary btn-sm" id="applyColsBtn" style="margin-top:14px;">🖨️ Dökümü Oluştur</button>
+    </div>
+    <div id="detayliUyeResult">${renderTable()}</div>
+  `;
+  document.getElementById("applyColsBtn").addEventListener("click", () => { document.getElementById("detayliUyeResult").innerHTML = renderTable(); });
+}
 
 const HOUSEHOLD_RELATIONSHIPS = ["Kendisi", "Eş", "Çocuk", "Anne", "Baba", "Kardeş", "Kiracı", "Ev Arkadaşı", "Misafir", "Diğer"];
 

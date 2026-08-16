@@ -179,7 +179,7 @@ router.get("/users", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();
   const list = data.users.map((u) => {
     const unit = u.unitId ? data.units.find((x) => x.id === u.unitId) : null;
-    return { id: u.id, name: u.name, email: u.email, email2: u.email2 || null, phone: u.phone, phone2: u.phone2 || null, role: u.role, unitId: u.unitId, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, department: u.department || null, nationalId: u.nationalId || null, isApproved: u.isApproved, isActive: u.isActive !== false, createdAt: u.createdAt, resetRequestedAt: u.resetRequestedAt || null };
+    return { id: u.id, name: u.name, email: u.email, email2: u.email2 || null, phone: u.phone, phone2: u.phone2 || null, role: u.role, unitId: u.unitId, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, department: u.department || null, nationalId: u.nationalId || null, isApproved: u.isApproved, isActive: u.isActive !== false, createdAt: u.createdAt, resetRequestedAt: u.resetRequestedAt || null, gender: u.gender || null, birthDate: u.birthDate || null, bloodType: u.bloodType || null, sector: u.sector || null, workplace: u.workplace || null, workAddress: u.workAddress || null, homeAddress: u.homeAddress || null };
   });
   res.json(list);
 });
@@ -189,15 +189,23 @@ router.get("/users", requireAuth, requireRole("yonetici"), async (req, res) => {
 router.patch("/users/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
-  const { name, phone, phone2, email2, nationalId } = req.body || {};
+  const { name, phone, phone2, email2, nationalId, gender, birthDate, bloodType, sector, workplace, workAddress, homeAddress } = req.body || {};
   const data = {};
   if (name !== undefined) data.name = name;
   if (phone !== undefined) data.phone = phone;
   if (phone2 !== undefined) data.phone2 = phone2 || null;
   if (email2 !== undefined) data.email2 = email2 || null;
   if (nationalId !== undefined) data.nationalId = nationalId || null;
+  if (gender !== undefined) data.gender = gender || null;
+  if (birthDate !== undefined) data.birthDate = birthDate ? new Date(birthDate) : null;
+  if (bloodType !== undefined) data.bloodType = bloodType || null;
+  if (sector !== undefined) data.sector = sector || null;
+  if (workplace !== undefined) data.workplace = workplace || null;
+  if (workAddress !== undefined) data.workAddress = workAddress || null;
+  if (homeAddress !== undefined) data.homeAddress = homeAddress || null;
   const updated = await prisma.user.update({ where: { id: user.id }, data });
-  res.json({ id: updated.id, name: updated.name, phone: updated.phone, phone2: updated.phone2, email2: updated.email2, nationalId: updated.nationalId });
+  const { passwordHash, tokenVersion, failedLoginAttempts, lockedUntil, ...safe } = updated;
+  res.json(safe);
 });
 
 /* ---------------- ARAÇ PLAKALARI ---------------- */
@@ -305,6 +313,36 @@ router.post("/users/personnel", requireAuth, requireRole("yonetici"), async (req
   });
   await prisma.personnel.create({ data: { id: user.id, name, phone: phone || "", department: department || "Genel", active: true, userId: user.id } });
   res.status(201).json({ message: "Personel hesabı oluşturuldu." });
+});
+
+// Yonetimcell karsilastirmasi: "Detaylı Üye Listesi Dökümü" - taşınmaz +
+// üye bilgilerini tek genis satirda birlestirir, hangi sutunlarin
+// gosterilecegine frontend'te checkbox'larla karar verilir (esnek dokum).
+router.get("/reports/detayli-uye-listesi", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const data = await db.load();
+  const meters = await prisma.meter.findMany();
+  const metersByUnit = meters.reduce((acc, m) => { (acc[m.unitId] = acc[m.unitId] || []).push(m); return acc; }, {});
+
+  const rows = data.users
+    .filter((u) => u.role === "sakin" && u.unitId)
+    .map((u) => {
+      const unit = data.units.find((x) => x.id === u.unitId);
+      if (!unit) return null;
+      const unitMeters = metersByUnit[unit.id] || [];
+      const meterOf = (type) => unitMeters.find((m) => m.type === type)?.serialNo || "";
+      return {
+        block: unit.block, no: unit.no, feeGroup: unit.feeGroup || "", floor: unit.floor,
+        squareMeters: unit.squareMeters || null, landShare: unit.landShare || null,
+        yakitSayacNo: meterOf("yakit") || meterOf("dogalgaz"), sicakSuSayacNo: meterOf("sicak_su"), sogukSuSayacNo: meterOf("soguk_su") || meterOf("su"), elektrikSayacNo: meterOf("elektrik"),
+        gender: u.gender || "", name: u.name, birthDate: u.birthDate || null, bloodType: u.bloodType || "",
+        nationalId: u.nationalId || "", phone: u.phone || "", phone2: u.phone2 || "", email: u.email || "", email2: u.email2 || "",
+        sector: u.sector || "", workplace: u.workplace || "", workAddress: u.workAddress || "", homeAddress: u.homeAddress || "",
+        durum: unit.occupancy === "tenant" ? "Kiracı" : "Malik",
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.block.localeCompare(b.block, "tr") || a.no.localeCompare(b.no, "tr", { numeric: true }));
+  res.json(rows);
 });
 
 module.exports = router;
