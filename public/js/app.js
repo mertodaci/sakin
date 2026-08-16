@@ -2897,11 +2897,18 @@ async function renderButce(c) {
 }
 
 async function renderRehber(c) {
-  const promises = [api("/contacts")];
   const canSeeUnits = state.user.role === "yonetici" || state.user.role === "personel";
-  if (canSeeUnits) promises.push(api("/units"));
-  promises.push(api("/personnel"));
-  const [contacts, units = [], personnel] = await Promise.all(promises);
+  // Onceki kod, units cekilip cekilmemesine gore promises dizisinin uzunlugunu
+  // degistirip sabit pozisyonla (contacts, units, personnel) destructure
+  // ediyordu - sakin rolunde (canSeeUnits=false) dizi 2 elemanli kaldigi icin
+  // "personnel" aslinda units'in sonucunu, gercek personnel ise undefined
+  // oluyordu ("Cannot read properties of undefined (reading 'map')").
+  // Sabit pozisyonlu, kosula gore Promise.resolve([]) donen bir dizi ile duzeltildi.
+  const [contacts, personnel, units] = await Promise.all([
+    api("/contacts"),
+    api("/personnel"),
+    canSeeUnits ? api("/units") : Promise.resolve([]),
+  ]);
 
   const rows = [
     ...contacts.map((x) => ({ name: x.name, role: x.role || "Faydalı Numara", phone: x.phone })),
