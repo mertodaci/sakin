@@ -186,7 +186,15 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .bell svg { width: 19px; height: 19px; }
 .bell .dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; background: var(--red); border-radius: 999px; border: 1.5px solid var(--paper); }
 
-.wrap { max-width: var(--content-max); margin: 0 auto; padding: 30px 36px 80px; }
+/* .wrap, .main-col'un (display:flex) flex ogesi - flex ogelerinin
+   varsayilan min-width:auto degeri, icindeki genis bir tablo/grid'in
+   dogal genisligi kadar buyumesine izin veriyordu. Sonuc: mobilde
+   .scroll-x sadece kendi icinde degil, TUM SAYFA yatay kaymaya
+   basliyordu (Mert'in "telefonda sigar mi" sorusuyla bulundu, gercek
+   bir responsive hata). min-width:0 flex ogesinin icerigine gore degil
+   ebeveynine gore boyutlanmasini saglar, boylece asiri genislik
+   .scroll-x'in kendi overflow-x:auto'suna hapsolur. */
+.wrap { max-width: var(--content-max); width: 100%; margin: 0 auto; padding: 30px 36px 80px; min-width: 0; box-sizing: border-box; }
 @media (max-width: 860px) { .wrap { padding: 20px 16px 70px; } }
 
 .section-title { margin-bottom: 22px; }
