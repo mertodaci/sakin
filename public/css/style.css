@@ -115,6 +115,20 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 }
 .sidebar-item.active svg { opacity: 1; color: var(--sb-active-border); }
 
+.sidebar-help-card {
+  display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; margin-top: 14px;
+  padding: 12px; border-radius: 12px; border: 1px solid var(--sb-border); background: var(--sb-bg-2);
+  cursor: pointer; transition: background .12s, border-color .12s;
+}
+.sidebar-help-card:hover { background: var(--sb-hover); border-color: rgba(255,255,255,.12); }
+.sidebar-help-icon {
+  width: 30px; height: 30px; border-radius: 8px; flex: 0 0 30px; display: flex; align-items: center; justify-content: center;
+  background: rgba(47,111,237,.16); color: var(--sb-active-border);
+}
+.sidebar-help-icon svg { width: 15px; height: 15px; }
+.sidebar-help-title { font-size: 12.5px; font-weight: 600; color: #fff; }
+.sidebar-help-sub { font-size: 11px; color: var(--sb-text-dim); margin-top: 1px; }
+
 .sidebar-user {
   border-top: 1px solid var(--sb-border); padding: 12px; position: relative; flex: 0 0 auto;
 }
@@ -185,19 +199,46 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .grid { display: grid; gap: 16px; }
 .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
 .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.grid.grid-cards { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); align-items: start; }
 @media (max-width: 640px) { .grid.cols-2, .grid.cols-3 { grid-template-columns: 1fr; } }
 
-.stat-card { padding: 20px 22px; }
+/* ---------- Avatar chip (kucuk, yeniden kullanilabilir kisi rozeti) ---------- */
+.avatar-chip { border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: var(--azure-light); color: var(--azure); font-weight: 700; flex: 0 0 auto; }
+.avatar-chip.sm { width: 22px; height: 22px; font-size: 10px; }
+
+/* ---------- Segmented control (butce/talep gibi durum secicileri icin) ---------- */
+.segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.segmented button { border: none; background: var(--paper); color: var(--steel); font-size: 12.5px; font-weight: 600; padding: 7px 14px; cursor: pointer; border-right: 1px solid var(--line); transition: background .12s, color .12s; }
+.segmented button:last-child { border-right: none; }
+.segmented button:hover { background: var(--ice); }
+.segmented button.active { background: var(--navy); color: #fff; }
+
+/* ---------- Kart-basinda ikon deseni (Talep karti vb.) ---------- */
+.icon-card-head { display: flex; align-items: flex-start; gap: 12px; }
+.icon-card-icon { width: 36px; height: 36px; border-radius: 10px; flex: 0 0 36px; display: flex; align-items: center; justify-content: center; background: var(--azure-light); color: var(--azure); }
+.icon-card-icon svg { width: 17px; height: 17px; }
+.icon-card-text { flex: 1; min-width: 0; }
+.icon-card-title { font-size: 14px; font-weight: 700; }
+.ticket-desc { font-size: 14px; color: var(--steel); margin-top: 10px; }
+.ticket-assignee { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--steel); margin-top: 9px; }
+.ticket-comments { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+.ticket-comment { font-size: 12.5px; color: var(--steel); background: var(--ice); border-radius: 8px; padding: 6px 10px; }
+
+/* Ikon etiketin USTUNDE degil YANINDA - dikey yigin "kucuk logo + alttaki
+   yazi" hissi veriyordu, Mert'in geri bildirimine gore yatay hizaya alindi. */
+.stat-card { padding: 17px 20px; display: flex; align-items: center; gap: 14px; }
 .stat-icon {
-  width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
-  background: var(--azure-light); color: var(--azure); margin-bottom: 14px;
+  width: 40px; height: 40px; border-radius: 10px; flex: 0 0 40px; display: flex; align-items: center; justify-content: center;
+  background: var(--azure-light); color: var(--azure);
 }
-.stat-icon svg { width: 18px; height: 18px; }
-.stat-label { font-size: 11.5px; font-weight: 700; color: var(--mist); letter-spacing: .6px; }
-.stat-value { font-size: 28px; font-weight: 700; margin-top: 6px; letter-spacing: -.4px; }
-.stat-card.compact .stat-icon { width: 28px; height: 28px; margin-bottom: 10px; }
-.stat-card.compact .stat-icon svg { width: 14px; height: 14px; }
-.stat-card.compact .stat-value { font-size: 20px; margin-top: 4px; }
+.stat-icon svg { width: 19px; height: 19px; }
+.stat-text { min-width: 0; }
+.stat-label { font-size: 11px; font-weight: 700; color: var(--mist); letter-spacing: .5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-value { font-size: 23px; font-weight: 700; margin-top: 3px; letter-spacing: -.3px; }
+.stat-card.compact { padding: 14px 18px; }
+.stat-card.compact .stat-icon { width: 32px; height: 32px; flex: 0 0 32px; }
+.stat-card.compact .stat-icon svg { width: 15px; height: 15px; }
+.stat-card.compact .stat-value { font-size: 18px; margin-top: 2px; }
 .stat-group-label { font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--steel); margin: 22px 0 10px; }
 .stat-group-label:first-of-type { margin-top: 0; }
 

@@ -597,6 +597,22 @@ function renderSidebarNav() {
       </div>`;
   }).join("");
 
+  // Nav grubu sayisi az oldugunda scroll alaninin altinda cirkin bos bosluk
+  // kaliyordu (Mert'in geri bildirimi). Kutucuklari yapay sekilde
+  // buyutmek yerine, zaten var olan "Bilgi Bankasi" sekmesine gercek
+  // islevli bir kisayol karti eklendi - bosluk hem dolduruluyor hem de
+  // gercek bir aksiyon sunuyor.
+  if (groups.some((g) => groupItems(g).some(([id]) => id === "bilgibankasi"))) {
+    nav.innerHTML += `
+      <button class="sidebar-help-card" data-tab="bilgibankasi">
+        <div class="sidebar-help-icon">${navIcon("bilgibankasi")}</div>
+        <div class="sidebar-help-text">
+          <div class="sidebar-help-title">Yardım mı lazım?</div>
+          <div class="sidebar-help-sub">Bilgi Bankası'na göz atın</div>
+        </div>
+      </button>`;
+  }
+
   nav.querySelectorAll("[data-group]").forEach((btn) => btn.addEventListener("click", () => {
     const g = btn.dataset.group;
     if (expandedGroups.has(g)) expandedGroups.delete(g); else expandedGroups.add(g);
@@ -922,16 +938,20 @@ async function renderRezervasyon(c) {
 
 function ticketCard(t, role, personnel) {
   const canManage = role === "yonetici" || role === "personel";
-  return `<div class="card pad mb-16">
-    <div class="flex-between">
-      <div><div style="font-size:14px;font-weight:700;">${esc(t.category)} — ${esc(t.title)}</div><div class="small muted">${role !== "sakin" ? esc(t.residentName) + " · " + esc(t.unitLabel) + " · " : ""}${dt(t.createdAt)}</div></div>
+  return `<div class="card pad">
+    <div class="icon-card-head">
+      <div class="icon-card-icon">${navIcon("talep")}</div>
+      <div class="icon-card-text">
+        <div class="icon-card-title">${esc(t.category)} — ${esc(t.title)}</div>
+        <div class="small muted">${role !== "sakin" ? esc(t.residentName) + " · " + esc(t.unitLabel) + " · " : ""}${dt(t.createdAt)}</div>
+      </div>
       ${pill(t.status)}
     </div>
-    <p style="font-size:14px;color:var(--steel);margin-top:8px;">${esc(t.description)}</p>
-    ${t.assignedName ? `<div class="small muted">Atanan: ${esc(t.assignedName)}</div>` : ""}
-    ${t.comments.length ? `<div class="small muted" style="margin-top:6px;">${t.comments.map((cm) => `💬 ${esc(cm.text)}`).join("<br/>")}</div>` : ""}
-    ${role === "yonetici" ? `<div class="field" style="margin-top:8px;max-width:220px;"><label class="small">Ata</label><select data-assign="${t.id}"><option value="">Atanmadı</option>${personnel.map((p) => `<option value="${p.id}" ${t.assignedPersonnelId === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>` : ""}
-    ${canManage ? `<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">${["Açık", "İşlemde", "Çözüldü"].map((s) => `<button class="btn btn-ghost btn-sm" data-status="${t.id}|${s}" style="${t.status === s ? "background:var(--ice);" : ""}">${s}</button>`).join("")}</div>` : ""}
+    <p class="ticket-desc">${esc(t.description)}</p>
+    ${t.assignedName ? `<div class="ticket-assignee"><span class="avatar-chip sm">${esc(initials(t.assignedName))}</span> ${esc(t.assignedName)}</div>` : ""}
+    ${t.comments.length ? `<div class="ticket-comments">${t.comments.map((cm) => `<div class="ticket-comment">${esc(cm.text)}</div>`).join("")}</div>` : ""}
+    ${role === "yonetici" ? `<div class="field" style="margin-top:10px;max-width:220px;"><label class="small">Ata</label><select data-assign="${t.id}"><option value="">Atanmadı</option>${personnel.map((p) => `<option value="${p.id}" ${t.assignedPersonnelId === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>` : ""}
+    ${canManage ? `<div class="segmented" style="margin-top:10px;">${["Açık", "İşlemde", "Çözüldü"].map((s) => `<button class="${t.status === s ? "active" : ""}" data-status="${t.id}|${s}">${s}</button>`).join("")}</div>` : ""}
   </div>`;
 }
 
@@ -943,7 +963,7 @@ async function renderTalep(c) {
   c.innerHTML = `
     <div class="flex-between">${sectionTitle(role === "sakin" ? "Arıza / Talep" : "Talepler")}${role === "sakin" ? '<button class="btn btn-ghost btn-sm" id="newTicketBtn" style="margin-bottom:16px;">+ Yeni Talep</button>' : ""}</div>
     <div id="ticketForm"></div>
-    <div class="grid">${tickets.map((t) => ticketCard(t, role, personnel)).join("") || '<div class="empty-row">Kayıt yok.</div>'}</div>
+    <div class="grid grid-cards">${tickets.map((t) => ticketCard(t, role, personnel)).join("") || '<div class="empty-row">Kayıt yok.</div>'}</div>
   `;
   if (role === "sakin") {
     document.getElementById("newTicketBtn").addEventListener("click", () => {
@@ -1051,8 +1071,10 @@ function statCard(goto, icon, label, value, color, compact) {
   return `
     <div class="card stat-card${compact ? " compact" : ""} clickable" data-goto="${esc(goto)}">
       <div class="stat-icon">${navIcon(icon)}</div>
-      <div class="stat-label">${esc(label)}</div>
-      <div class="f-num stat-value" style="${color ? `color:${color};` : ""}">${value}</div>
+      <div class="stat-text">
+        <div class="stat-label">${esc(label)}</div>
+        <div class="f-num stat-value" style="${color ? `color:${color};` : ""}">${value}</div>
+      </div>
     </div>`;
 }
 
