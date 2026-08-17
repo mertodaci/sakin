@@ -603,7 +603,7 @@ model Package {
 
 model Decision {
   id         String   @id @default(uuid())
-  decisionNo Int
+  decisionNo Int      @unique
   date       DateTime @default(now())
   title      String
   content    String

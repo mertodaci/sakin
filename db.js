@@ -138,22 +138,16 @@ async function loadUnits() {
 const LEGACY_COLLECTIONS = [
   { name: "units", model: "unit", load: loadUnits },
   { name: "accounts", model: "account", load: simple("account") },
-  { name: "facilities", model: "facility", load: simple("facility") },
+  // personnel: routes/ops.js'in PATCH /personnel/:id ucu artik dogrudan Prisma
+  // kullaniyor, ama routes/accounting.js'nin auto-assign/accountingCode
+  // uclari hala data.personnel uzerinden yaziyor - bu yuzden burada kalmali.
   { name: "personnel", model: "personnel", load: simple("personnel") },
-  { name: "equipment", model: "equipment", load: loadEquipment, children: [{ field: "maintenanceHistory", model: "maintenanceRecord", parentField: "equipmentId" }] },
-  { name: "meters", model: "meter", load: simple("meter") },
-  { name: "meterReadings", model: "meterReading", load: simple("meterReading") },
   { name: "transfers", model: "transfer", load: simple("transfer") },
-  { name: "reservations", model: "reservation", load: simple("reservation") },
-  { name: "tickets", model: "ticket", load: loadTickets, children: [{ field: "comments", model: "ticketComment", parentField: "ticketId" }] },
   { name: "announcements", model: "announcement", load: simple("announcement") },
   { name: "surveys", model: "survey", load: loadSurveys, children: [
     { field: "options", model: "surveyOption", parentField: "surveyId", mapCreate: (o, parentId) => ({ surveyId: parentId, text: o.text, votes: o.votes }) },
     { field: "votedBy", model: "surveyVote", parentField: "surveyId", mapCreate: (userId, parentId) => ({ surveyId: parentId, userId }) },
   ] },
-  { name: "packages", model: "package", load: simple("package") },
-  { name: "decisions", model: "decision", load: simple("decision") },
-  { name: "keys", model: "key", load: loadKeys, children: [{ field: "history", model: "keyAssignment", parentField: "keyId" }] },
   { name: "classifieds", model: "classifieds", load: simple("classifieds") },
   { name: "notifications", model: "notification", load: simple("notification") },
   { name: "activityLog", model: "activityLog", load: loadActivityLog },
@@ -190,6 +184,22 @@ const READONLY_PASSTHROUGH = [
   { name: "vendors", load: simple("vendor") },
   { name: "partyCharges", load: simple("partyCharge") },
   { name: "partyPayments", load: loadPartyPayments },
+  // facilities/equipment/meters/meterReadings/reservations/tickets/packages/
+  // decisions/keys: routes/ops.js artik dogrudan Prisma kullaniyor. Burada
+  // hala data.xxx okuyan dashboard.js ve system.js /export icin salt-okunur
+  // olarak sunuluyor - export'un TUM koleksiyonlari icermesi gerektigi icin
+  // (bkz. system.js: `const {usedPaymentRequestIds, ...exportable} = data`)
+  // bu koleksiyonlar load()'dan tamamen kaldirilamaz, sadece yazma tarafi
+  // (LEGACY_COLLECTIONS) kapatilir.
+  { name: "facilities", load: simple("facility") },
+  { name: "equipment", load: loadEquipment },
+  { name: "meters", load: simple("meter") },
+  { name: "meterReadings", load: simple("meterReading") },
+  { name: "reservations", load: simple("reservation") },
+  { name: "tickets", load: loadTickets },
+  { name: "packages", load: simple("package") },
+  { name: "decisions", load: simple("decision") },
+  { name: "keys", load: loadKeys },
 ];
 
 async function load() {

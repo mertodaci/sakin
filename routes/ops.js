@@ -4,54 +4,56 @@ const db = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
 const router = express.Router();
+const prisma = db.prisma;
 
-function unitLabel(data, unitId) {
-  const u = data.units.find((x) => x.id === unitId);
+async function unitLabel(unitId) {
+  const u = await prisma.unit.findUnique({ where: { id: unitId } });
   return u ? `${u.block} - Daire ${u.no}` : "-";
 }
 
 /* ---------------- FACILITIES & RESERVATIONS ---------------- */
 
 router.get("/facilities", requireAuth, async (req, res) => {
-  res.json((await db.load()).facilities);
+  res.json(await prisma.facility.findMany({ orderBy: { name: "asc" } }));
 });
 
 router.get("/reservations", requireAuth, async (req, res) => {
-  const data = await db.load();
-  let list = data.reservations;
-  if (req.user.role === "sakin") list = list.filter((r) => r.userId === req.user.id);
-  const withNames = list.map((r) => ({
+  const where = req.user.role === "sakin" ? { userId: req.user.id } : {};
+  const list = await prisma.reservation.findMany({
+    where,
+    orderBy: { date: "asc" },
+    include: { facility: { select: { name: true } }, unit: { select: { block: true, no: true } } },
+  });
+  res.json(list.map((r) => ({
     ...r,
-    facilityName: data.facilities.find((f) => f.id === r.facilityId)?.name || "-",
-    unitLabel: unitLabel(data, r.unitId),
-  }));
-  res.json(withNames.sort((a, b) => new Date(a.date) - new Date(b.date)));
+    facilityName: r.facility?.name || "-",
+    unitLabel: r.unit ? `${r.unit.block} - Daire ${r.unit.no}` : "-",
+    facility: undefined,
+    unit: undefined,
+  })));
 });
 
 router.post("/reservations", requireAuth, async (req, res) => {
-  const data = await db.load();
   const { facilityId, date, startTime, endTime } = req.body || {};
+  const unitId = req.user.role === "sakin" ? req.user.unitId : req.body.unitId;
   if (!facilityId || !date || !startTime || !endTime) return res.status(400).json({ error: "Tesis, tarih ve saat aralığı zorunludur." });
+  if (!unitId) return res.status(400).json({ error: "Daire seçimi zorunludur." });
 
-  const conflict = data.reservations.some(
-    (r) => r.facilityId === facilityId && r.date.slice(0, 10) === date.slice(0, 10) && r.status !== "İptal" && !(endTime <= r.startTime || startTime >= r.endTime)
-  );
+  const dayStart = new Date(new Date(date).toISOString().slice(0, 10) + "T00:00:00.000Z");
+  const dayEnd = new Date(new Date(date).toISOString().slice(0, 10) + "T23:59:59.999Z");
+  const sameDay = await prisma.reservation.findMany({ where: { facilityId, date: { gte: dayStart, lte: dayEnd }, status: { not: "İptal" } } });
+  const conflict = sameDay.some((r) => !(endTime <= r.startTime || startTime >= r.endTime));
   if (conflict) return res.status(409).json({ error: "Bu tesis, seçtiğiniz tarih ve saatte dolu." });
 
-  const unitId = req.user.role === "sakin" ? req.user.unitId : req.body.unitId || null;
-  const r = { id: db.uid(), facilityId, unitId, userId: req.user.id, date, startTime, endTime, status: "Onaylandı", createdAt: new Date().toISOString() };
-  data.reservations.push(r);
-  await db.save(data);
+  const r = await prisma.reservation.create({ data: { facilityId, unitId, userId: req.user.id, date: new Date(date), startTime, endTime, status: "Onaylandı" } });
   res.status(201).json(r);
 });
 
 router.delete("/reservations/:id", requireAuth, async (req, res) => {
-  const data = await db.load();
-  const r = data.reservations.find((x) => x.id === req.params.id);
+  const r = await prisma.reservation.findUnique({ where: { id: req.params.id } });
   if (!r) return res.status(404).json({ error: "Rezervasyon bulunamadı." });
   if (r.userId !== req.user.id && req.user.role !== "yonetici") return res.status(403).json({ error: "Bu rezervasyonu iptal etme yetkiniz yok." });
-  data.reservations = data.reservations.filter((x) => x.id !== req.params.id);
-  await db.save(data);
+  await prisma.reservation.delete({ where: { id: req.params.id } });
   res.json({ message: "Rezervasyon iptal edildi." });
 });
 
@@ -60,308 +62,334 @@ router.delete("/reservations/:id", requireAuth, async (req, res) => {
 router.get("/ticket-categories", requireAuth, async (req, res) => res.json((await db.load()).ticketCategories));
 
 router.get("/tickets", requireAuth, async (req, res) => {
-  const data = await db.load();
-  let list = data.tickets;
-  if (req.user.role === "sakin") list = list.filter((t) => t.userId === req.user.id);
-  if (req.user.role === "personel") list = list.filter((t) => t.assignedPersonnelId === req.user.id);
-  const withNames = list.map((t) => ({
+  const where = {};
+  if (req.user.role === "sakin") where.userId = req.user.id;
+  if (req.user.role === "personel") where.assignedPersonnelId = req.user.id;
+  const list = await prisma.ticket.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    include: { unit: { select: { block: true, no: true } }, user: { select: { name: true } }, assignedPersonnel: { select: { name: true } }, comments: { orderBy: { date: "asc" } } },
+  });
+  res.json(list.map((t) => ({
     ...t,
-    unitLabel: unitLabel(data, t.unitId),
-    residentName: data.users.find((u) => u.id === t.userId)?.name || "-",
-    assignedName: t.assignedPersonnelId ? data.users.find((u) => u.id === t.assignedPersonnelId)?.name : null,
-  }));
-  res.json(withNames.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+    unitLabel: t.unit ? `${t.unit.block} - Daire ${t.unit.no}` : "-",
+    residentName: t.user?.name || "-",
+    assignedName: t.assignedPersonnel?.name || null,
+    unit: undefined,
+    user: undefined,
+    assignedPersonnel: undefined,
+  })));
 });
 
 router.post("/tickets", requireAuth, async (req, res) => {
-  const data = await db.load();
   const { category, title, description, priority } = req.body || {};
+  const unitId = req.user.role === "sakin" ? req.user.unitId : req.body.unitId;
   if (!category || !title || !description) return res.status(400).json({ error: "Kategori, başlık ve açıklama zorunludur." });
-  const unitId = req.user.role === "sakin" ? req.user.unitId : req.body.unitId || null;
-  const t = { id: db.uid(), unitId, userId: req.user.id, category, title, description, priority: priority || "Orta", status: "Açık", assignedPersonnelId: null, comments: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-  data.tickets.unshift(t);
-  data.notifications.push({ id: db.uid(), userId: "admin1", message: `Yeni talep: ${title}`, read: false, date: t.createdAt, link: "#/talepler" });
-  await db.save(data);
+  if (!unitId) return res.status(400).json({ error: "Daire seçimi zorunludur." });
+  const t = await prisma.ticket.create({
+    data: { unitId, userId: req.user.id, category, title, description, priority: priority || "Orta", status: "Açık", assignedPersonnelId: null },
+  });
+  const admins = await prisma.user.findMany({ where: { role: "yonetici" } });
+  if (admins.length) {
+    await prisma.notification.createMany({ data: admins.map((a) => ({ userId: a.id, message: `Yeni talep: ${title}`, link: "#/talepler" })) });
+  }
   res.status(201).json(t);
 });
 
 router.patch("/tickets/:id", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
-  const data = await db.load();
-  const t = data.tickets.find((x) => x.id === req.params.id);
+  const t = await prisma.ticket.findUnique({ where: { id: req.params.id } });
   if (!t) return res.status(404).json({ error: "Talep bulunamadı." });
   const { status, assignedPersonnelId, priority } = req.body || {};
-  if (status) t.status = status;
-  if (assignedPersonnelId !== undefined) t.assignedPersonnelId = assignedPersonnelId;
-  if (priority) t.priority = priority;
-  t.updatedAt = new Date().toISOString();
+  const fields = { updatedAt: new Date() };
+  if (status) fields.status = status;
+  if (assignedPersonnelId !== undefined) fields.assignedPersonnelId = assignedPersonnelId || null;
+  if (priority) fields.priority = priority;
+  const updated = await prisma.ticket.update({ where: { id: t.id }, data: fields });
   if (status) {
-    data.notifications.push({ id: db.uid(), userId: t.userId, message: `Talebiniz güncellendi: ${t.title} - ${status}`, read: false, date: t.updatedAt, link: "#/talep" });
-    db.logActivity(data, req.user, "ticket.status", `Talep durumu güncellendi: ${t.title} → ${status}`, t.unitId);
+    await prisma.notification.create({ data: { userId: t.userId, message: `Talebiniz güncellendi: ${t.title} - ${status}`, link: "#/talep" } });
+    await prisma.activityLog.create({ data: { actorId: req.user.id, actorName: req.user.name, action: "ticket.status", detail: `Talep durumu güncellendi: ${t.title} → ${status}`, scopeUnitId: t.unitId } });
   }
-  await db.save(data);
-  res.json(t);
+  res.json(updated);
 });
 
 router.post("/tickets/:id/comments", requireAuth, async (req, res) => {
-  const data = await db.load();
-  const t = data.tickets.find((x) => x.id === req.params.id);
+  const t = await prisma.ticket.findUnique({ where: { id: req.params.id } });
   if (!t) return res.status(404).json({ error: "Talep bulunamadı." });
   const { text } = req.body || {};
   if (!text) return res.status(400).json({ error: "Yorum boş olamaz." });
-  t.comments.push({ id: db.uid(), userId: req.user.id, text, date: new Date().toISOString() });
-  t.updatedAt = new Date().toISOString();
-  await db.save(data);
-  res.status(201).json(t);
+  await prisma.ticketComment.create({ data: { ticketId: t.id, userId: req.user.id, text } });
+  const updated = await prisma.ticket.update({ where: { id: t.id }, data: { updatedAt: new Date() }, include: { comments: true } });
+  res.status(201).json(updated);
 });
 
 /* ---------------- PERSONNEL ---------------- */
 
-router.get("/personnel", requireAuth, async (req, res) => res.json((await db.load()).personnel));
+router.get("/personnel", requireAuth, async (req, res) => res.json(await prisma.personnel.findMany({ orderBy: { name: "asc" } })));
 
 router.patch("/personnel/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const p = data.personnel.find((x) => x.id === req.params.id);
+  const { name, phone, department, active, monthlySalary } = req.body || {};
+  const fields = {};
+  if (name !== undefined) fields.name = name;
+  if (phone !== undefined) fields.phone = phone;
+  if (department !== undefined) fields.department = department;
+  if (active !== undefined) fields.active = !!active;
+  if (monthlySalary !== undefined) fields.monthlySalary = monthlySalary === null || monthlySalary === "" ? null : new Prisma.Decimal(monthlySalary);
+  const p = await prisma.personnel.update({ where: { id: req.params.id }, data: fields }).catch(() => null);
   if (!p) return res.status(404).json({ error: "Personel bulunamadı." });
-  Object.assign(p, req.body || {});
-  await db.save(data);
   res.json(p);
 });
 
 /* ---------------- EQUIPMENT (Demirbas / Bakim-Onarim) ---------------- */
 
 router.get("/equipment", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
-  const data = await db.load();
   const now = Date.now();
-  const list = data.equipment.map((e) => {
+  const list = await prisma.equipment.findMany({ include: { responsiblePersonnel: { select: { name: true } }, maintenanceHistory: true } });
+  res.json(list.map((e) => {
     const due = e.lastMaintenanceDate ? new Date(e.lastMaintenanceDate).getTime() + e.maintenancePeriodDays * 86400000 : null;
-    return { ...e, responsibleName: data.users.find((u) => u.id === e.responsiblePersonnelId)?.name || "-", maintenanceOverdue: due ? due < now : false };
-  });
-  res.json(list);
+    return { ...e, responsibleName: e.responsiblePersonnel?.name || "-", maintenanceOverdue: due ? due < now : false, responsiblePersonnel: undefined };
+  }));
 });
 
 router.post("/equipment", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   const { name, location, purchaseDate, warrantyUntil, responsiblePersonnelId, maintenancePeriodDays, notes } = req.body || {};
   if (!name) return res.status(400).json({ error: "Demirbaş adı zorunludur." });
-  const e = { id: db.uid(), name, location: location || "", purchaseDate: purchaseDate || "", warrantyUntil: warrantyUntil || "", responsiblePersonnelId: responsiblePersonnelId || null, maintenancePeriodDays: Number(maintenancePeriodDays) || 90, lastMaintenanceDate: new Date().toISOString(), maintenanceHistory: [], notes: notes || "" };
-  data.equipment.push(e);
-  await db.save(data);
+  const e = await prisma.equipment.create({
+    data: {
+      name,
+      location: location || "",
+      purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
+      warrantyUntil: warrantyUntil ? new Date(warrantyUntil) : null,
+      responsiblePersonnelId: responsiblePersonnelId || null,
+      maintenancePeriodDays: Number(maintenancePeriodDays) || 90,
+      lastMaintenanceDate: new Date(),
+      notes: notes || "",
+    },
+  });
   res.status(201).json(e);
 });
 
 router.delete("/equipment/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  data.equipment = data.equipment.filter((e) => e.id !== req.params.id);
-  await db.save(data);
+  await prisma.equipment.delete({ where: { id: req.params.id } }).catch((e) => {
+    if (e.code !== "P2025") throw e;
+  });
   res.json({ message: "Demirbaş kaydı silindi." });
 });
 
 router.patch("/equipment/:id/maintained", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
-  const data = await db.load();
-  const e = data.equipment.find((x) => x.id === req.params.id);
+  const e = await prisma.equipment.findUnique({ where: { id: req.params.id } });
   if (!e) return res.status(404).json({ error: "Demirbaş bulunamadı." });
-  if (!e.maintenanceHistory) e.maintenanceHistory = [];
-  const now = new Date().toISOString();
-  e.maintenanceHistory.push({ id: db.uid(), date: now, by: req.user.id, notes: req.body?.notes || "" });
-  e.lastMaintenanceDate = now;
-  if (req.body?.notes) e.notes = req.body.notes;
-  await db.save(data);
-  res.json(e);
+  const now = new Date();
+  await prisma.maintenanceRecord.create({ data: { equipmentId: e.id, date: now, by: req.user.id, notes: req.body?.notes || "" } });
+  const updated = await prisma.equipment.update({
+    where: { id: e.id },
+    data: { lastMaintenanceDate: now, ...(req.body?.notes ? { notes: req.body.notes } : {}) },
+    include: { maintenanceHistory: true },
+  });
+  res.json(updated);
 });
 
 // Yanlislikla "bakim yapildi" isaretlenmisse son bakim kaydini geri alir
 router.post("/equipment/:id/undo-maintained", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const e = data.equipment.find((x) => x.id === req.params.id);
+  const e = await prisma.equipment.findUnique({ where: { id: req.params.id }, include: { maintenanceHistory: true } });
   if (!e) return res.status(404).json({ error: "Demirbaş bulunamadı." });
-  if (!e.maintenanceHistory || e.maintenanceHistory.length === 0) return res.status(400).json({ error: "Geri alınacak bir bakım kaydı yok." });
-  e.maintenanceHistory.pop();
-  const last = e.maintenanceHistory[e.maintenanceHistory.length - 1];
-  e.lastMaintenanceDate = last ? last.date : null;
-  await db.save(data);
-  res.json(e);
+  if (!e.maintenanceHistory.length) return res.status(400).json({ error: "Geri alınacak bir bakım kaydı yok." });
+  const sorted = e.maintenanceHistory.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+  const last = sorted[0];
+  const newLast = sorted[1] || null;
+  await prisma.maintenanceRecord.delete({ where: { id: last.id } });
+  const updated = await prisma.equipment.update({
+    where: { id: e.id },
+    data: { lastMaintenanceDate: newLast ? newLast.date : null },
+    include: { maintenanceHistory: true },
+  });
+  res.json(updated);
 });
 
 /* ---------------- METERS (Sayac Okuma & Faturalama) ---------------- */
 
 router.get("/meters", requireAuth, async (req, res) => {
-  const data = await db.load();
-  let list = data.meters;
-  if (req.user.role === "sakin") list = list.filter((m) => m.unitId === req.user.unitId);
-  res.json(list.map((m) => ({ ...m, unitLabel: unitLabel(data, m.unitId) })));
+  const where = req.user.role === "sakin" ? { unitId: req.user.unitId } : {};
+  const list = await prisma.meter.findMany({ where, include: { unit: { select: { block: true, no: true } } } });
+  res.json(list.map((m) => ({ ...m, unitLabel: m.unit ? `${m.unit.block} - Daire ${m.unit.no}` : "-", unit: undefined })));
 });
 
 router.post("/meters", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   const { unitId, type, serialNo } = req.body || {};
   if (!unitId || !type) return res.status(400).json({ error: "Daire ve sayaç tipi zorunludur." });
-  const m = { id: db.uid(), unitId, type, serialNo: serialNo || "" };
-  data.meters.push(m);
-  await db.save(data);
+  const m = await prisma.meter.create({ data: { unitId, type, serialNo: serialNo || "" } });
   res.status(201).json(m);
 });
 
 router.get("/meter-readings", requireAuth, async (req, res) => {
-  const data = await db.load();
-  let list = data.meterReadings;
+  const where = {};
   if (req.user.role === "sakin") {
-    const myMeterIds = data.meters.filter((m) => m.unitId === req.user.unitId).map((m) => m.id);
-    list = list.filter((r) => myMeterIds.includes(r.meterId));
+    const myMeters = await prisma.meter.findMany({ where: { unitId: req.user.unitId }, select: { id: true } });
+    where.meterId = { in: myMeters.map((m) => m.id) };
   }
-  res.json(list.slice().sort((a, b) => new Date(b.date) - new Date(a.date)));
+  const list = await prisma.meterReading.findMany({ where, orderBy: { date: "desc" } });
+  res.json(list);
 });
 
-// Sayac okuma girisi otomatik olarak borclandirma (charge) olusturur. Charge artik
-// finance.js gibi dogrudan Prisma'da yasiyor (LEGACY_COLLECTIONS'ta degil) - once
-// gercek satiri olusturup id'sini aliyoruz, meterReading'e (hala legacy) o id'yi
-// referans olarak yaziyoruz ki db.save() sirasinda FK saglansin.
+// Sayac okuma girisi otomatik olarak borclandirma (charge) olusturur - okuma +
+// bagli borc olusturma tek $transaction icinde (biri basarisiz olursa hicbiri kalici olmaz).
 router.post("/meter-readings", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   const { meterId, period, value, unitCost } = req.body || {};
-  const meter = data.meters.find((m) => m.id === meterId);
+  const meter = await prisma.meter.findUnique({ where: { id: meterId } });
   if (!meter) return res.status(404).json({ error: "Sayaç bulunamadı." });
-  const amount = Number(value) * Number(unitCost);
-  const charge = await db.prisma.charge.create({
-    data: {
-      unitId: meter.unitId,
-      type: "sayac",
-      period,
-      amount: new Prisma.Decimal(amount),
-      dueDate: new Date(),
-      status: "unpaid",
-      paidAmount: 0,
-      lateFeeAppliedPeriods: [],
-      description: `${period} ${meter.type} tüketimi (${value} birim x ${unitCost}₺)`,
-    },
+  const amount = new Prisma.Decimal(Number(value) * Number(unitCost));
+  const reading = await prisma.$transaction(async (tx) => {
+    const charge = await tx.charge.create({
+      data: {
+        unitId: meter.unitId,
+        type: "sayac",
+        period,
+        amount,
+        dueDate: new Date(),
+        status: "unpaid",
+        paidAmount: 0,
+        lateFeeAppliedPeriods: [],
+        description: `${period} ${meter.type} tüketimi (${value} birim x ${unitCost}₺)`,
+      },
+    });
+    return tx.meterReading.create({ data: { meterId, period, value: Number(value), unitCost: Number(unitCost), amount, chargeId: charge.id } });
   });
-  const reading = { id: db.uid(), meterId, period, value: Number(value), unitCost: Number(unitCost), amount, date: new Date().toISOString(), chargeId: charge.id };
-  data.meterReadings.unshift(reading);
-  await db.save(data);
   res.status(201).json(reading);
 });
 
 // Yanlis girilen bir sayac okumasini/faturasini siler - bagli borca hic odeme
-// yapilmamissa hem okumayi hem olusturdugu borcu birlikte kaldirir.
+// yapilmamissa hem okumayi hem olusturdugu borcu birlikte kaldirir (tek $transaction).
 router.delete("/meter-readings/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const reading = data.meterReadings.find((r) => r.id === req.params.id);
-  if (!reading) return res.status(404).json({ error: "Okuma kaydı bulunamadı." });
-  const charge = reading.chargeId ? await db.prisma.charge.findUnique({ where: { id: reading.chargeId } }) : null;
-  if (charge && charge.paidAmount.gt(0)) return res.status(400).json({ error: "Bu faturaya ait borca ödeme yapılmış, önce ilgili ödemeyi iptal edin." });
-  data.meterReadings = data.meterReadings.filter((r) => r.id !== req.params.id);
-  db.logActivity(data, req.user, "meter.delete", `Sayaç okuması silindi: ${reading.period} - ${reading.amount}₺`, meter_unit(data, reading.meterId));
-  await db.save(data);
-  if (charge) await db.prisma.charge.delete({ where: { id: charge.id } });
-  res.json({ message: "Sayaç okuması ve bağlı borç silindi." });
+  try {
+    await prisma.$transaction(async (tx) => {
+      const reading = await tx.meterReading.findUnique({ where: { id: req.params.id } });
+      if (!reading) throw Object.assign(new Error("NOT_FOUND"), { httpStatus: 404, msg: "Okuma kaydı bulunamadı." });
+      const charge = reading.chargeId ? await tx.charge.findUnique({ where: { id: reading.chargeId } }) : null;
+      if (charge && charge.paidAmount.gt(0)) throw Object.assign(new Error("HAS_PAYMENT"), { httpStatus: 400, msg: "Bu faturaya ait borca ödeme yapılmış, önce ilgili ödemeyi iptal edin." });
+      const meter = await tx.meter.findUnique({ where: { id: reading.meterId } });
+      await tx.meterReading.delete({ where: { id: reading.id } });
+      if (charge) await tx.charge.delete({ where: { id: charge.id } });
+      await tx.activityLog.create({
+        data: { actorId: req.user.id, actorName: req.user.name, action: "meter.delete", detail: `Sayaç okuması silindi: ${reading.period} - ${reading.amount}₺`, scopeUnitId: meter?.unitId || null },
+      });
+    });
+    res.json({ message: "Sayaç okuması ve bağlı borç silindi." });
+  } catch (e) {
+    if (e.httpStatus) return res.status(e.httpStatus).json({ error: e.msg });
+    throw e;
+  }
 });
-function meter_unit(data, meterId) {
-  return data.meters.find((m) => m.id === meterId)?.unitId || null;
-}
 
 /* ---------------- PACKAGES (Kargo Takibi) ---------------- */
 
 router.get("/packages", requireAuth, async (req, res) => {
-  const data = await db.load();
-  let list = data.packages;
-  if (req.user.role === "sakin") list = list.filter((p) => p.unitId === req.user.unitId);
-  res.json(list.map((p) => ({ ...p, unitLabel: unitLabel(data, p.unitId) })).sort((a, b) => new Date(b.receivedDate) - new Date(a.receivedDate)));
+  const where = req.user.role === "sakin" ? { unitId: req.user.unitId } : {};
+  const list = await prisma.package.findMany({ where, orderBy: { receivedDate: "desc" }, include: { unit: { select: { block: true, no: true } } } });
+  res.json(list.map((p) => ({ ...p, unitLabel: p.unit ? `${p.unit.block} - Daire ${p.unit.no}` : "-", unit: undefined })));
 });
 
 router.post("/packages", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
-  const data = await db.load();
   const { unitId, courier, trackingNo, deliveredBy } = req.body || {};
   if (!unitId || !courier) return res.status(400).json({ error: "Daire ve kargo firması zorunludur." });
-  const p = { id: db.uid(), unitId, courier, trackingNo: trackingNo || "", receivedDate: new Date().toISOString(), deliveredDate: null, status: "Teslim Alındı", deliveredBy: deliveredBy || req.user.name };
-  data.packages.unshift(p);
-  data.notifications.push({ id: db.uid(), userId: data.users.find((u) => u.unitId === unitId)?.id, message: `${courier} kargonuz yönetim ofisine teslim alındı.`, read: false, date: p.receivedDate, link: "#/kargo" });
-  await db.save(data);
+  const p = await prisma.package.create({ data: { unitId, courier, trackingNo: trackingNo || "", status: "Teslim Alındı", deliveredBy: deliveredBy || req.user.name } });
+  const owner = await prisma.user.findFirst({ where: { unitId } });
+  if (owner) {
+    await prisma.notification.create({ data: { userId: owner.id, message: `${courier} kargonuz yönetim ofisine teslim alındı.`, link: "#/kargo" } });
+  }
   res.status(201).json(p);
 });
 
 router.patch("/packages/:id/deliver", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
-  const data = await db.load();
-  const p = data.packages.find((x) => x.id === req.params.id);
+  const p = await prisma.package.update({ where: { id: req.params.id }, data: { status: "Teslim Edildi", deliveredDate: new Date() } }).catch(() => null);
   if (!p) return res.status(404).json({ error: "Kargo kaydı bulunamadı." });
-  p.status = "Teslim Edildi";
-  p.deliveredDate = new Date().toISOString();
-  await db.save(data);
   res.json(p);
 });
 
 // Yanlislikla "teslim edildi" isaretlenmisse geri alir
 router.patch("/packages/:id/undo-deliver", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
-  const data = await db.load();
-  const p = data.packages.find((x) => x.id === req.params.id);
+  const p = await prisma.package.update({ where: { id: req.params.id }, data: { status: "Teslim Alındı", deliveredDate: null } }).catch(() => null);
   if (!p) return res.status(404).json({ error: "Kargo kaydı bulunamadı." });
-  p.status = "Teslim Alındı";
-  p.deliveredDate = null;
-  await db.save(data);
   res.json(p);
 });
 
 router.delete("/packages/:id", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
-  const data = await db.load();
-  data.packages = data.packages.filter((p) => p.id !== req.params.id);
-  await db.save(data);
+  await prisma.package.delete({ where: { id: req.params.id } }).catch((e) => {
+    if (e.code !== "P2025") throw e;
+  });
   res.json({ message: "Kargo kaydı silindi." });
 });
 
 /* ---------------- DECISIONS (Karar Defteri) ---------------- */
 
 router.get("/decisions", requireAuth, async (req, res) => {
-  res.json((await db.load()).decisions.slice().sort((a, b) => b.decisionNo - a.decisionNo));
+  res.json(await prisma.decision.findMany({ orderBy: { decisionNo: "desc" } }));
 });
 
+// decisionNo'nun DB'de @unique olmasi sayesinde (bkz. schema.prisma) eszamanli
+// iki olusturma denemesi ayni numarayi almaya calisirsa biri P2002 ile
+// carpisir - bu durumda bir kez "en buyuk numara + 1"i yeniden hesaplayip
+// tekrar dener (cok dusuk ihtimalli bir yaris durumu, sonsuz donguye
+// girmemesi icin sadece 1 kez).
 router.post("/decisions", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   const { title, content, attendees, date } = req.body || {};
   if (!title || !content) return res.status(400).json({ error: "Başlık ve karar metni zorunludur." });
-  const nextNo = (Math.max(0, ...data.decisions.map((d) => d.decisionNo)) || 0) + 1;
-  const d = { id: db.uid(), decisionNo: nextNo, date: date || new Date().toISOString(), title, content, attendees: Number(attendees) || 0, createdBy: req.user.id };
-  data.decisions.unshift(d);
-  await db.save(data);
+
+  async function tryCreate() {
+    const max = await prisma.decision.aggregate({ _max: { decisionNo: true } });
+    const nextNo = (max._max.decisionNo || 0) + 1;
+    return prisma.decision.create({
+      data: { decisionNo: nextNo, date: date ? new Date(date) : new Date(), title, content, attendees: Number(attendees) || 0, createdBy: req.user.id },
+    });
+  }
+
+  let d;
+  try {
+    d = await tryCreate();
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      d = await tryCreate();
+    } else {
+      throw e;
+    }
+  }
   res.status(201).json(d);
 });
 
 /* ---------------- KEYS (Anahtar Takibi) ---------------- */
 
-router.get("/keys", requireAuth, requireRole("yonetici", "personel"), async (req, res) => res.json((await db.load()).keys));
+router.get("/keys", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
+  res.json(await prisma.key.findMany({ include: { history: true }, orderBy: { keyName: "asc" } }));
+});
 
 router.post("/keys", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   const { keyName, location } = req.body || {};
   if (!keyName) return res.status(400).json({ error: "Anahtar adı zorunludur." });
-  const k = { id: db.uid(), keyName, location: location || "", status: "depoda", holderName: "", givenDate: null, returnedDate: null, history: [] };
-  data.keys.push(k);
-  await db.save(data);
+  const k = await prisma.key.create({ data: { keyName, location: location || "", status: "depoda", holderName: "" } });
   res.status(201).json(k);
 });
 
 router.patch("/keys/:id/checkout", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const k = data.keys.find((x) => x.id === req.params.id);
+  const k = await prisma.key.findUnique({ where: { id: req.params.id } });
   if (!k) return res.status(404).json({ error: "Anahtar bulunamadı." });
   const { holderName } = req.body || {};
   if (!holderName) return res.status(400).json({ error: "Zimmetlenecek kişi adı zorunludur." });
-  k.status = "zimmetli";
-  k.holderName = holderName;
-  k.givenDate = new Date().toISOString();
-  k.returnedDate = null;
-  k.history.push({ id: db.uid(), holderName, givenDate: k.givenDate, returnedDate: null });
-  await db.save(data);
-  res.json(k);
+  const now = new Date();
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.keyAssignment.create({ data: { keyId: k.id, holderName, givenDate: now, returnedDate: null } });
+    return tx.key.update({ where: { id: k.id }, data: { status: "zimmetli", holderName, givenDate: now, returnedDate: null }, include: { history: true } });
+  });
+  res.json(updated);
 });
 
 router.patch("/keys/:id/checkin", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const k = data.keys.find((x) => x.id === req.params.id);
+  const k = await prisma.key.findUnique({ where: { id: req.params.id }, include: { history: true } });
   if (!k) return res.status(404).json({ error: "Anahtar bulunamadı." });
-  k.status = "depoda";
-  const last = k.history[k.history.length - 1];
-  if (last) last.returnedDate = new Date().toISOString();
-  k.returnedDate = new Date().toISOString();
-  await db.save(data);
-  res.json(k);
+  const now = new Date();
+  const openAssignment = k.history.filter((h) => !h.returnedDate).sort((a, b) => new Date(b.givenDate) - new Date(a.givenDate))[0];
+  const updated = await prisma.$transaction(async (tx) => {
+    if (openAssignment) await tx.keyAssignment.update({ where: { id: openAssignment.id }, data: { returnedDate: now } });
+    return tx.key.update({ where: { id: k.id }, data: { status: "depoda", returnedDate: now }, include: { history: true } });
+  });
+  res.json(updated);
 });
 
 module.exports = router;
