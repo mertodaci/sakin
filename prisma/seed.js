@@ -3,8 +3,15 @@
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const { randomUUID } = require("crypto");
+const { withTenantScope } = require("../lib/prismaClient");
 
-const prisma = new PrismaClient();
+// rawPrisma: extension'siz, sadece Site satirini olusturmak icin (henuz
+// hicbir siteId yok - tavuk-yumurta). Site olusturulduktan sonra ayni
+// baglantiyi withTenantScope ile saran `prisma` degiskeni tum asagidaki
+// tx.model.create(...) cagrilarina otomatik siteId ekler - AsyncLocalStorage
+// yerine sabit bir deger dondurenSiteId getter'i kullanilir (bu script
+// istekler arasi eszamanlilik gerektirmeyen dogrusal bir akis).
+const rawPrisma = new PrismaClient();
 
 function uid() {
   return randomUUID();
@@ -26,6 +33,28 @@ async function main() {
   const adminEmail = process.env.ADMIN_EMAIL || "yonetici@site.com";
   const adminPassword = process.env.ADMIN_PASSWORD || "Degistir123!";
   const DUE_AMOUNT = 450;
+
+  // Coklu-kiracili donusum: her seyden once TEK bir Site olusturulur (henuz
+  // extension'siz rawPrisma ile - siteId'nin kendisi bu adimda dogar).
+  // defaultAccountId burada "acc-banka" olarak sabitleniyor (asagida ayni id
+  // ile gercekten olusturulacak) - Site.defaultAccountId'nin FK kisiti yok,
+  // sira onemli degil.
+  const site = await rawPrisma.site.create({
+    data: {
+      name: "Örnek Site",
+      address: "",
+      monthlyDueDefault: DUE_AMOUNT,
+      lateFeeRate: 5,
+      lateFeeGraceDays: 10,
+      autoDueEnabled: true,
+      autoDueDay: 1,
+      autoDueAmount: DUE_AMOUNT,
+      lastAutoDuePeriod: monthsAgoPeriod(0),
+      defaultAccountId: "acc-banka",
+      ticketCategories: ["Tesisat", "Elektrik", "Asansör", "Ortak Alan", "Diğer"],
+    },
+  });
+  const prisma = withTenantScope(rawPrisma, () => site.id);
 
   await prisma.$transaction(
     async (tx) => {
@@ -61,6 +90,8 @@ async function main() {
         { id: "per2", name: "Osman Teknisyen", email: "osman@site.com", phone: "0533 444 55 66", passwordHash: bcrypt.hashSync("demo1234", 10), role: "personel", unitId: null, department: "Bakım-Onarım", isApproved: true, createdAt: isoDaysAgo(200) },
       ];
       for (const u of users) await tx.user.create({ data: u });
+      // Her kullanici bu tek siteye erisim kazanir (coklu-kiracili donusum).
+      for (const u of users) await tx.userSiteAccess.create({ data: { userId: u.id, siteId: site.id } });
 
       // ---- Ayarlar (eski "meta") ----
       await tx.settings.create({
@@ -254,10 +285,10 @@ async function main() {
 main()
   .then(async () => {
     console.log("Seed tamamlandi.");
-    await prisma.$disconnect();
+    await rawPrisma.$disconnect();
   })
   .catch(async (e) => {
     console.error(e);
-    await prisma.$disconnect();
+    await rawPrisma.$disconnect();
     process.exit(1);
   });

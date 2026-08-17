@@ -46,11 +46,15 @@ router.post("/surveys", requireAuth, requireRole("yonetici"), async (req, res) =
   const { question, options } = req.body || {};
   const cleaned = (options || []).map((o) => String(o).trim()).filter(Boolean);
   if (!question || cleaned.length < 2) return res.status(400).json({ error: "Soru ve en az 2 seçenek girilmelidir." });
-  const s = await prisma.survey.create({
-    data: { question, active: true, options: { create: cleaned.map((t, i) => ({ text: t, votes: 0, position: i })) } },
-    include: { options: { orderBy: [{ position: "asc" }, { id: "asc" }] } },
-  });
-  res.status(201).json({ ...s, votedBy: [] });
+  // options ayri, duz .create() cagrilariyla yaziliyor - Prisma extension'lar
+  // (siteId enjeksiyonu, bkz. lib/prismaClient.js) ic ice (nested) iliskisel
+  // yazmalari yakalamaz.
+  const s = await prisma.survey.create({ data: { question, active: true } });
+  const createdOptions = [];
+  for (let i = 0; i < cleaned.length; i++) {
+    createdOptions.push(await prisma.surveyOption.create({ data: { surveyId: s.id, text: cleaned[i], votes: 0, position: i } }));
+  }
+  res.status(201).json({ ...s, options: createdOptions, votedBy: [] });
 });
 
 // Oy verme + secenegin votes sayacinin artmasi tek $transaction icinde:

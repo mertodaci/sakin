@@ -1,10 +1,17 @@
 const jwt = require("jsonwebtoken");
 const db = require("../db");
+const tenantContext = require("../lib/tenantContext");
 
 const SECRET = process.env.JWT_SECRET || "dev-secret-degistirin";
 
-function sign(user) {
-  return jwt.sign({ id: user.id, role: user.role, unitId: user.unitId || null, name: user.name, tokenVersion: user.tokenVersion || 0 }, SECRET, { expiresIn: "30d" });
+// siteId zorunlu degil (preAuthToken - coklu-site secim ekrani icin - henuz
+// hicbir site secilmemis token'i temsil eder, bkz. routes/auth.js login).
+function sign(user, siteId) {
+  return jwt.sign(
+    { id: user.id, role: user.role, unitId: user.unitId || null, name: user.name, tokenVersion: user.tokenVersion || 0, siteId: siteId || null },
+    SECRET,
+    { expiresIn: "30d" }
+  );
 }
 
 // mustChangePassword=true olan bir kullanici (yonetici gecici sifre
@@ -35,8 +42,21 @@ async function requireAuth(req, res, next) {
         return res.status(403).json({ error: "Devam etmeden önce şifrenizi değiştirmeniz gerekiyor.", mustChangePassword: true });
       }
     }
+    if (!payload.siteId) {
+      return res.status(401).json({ error: "Site seçimi gerekiyor, lütfen tekrar giriş yapın." });
+    }
+    // Erisim her istekte tekrar dogrulanir - personelin erisimi kaldirilirsa
+    // 30 gunluk token'i suresi dolana kadar calismaya devam etmesin diye.
+    const access = await db.prisma.userSiteAccess.findUnique({
+      where: { userId_siteId: { userId: payload.id, siteId: payload.siteId } },
+    });
+    if (!access) return res.status(403).json({ error: "Bu siteye erişiminiz kaldırılmış." });
+
     req.user = payload;
-    next();
+    // Isteğin geri kalani (route handler + icindeki TUM Prisma cagrilari,
+    // db.js'in $transaction'lari dahil) bu site baglamini miras alir -
+    // bkz. lib/prismaClient.js.
+    tenantContext.run(payload.siteId, () => next());
   } catch {
     return res.status(401).json({ error: "Oturum geçersiz veya süresi dolmuş." });
   }

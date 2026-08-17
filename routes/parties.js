@@ -289,6 +289,9 @@ router.post("/party-payments/pay", requireAuth, requireRole("yonetici"), async (
       });
 
       const receiptNo = genReceiptNo();
+      // allocations ayri, duz .create() cagrilariyla yaziliyor - Prisma
+      // extension'lar (siteId enjeksiyonu, bkz. lib/prismaClient.js) ic ice
+      // (nested) iliskisel yazmalari yakalamaz.
       const created = await tx.partyPayment.create({
         data: {
           partyType: resolvedPartyType,
@@ -300,10 +303,12 @@ router.post("/party-payments/pay", requireAuth, requireRole("yonetici"), async (
           receiptNo,
           createdBy: req.user.id,
           transactionId: transaction.id,
-          allocations: { create: appliedTo.map((a) => ({ partyChargeId: a.chargeId, amount: a.amount })) },
         },
-        include: { allocations: true },
       });
+      for (const a of appliedTo) {
+        await tx.partyPaymentAllocation.create({ data: { partyPaymentId: created.id, partyChargeId: a.chargeId, amount: a.amount } });
+      }
+      created.allocations = appliedTo.map((a) => ({ partyChargeId: a.chargeId, amount: a.amount }));
 
       await tx.activityLog.create({
         data: { actorId: req.user.id, actorName: req.user.name, action: "party.payment", detail: `${label} tarafına ${amount}₺ ödeme yapıldı (makbuz ${receiptNo}).` },

@@ -14,10 +14,9 @@
 // koleksiyon tasindikca LEGACY_COLLECTIONS listesinden cikarilir ve
 // load()'a salt-okunur bir "passthrough" eklenir (cunku export/dashboard
 // gibi hala tasinmamis baska route'lar o veriyi okumaya devam eder).
-const { PrismaClient, Prisma } = require("@prisma/client");
 const { randomUUID } = require("crypto");
-
-const prisma = new PrismaClient();
+const prisma = require("./lib/prismaClient");
+const { Prisma } = prisma;
 
 function uid() {
   return randomUUID();

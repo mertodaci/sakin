@@ -1,8 +1,10 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const rateLimit = require("express-rate-limit");
 const db = require("../db");
-const { sign, requireAuth } = require("../middleware/auth");
+const { sign, requireAuth, SECRET } = require("../middleware/auth");
+const tenantContext = require("../lib/tenantContext");
 
 const router = express.Router();
 const prisma = db.prisma;
@@ -28,9 +30,20 @@ function findByEmail(email) {
   return prisma.user.findFirst({ where: { email: { equals: email || "", mode: "insensitive" } } });
 }
 
+// GECICI (Asama 5'te degisecek): su an tek site oldugu icin kayit akisi o
+// tek site'i kullanir. Asama 5'te bunun yerine Site.inviteCode ile
+// cozulen site-bazli bir kayit linki gelecek - o zaman bu "ilk siteyi al"
+// yaklasimi kaldirilacak.
+async function getOnlySiteOrThrow() {
+  const site = await prisma.site.findFirst();
+  if (!site) throw new Error("Hicbir site bulunamadi.");
+  return site;
+}
+
 // Kayit icin bos/musait daire listesi (auth gerektirmez, kayit formunda kullanilir)
 router.get("/units-for-signup", async (req, res) => {
-  const units = await prisma.unit.findMany({ orderBy: [{ block: "asc" }, { no: "asc" }] });
+  const site = await getOnlySiteOrThrow();
+  const units = await tenantContext.run(site.id, () => prisma.unit.findMany({ orderBy: [{ block: "asc" }, { no: "asc" }] }));
   res.json(units.map((u) => ({ id: u.id, label: `${u.block} - Daire ${u.no}` })));
 });
 
@@ -45,22 +58,33 @@ router.post("/register", registerLimiter, async (req, res) => {
   if (await findByEmail(email)) {
     return res.status(409).json({ error: "Bu e-posta ile zaten bir hesap var." });
   }
-  const unit = await prisma.unit.findUnique({ where: { id: unitId } });
-  if (!unit) return res.status(400).json({ error: "Geçersiz daire seçimi." });
 
-  await prisma.user.create({
-    data: { name, email, phone: phone || "", passwordHash: bcrypt.hashSync(password, 10), role: "sakin", unitId, isApproved: false },
-  });
+  const site = await getOnlySiteOrThrow();
+  await tenantContext.run(site.id, async () => {
+    const unit = await prisma.unit.findUnique({ where: { id: unitId } });
+    if (!unit) return res.status(400).json({ error: "Geçersiz daire seçimi." });
 
-  const admins = await prisma.user.findMany({ where: { role: "yonetici" } });
-  if (admins.length) {
-    await prisma.notification.createMany({
-      data: admins.map((a) => ({ userId: a.id, message: `${name} kayıt onayı bekliyor.`, link: "#/kullanicilar" })),
+    const user = await prisma.user.create({
+      data: { name, email, phone: phone || "", passwordHash: bcrypt.hashSync(password, 10), role: "sakin", unitId, isApproved: false },
     });
-  }
+    await prisma.userSiteAccess.create({ data: { userId: user.id, siteId: site.id } });
 
-  res.status(201).json({ message: "Kaydınız alındı. Yönetici onayından sonra giriş yapabilirsiniz." });
+    const admins = await prisma.userSiteAccess.findMany({ where: { siteId: site.id }, include: { user: true } });
+    const adminUsers = admins.map((a) => a.user).filter((u) => u.role === "yonetici");
+    if (adminUsers.length) {
+      await prisma.notification.createMany({
+        data: adminUsers.map((a) => ({ userId: a.id, message: `${name} kayıt onayı bekliyor.`, link: "#/kullanicilar" })),
+      });
+    }
+    res.status(201).json({ message: "Kaydınız alındı. Yönetici onayından sonra giriş yapabilirsiniz." });
+  });
 });
+
+// Bir kullanicinin erisebildigi siteleri {id,name} olarak dondurur.
+async function accessibleSites(userId) {
+  const rows = await prisma.userSiteAccess.findMany({ where: { userId }, include: { site: true } });
+  return rows.map((r) => ({ id: r.site.id, name: r.site.name }));
+}
 
 router.post("/login", loginLimiter, async (req, res) => {
   const { email, password } = req.body || {};
@@ -80,9 +104,11 @@ router.post("/login", loginLimiter, async (req, res) => {
         data: { failedLoginAttempts, lockedUntil: lockOut ? new Date(Date.now() + LOCK_DURATION_MS) : user.lockedUntil },
       });
       if (lockOut) {
-        await prisma.activityLog.create({
-          data: { actorId: "sistem", actorName: "Sistem", action: "user.lockout", detail: `${user.name} hesabı ${MAX_FAILED_ATTEMPTS} hatalı denemeden sonra kilitlendi.`, scopeUnitId: user.unitId || null },
-        });
+        await tenantContext.run((await getOnlySiteOrThrow()).id, () =>
+          prisma.activityLog.create({
+            data: { actorId: "sistem", actorName: "Sistem", action: "user.lockout", detail: `${user.name} hesabı ${MAX_FAILED_ATTEMPTS} hatalı denemeden sonra kilitlendi.`, scopeUnitId: user.unitId || null },
+          })
+        );
       }
     }
     return res.status(401).json({ error: "E-posta veya şifre hatalı." });
@@ -97,14 +123,66 @@ router.post("/login", loginLimiter, async (req, res) => {
 
   await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, lockedUntil: null } });
 
-  const token = sign(user);
-  const unit = user.unitId ? await prisma.unit.findUnique({ where: { id: user.unitId } }) : null;
+  const sites = await accessibleSites(user.id);
+  if (sites.length === 0) {
+    return res.status(403).json({ error: "Hesabınız hiçbir siteye bağlı değil. Yönetici ile iletişime geçin." });
+  }
+  if (sites.length > 1) {
+    // Site secilene kadar TAM token verilmez - preAuthToken sadece
+    // /auth/select-site'i cagirmaya yarar (siteId=null, requireAuth'tan gecemez).
+    const preAuthToken = sign(user, null);
+    return res.json({ requiresSiteSelection: true, sites, preAuthToken });
+  }
+
+  const site = sites[0];
+  const token = sign(user, site.id);
+  const unit = user.unitId ? await tenantContext.run(site.id, () => prisma.unit.findUnique({ where: { id: user.unitId } })) : null;
   res.json({
     token,
     mustChangePassword: !!user.mustChangePassword,
-    user: { id: user.id, name: user.name, email: user.email, role: user.role, unitId: user.unitId, department: user.department || null, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null },
+    user: { id: user.id, name: user.name, email: user.email, role: user.role, unitId: user.unitId, department: user.department || null, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, siteId: site.id, siteName: site.name },
   });
 });
+
+// preAuthToken (siteId=null) ile cagrilir - requireAuth'u KULLANMAZ, cunku
+// requireAuth zaten dolu bir siteId sartiyor (bkz. middleware/auth.js).
+// Kendi hafif dogrulamasini yapar: token gecerli mi + secilen site icin
+// gercekten UserSiteAccess var mi.
+async function resolveSiteSelection(req, res) {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ error: "Oturum bulunamadı, lütfen giriş yapın." });
+  let payload;
+  try {
+    payload = jwt.verify(token, SECRET);
+  } catch {
+    return res.status(401).json({ error: "Oturum geçersiz veya süresi dolmuş." });
+  }
+  const { siteId } = req.body || {};
+  if (!siteId) return res.status(400).json({ error: "Site seçimi zorunludur." });
+
+  const [user, access] = await Promise.all([
+    prisma.user.findUnique({ where: { id: payload.id } }),
+    prisma.userSiteAccess.findUnique({ where: { userId_siteId: { userId: payload.id, siteId } } }),
+  ]);
+  if (!user) return res.status(401).json({ error: "Oturum geçersiz veya süresi dolmuş." });
+  if (!access) return res.status(403).json({ error: "Bu siteye erişiminiz yok." });
+
+  const site = await prisma.site.findUnique({ where: { id: siteId } });
+  const newToken = sign(user, site.id);
+  const unit = user.unitId ? await tenantContext.run(site.id, () => prisma.unit.findUnique({ where: { id: user.unitId } })) : null;
+  res.json({
+    token: newToken,
+    mustChangePassword: !!user.mustChangePassword,
+    user: { id: user.id, name: user.name, email: user.email, role: user.role, unitId: user.unitId, department: user.department || null, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, siteId: site.id, siteName: site.name },
+  });
+}
+
+// Ilk girişte (preAuthToken ile) site seçimi
+router.post("/select-site", resolveSiteSelection);
+// Oturum ortasında site değiştirme (tam token ile) - ayni mantik, tek fark
+// cagiran tarafin zaten tam yetkili bir token'a sahip olmasi.
+router.post("/switch-site", resolveSiteSelection);
 
 // Sifremi unuttum: e-posta/SMS altyapisi olmadigindan, istek yoneticiye iletilir.
 // Yonetici "Kullanicilar" ekranindan tek tikla gecici sifre uretip sakine iletir.
@@ -114,11 +192,15 @@ router.post("/forgot-password", forgotLimiter, async (req, res) => {
   // Kullanici bulunamasa bile ayni mesaji donduruyoruz (e-posta enumerasyonunu onlemek icin)
   if (user) {
     await prisma.user.update({ where: { id: user.id }, data: { resetRequestedAt: new Date() } });
-    const admins = await prisma.user.findMany({ where: { role: "yonetici" } });
-    if (admins.length) {
-      await prisma.notification.createMany({
-        data: admins.map((a) => ({ userId: a.id, message: `${user.name} şifre sıfırlama talep etti.`, link: "#/kullanicilar" })),
-      });
+    const sites = await prisma.userSiteAccess.findMany({ where: { userId: user.id } });
+    for (const s of sites) {
+      const admins = await prisma.userSiteAccess.findMany({ where: { siteId: s.siteId }, include: { user: true } });
+      const adminUsers = admins.map((a) => a.user).filter((u) => u.role === "yonetici");
+      if (adminUsers.length) {
+        await prisma.notification.createMany({
+          data: adminUsers.map((a) => ({ userId: a.id, message: `${user.name} şifre sıfırlama talep etti.`, link: "#/kullanicilar" })),
+        });
+      }
     }
   }
   res.json({ message: "Talebiniz alındı. Yönetici sizinle iletişime geçip geçici bir şifre tanımlayacaktır." });
@@ -128,7 +210,23 @@ router.get("/me", requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.user.id } });
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   const unit = user.unitId ? await prisma.unit.findUnique({ where: { id: user.unitId } }) : null;
-  res.json({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, unitId: user.unitId, department: user.department || null, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, mustChangePassword: !!user.mustChangePassword, favoriteTabs: user.favoriteTabs || [] });
+  const sites = await accessibleSites(user.id);
+  const currentSite = sites.find((s) => s.id === req.user.siteId) || null;
+  res.json({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    role: user.role,
+    unitId: user.unitId,
+    department: user.department || null,
+    unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null,
+    mustChangePassword: !!user.mustChangePassword,
+    favoriteTabs: user.favoriteTabs || [],
+    siteId: req.user.siteId,
+    siteName: currentSite ? currentSite.name : null,
+    sites,
+  });
 });
 
 // Sidebar'da yildizlanan sayfalar - profil ozelinde, herhangi bir rol
@@ -158,7 +256,7 @@ router.post("/change-password", requireAuth, async (req, res) => {
     where: { id: user.id },
     data: { passwordHash: bcrypt.hashSync(newPassword, 10), mustChangePassword: false, tokenVersion: { increment: 1 } },
   });
-  const newToken = sign(updated);
+  const newToken = sign(updated, req.user.siteId);
   res.json({ message: "Şifreniz güncellendi.", token: newToken });
 });
 
@@ -168,7 +266,7 @@ router.post("/logout-all-sessions", requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.user.id } });
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   const updated = await prisma.user.update({ where: { id: user.id }, data: { tokenVersion: { increment: 1 } } });
-  const newToken = sign(updated);
+  const newToken = sign(updated, req.user.siteId);
   res.json({ message: "Tüm oturumlar kapatıldı. Bu cihazda oturumunuz devam ediyor.", token: newToken });
 });
 

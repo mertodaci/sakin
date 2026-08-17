@@ -1,5 +1,6 @@
 const { Prisma } = require("@prisma/client");
 const db = require("./db");
+const tenantContext = require("./lib/tenantContext");
 
 const prisma = db.prisma;
 
@@ -14,8 +15,8 @@ function currentPeriod() {
 // Tum okuma+kontrol+yazma islemi tek $transaction icinde - runMaintenanceTasks
 // ileride eszamanli iki kez tetiklenirse (orn. sunucu yeniden baslatma 6 saatlik
 // setInterval ile cakisirsa) yari-tamamlanmis bir durumda kalinmaz.
-async function applyLateFees(settings) {
-  const { lateFeeRate, lateFeeGraceDays } = settings;
+async function applyLateFees(site) {
+  const { lateFeeRate, lateFeeGraceDays } = site;
   if (!lateFeeRate || lateFeeRate.lte(0)) return 0;
   const now = Date.now();
   const period = currentPeriod();
@@ -80,8 +81,8 @@ async function applyLateFees(settings) {
 // kontrolu + guncellemesi ARTIK AYNI transaction icinde - eskiden guncelleme
 // dongunun sonunda ayri bir cagriyla yapiliyordu, eszamanli iki calisma ayni
 // "henuz islenmedi" kontrolunden ikisi de gecebilirdi.
-async function autoGenerateMonthlyDues(settings) {
-  const { autoDueEnabled, autoDueDay, autoDueAmount, lastAutoDuePeriod } = settings;
+async function autoGenerateMonthlyDues(site) {
+  const { autoDueEnabled, autoDueDay, autoDueAmount, lastAutoDuePeriod } = site;
   if (!autoDueEnabled) return 0;
   const now = new Date();
   const period = currentPeriod();
@@ -90,9 +91,9 @@ async function autoGenerateMonthlyDues(settings) {
 
   return prisma.$transaction(async (tx) => {
     // Ayni transaction icinde tekrar kontrol et - bu fonksiyon cagrilirken
-    // kullanilan `settings` disaridan (runMaintenanceTasks'ta) tek seferlik
+    // kullanilan `site` disaridan (runMaintenanceTasks'ta) tek seferlik
     // okunmustu, baska bir eszamanli calisma arada guncellemis olabilir.
-    const fresh = await tx.settings.findUniqueOrThrow({ where: { id: "singleton" } });
+    const fresh = await tx.site.findUniqueOrThrow({ where: { id: site.id } });
     if (fresh.lastAutoDuePeriod === period) return 0;
 
     const units = await tx.unit.findMany();
@@ -122,7 +123,7 @@ async function autoGenerateMonthlyDues(settings) {
       created++;
     }
 
-    await tx.settings.update({ where: { id: "singleton" }, data: { lastAutoDuePeriod: period } });
+    await tx.site.update({ where: { id: site.id }, data: { lastAutoDuePeriod: period } });
 
     if (created > 0) {
       await tx.activityLog.create({ data: { actorId: "sistem", actorName: "Otomatik Sistem", action: "charge.autogenerate", detail: `${period} dönemi aidat borcu ${created} daireye otomatik uygulandı.` } });
@@ -175,11 +176,20 @@ async function materializeRecurringPartyCharges() {
   return created;
 }
 
-async function runMaintenanceTasks() {
-  const settings = await prisma.settings.findUniqueOrThrow({ where: { id: "singleton" } });
-  await applyLateFees(settings);
-  await autoGenerateMonthlyDues(settings);
+async function runMaintenanceTasksForSite(site) {
+  await applyLateFees(site);
+  await autoGenerateMonthlyDues(site);
   await materializeRecurringPartyCharges();
+}
+
+// Her site kendi gecikme faizi/otomatik borclandirma/tekrarlayan fatura
+// ayarlarina (Site satirinin kendi lateFeeRate/autoDueEnabled/... alanlari)
+// gore, kendi tenant baglaminda calisir - bir sitenin ayari baskasini etkilemez.
+async function runMaintenanceTasks() {
+  const sites = await prisma.site.findMany();
+  for (const site of sites) {
+    await tenantContext.run(site.id, () => runMaintenanceTasksForSite(site));
+  }
 }
 
 module.exports = { runMaintenanceTasks, materializeRecurringPartyCharges };

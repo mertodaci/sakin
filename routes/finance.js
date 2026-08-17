@@ -186,6 +186,10 @@ async function applyPayment(tx, { unitId, amount, method, userId, userName, note
   // sonra "Krediyi Borca Uygula" ile bilincli olarak bir sonraki borca aktarir.
   const creditAmount = remaining.gt(0) ? remaining : new Prisma.Decimal(0);
 
+  // allocations ayri, duz .create() cagrilariyla yaziliyor - Prisma extension'lar
+  // (coklu-kiracili siteId enjeksiyonu icin kullanilan, bkz. lib/prismaClient.js)
+  // ic ice (nested) iliskisel yazmalari YAKALAMAZ, sadece en dista cagrilan
+  // operasyonu gorur.
   const payment = await tx.payment.create({
     data: {
       unitId,
@@ -198,10 +202,12 @@ async function applyPayment(tx, { unitId, amount, method, userId, userName, note
       transactionId: transaction.id,
       creditAmount,
       creditRemaining: creditAmount,
-      allocations: { create: appliedTo.map((a) => ({ chargeId: a.chargeId, amount: a.amount })) },
     },
-    include: { allocations: true },
   });
+  for (const a of appliedTo) {
+    await tx.paymentAllocation.create({ data: { paymentId: payment.id, chargeId: a.chargeId, amount: a.amount } });
+  }
+  payment.allocations = appliedTo.map((a) => ({ chargeId: a.chargeId, amount: a.amount }));
 
   const unit = creditAmount.gt(0)
     ? await tx.unit.update({ where: { id: unitId }, data: { creditBalance: { increment: creditAmount } } })
