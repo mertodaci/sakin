@@ -233,6 +233,7 @@ function logout() {
   state.user = null;
   state.tab = "ozet";
   expandedGroups = null;
+  navSearchQuery = "";
   renderLogin();
 }
 
@@ -243,6 +244,7 @@ function svgIcon(inner, extraAttrs) {
 const ICON = {
   bell: svgIcon('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>'),
   chevUpDown: svgIcon('<polyline points="7 15 12 20 17 15"/><polyline points="7 9 12 4 17 9"/>', 'class="chev"'),
+  search: svgIcon('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),
 };
 const NAV_ICON = {
   ozet: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -331,6 +333,7 @@ const NAV_GROUPS = {
 const ROLE_LABEL = { sakin: "Sakin Paneli", yonetici: "Yönetim Paneli", personel: "Personel Paneli" };
 let expandedGroups = null;
 let collapsedSections = new Set();
+let navSearchQuery = "";
 
 function groupItems(g) {
   return g.items || g.sections.flatMap((s) => s.items);
@@ -360,6 +363,10 @@ function renderShell() {
            <span class="f-display">Sakin</span>
            <span class="badge-role">${esc(ROLE_LABEL[state.user.role] || "")}</span>
          </div>
+       </div>
+       <div class="sidebar-search">
+         ${ICON.search}
+         <input type="text" id="navSearchInput" placeholder="Menüde ara..." autocomplete="off" />
        </div>
        <div class="sidebar-nav-scroll"><nav id="sidebarNav"></nav></div>
        <div class="sidebar-user">
@@ -393,6 +400,10 @@ function renderShell() {
   document.getElementById("hamburgerBtn").addEventListener("click", toggleSidebar);
   document.getElementById("sidebarOverlay").addEventListener("click", toggleSidebar);
   document.getElementById("userMenuBtn").addEventListener("click", toggleUserMenu);
+  document.getElementById("navSearchInput").addEventListener("input", (e) => {
+    navSearchQuery = e.target.value;
+    renderSidebarNav();
+  });
   refreshNotifBadge();
   renderTab(state.tab || "ozet");
 }
@@ -560,19 +571,43 @@ function sidebarItemBtn(id, label) {
   return `<button class="sidebar-item ${state.tab === id ? "active" : ""}" data-tab="${id}">${navIcon(id)}<span>${esc(label)}</span></button>`;
 }
 
+// Menude arama: girilen metinle eslesen ogeler disindaki her sey elenir,
+// eslesen gruplar/alt basliklar arama sirasinda otomatik acik gosterilir
+// (kullanicinin elle ac/kapa durumuna dokunmadan - arama bitince eski hali geri gelir).
+function navSearchMatch(label, q) { return label.toLocaleLowerCase("tr").includes(q); }
+
 function renderSidebarNav() {
-  const groups = NAV_GROUPS[state.user.role] || [];
+  const allGroups = NAV_GROUPS[state.user.role] || [];
   if (!expandedGroups) {
-    const activeGroup = groups.find((g) => groupItems(g).some(([id]) => id === state.tab));
-    expandedGroups = new Set([(activeGroup || groups[0])?.group]);
+    const activeGroup = allGroups.find((g) => groupItems(g).some(([id]) => id === state.tab));
+    expandedGroups = new Set([(activeGroup || allGroups[0])?.group]);
   }
+  const q = navSearchQuery.trim().toLocaleLowerCase("tr");
+  const searching = q.length > 0;
+  const groups = !searching ? allGroups : allGroups
+    .map((g) => {
+      if (g.sections) {
+        const sections = g.sections
+          .map((s) => ({ label: s.label, items: s.items.filter(([, label]) => navSearchMatch(label, q)) }))
+          .filter((s) => s.items.length);
+        return sections.length ? { group: g.group, sections } : null;
+      }
+      const items = g.items.filter(([, label]) => navSearchMatch(label, q));
+      return items.length ? { group: g.group, items } : null;
+    })
+    .filter(Boolean);
+
   const nav = document.getElementById("sidebarNav");
+  if (searching && !groups.length) {
+    nav.innerHTML = `<div class="sidebar-no-results">"${esc(navSearchQuery)}" için sonuç bulunamadı.</div>`;
+    return;
+  }
   nav.innerHTML = groups.map((g) => {
-    const isOpen = expandedGroups.has(g.group);
+    const isOpen = searching || expandedGroups.has(g.group);
     const body = g.sections
       ? g.sections.map((s) => {
           const key = `${g.group}::${s.label}`;
-          const secOpen = !collapsedSections.has(key);
+          const secOpen = searching || !collapsedSections.has(key);
           return `
             <div class="sidebar-section">
               <button class="sidebar-subheading-btn" data-section="${esc(key)}">
@@ -602,7 +637,7 @@ function renderSidebarNav() {
   // buyutmek yerine, zaten var olan "Bilgi Bankasi" sekmesine gercek
   // islevli bir kisayol karti eklendi - bosluk hem dolduruluyor hem de
   // gercek bir aksiyon sunuyor.
-  if (groups.some((g) => groupItems(g).some(([id]) => id === "bilgibankasi"))) {
+  if (!searching && groups.some((g) => groupItems(g).some(([id]) => id === "bilgibankasi"))) {
     nav.innerHTML += `
       <button class="sidebar-help-card" data-tab="bilgibankasi">
         <div class="sidebar-help-icon">${navIcon("bilgibankasi")}</div>
@@ -625,6 +660,13 @@ function renderSidebarNav() {
   }));
   nav.querySelectorAll("[data-tab]").forEach((btn) => btn.addEventListener("click", () => {
     state.tab = btn.dataset.tab;
+    if (searching) {
+      navSearchQuery = "";
+      const input = document.getElementById("navSearchInput");
+      if (input) input.value = "";
+      const owner = allGroups.find((g) => groupItems(g).some(([id]) => id === state.tab));
+      if (owner) { if (!expandedGroups) expandedGroups = new Set(); expandedGroups.add(owner.group); }
+    }
     renderSidebarNav();
     renderTab(state.tab);
     document.getElementById("sidebar")?.classList.remove("open");
@@ -950,7 +992,7 @@ function ticketCard(t, role, personnel) {
     <p class="ticket-desc">${esc(t.description)}</p>
     ${t.assignedName ? `<div class="ticket-assignee"><span class="avatar-chip sm">${esc(initials(t.assignedName))}</span> ${esc(t.assignedName)}</div>` : ""}
     ${t.comments.length ? `<div class="ticket-comments">${t.comments.map((cm) => `<div class="ticket-comment">${esc(cm.text)}</div>`).join("")}</div>` : ""}
-    ${role === "yonetici" ? `<div class="field" style="margin-top:10px;max-width:220px;"><label class="small">Ata</label><select data-assign="${t.id}"><option value="">Atanmadı</option>${personnel.map((p) => `<option value="${p.id}" ${t.assignedPersonnelId === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>` : ""}
+    ${role === "yonetici" ? `<div class="field inline" style="margin-top:10px;"><label class="small">Ata</label><select data-assign="${t.id}"><option value="">Atanmadı</option>${personnel.map((p) => `<option value="${p.id}" ${t.assignedPersonnelId === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>` : ""}
     ${canManage ? `<div class="segmented" style="margin-top:10px;">${["Açık", "İşlemde", "Çözüldü"].map((s) => `<button class="${t.status === s ? "active" : ""}" data-status="${t.id}|${s}">${s}</button>`).join("")}</div>` : ""}
   </div>`;
 }
