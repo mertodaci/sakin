@@ -2,6 +2,7 @@ const express = require("express");
 const { Prisma } = require("@prisma/client");
 const db = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { myUnitIds, findUnitResidents } = require("../lib/residentUnits");
 
 const router = express.Router();
 const prisma = db.prisma;
@@ -35,7 +36,12 @@ router.get("/reservations", requireAuth, async (req, res) => {
 
 router.post("/reservations", requireAuth, async (req, res) => {
   const { facilityId, date, startTime, endTime } = req.body || {};
-  const unitId = req.user.role === "sakin" ? req.user.unitId : req.body.unitId;
+  let unitId = req.body.unitId;
+  if (req.user.role === "sakin") {
+    if (!unitId) unitId = req.user.unitId;
+    const mine = await myUnitIds(prisma, req.user);
+    if (!mine.includes(unitId)) return res.status(403).json({ error: "Bu daireye erişim yetkiniz yok." });
+  }
   if (!facilityId || !date || !startTime || !endTime) return res.status(400).json({ error: "Tesis, tarih ve saat aralığı zorunludur." });
   if (!unitId) return res.status(400).json({ error: "Daire seçimi zorunludur." });
 
@@ -83,13 +89,22 @@ router.get("/tickets", requireAuth, async (req, res) => {
 
 router.post("/tickets", requireAuth, async (req, res) => {
   const { category, title, description, priority } = req.body || {};
-  const unitId = req.user.role === "sakin" ? req.user.unitId : req.body.unitId;
+  let unitId = req.body.unitId;
+  if (req.user.role === "sakin") {
+    if (!unitId) unitId = req.user.unitId;
+    const mine = await myUnitIds(prisma, req.user);
+    if (!mine.includes(unitId)) return res.status(403).json({ error: "Bu daireye erişim yetkiniz yok." });
+  }
   if (!category || !title || !description) return res.status(400).json({ error: "Kategori, başlık ve açıklama zorunludur." });
   if (!unitId) return res.status(400).json({ error: "Daire seçimi zorunludur." });
   const t = await prisma.ticket.create({
     data: { unitId, userId: req.user.id, category, title, description, priority: priority || "Orta", status: "Açık", assignedPersonnelId: null },
   });
-  const admins = await prisma.user.findMany({ where: { role: "yonetici" } });
+  // DIKKAT: User global bir model (coklu-site personel icin) - prisma.user.findMany({where:{role:"yonetici"}})
+  // TUM platformdaki yoneticileri dondurur, bu SITEYE ozel degil. UserSiteAccess
+  // uzerinden SADECE bu sitenin yoneticilerini buluyoruz.
+  const siteAccess = await prisma.userSiteAccess.findMany({ where: { siteId: req.user.siteId }, include: { user: true } });
+  const admins = siteAccess.map((a) => a.user).filter((u) => u.role === "yonetici");
   if (admins.length) {
     await prisma.notification.createMany({ data: admins.map((a) => ({ userId: a.id, message: `Yeni talep: ${title}`, link: "#/talepler" })) });
   }
@@ -208,7 +223,7 @@ router.post("/equipment/:id/undo-maintained", requireAuth, requireRole("yonetici
 /* ---------------- METERS (Sayac Okuma & Faturalama) ---------------- */
 
 router.get("/meters", requireAuth, async (req, res) => {
-  const where = req.user.role === "sakin" ? { unitId: req.user.unitId } : {};
+  const where = req.user.role === "sakin" ? { unitId: { in: await myUnitIds(prisma, req.user) } } : {};
   const list = await prisma.meter.findMany({ where, include: { unit: { select: { block: true, no: true } } } });
   res.json(list.map((m) => ({ ...m, unitLabel: m.unit ? `${m.unit.block} - Daire ${m.unit.no}` : "-", unit: undefined })));
 });
@@ -223,7 +238,7 @@ router.post("/meters", requireAuth, requireRole("yonetici"), async (req, res) =>
 router.get("/meter-readings", requireAuth, async (req, res) => {
   const where = {};
   if (req.user.role === "sakin") {
-    const myMeters = await prisma.meter.findMany({ where: { unitId: req.user.unitId }, select: { id: true } });
+    const myMeters = await prisma.meter.findMany({ where: { unitId: { in: await myUnitIds(prisma, req.user) } }, select: { id: true } });
     where.meterId = { in: myMeters.map((m) => m.id) };
   }
   const list = await prisma.meterReading.findMany({ where, orderBy: { date: "desc" } });
@@ -282,7 +297,7 @@ router.delete("/meter-readings/:id", requireAuth, requireRole("yonetici"), async
 /* ---------------- PACKAGES (Kargo Takibi) ---------------- */
 
 router.get("/packages", requireAuth, async (req, res) => {
-  const where = req.user.role === "sakin" ? { unitId: req.user.unitId } : {};
+  const where = req.user.role === "sakin" ? { unitId: { in: await myUnitIds(prisma, req.user) } } : {};
   const list = await prisma.package.findMany({ where, orderBy: { receivedDate: "desc" }, include: { unit: { select: { block: true, no: true } } } });
   res.json(list.map((p) => ({ ...p, unitLabel: p.unit ? `${p.unit.block} - Daire ${p.unit.no}` : "-", unit: undefined })));
 });
@@ -291,9 +306,11 @@ router.post("/packages", requireAuth, requireRole("yonetici", "personel"), async
   const { unitId, courier, trackingNo, deliveredBy } = req.body || {};
   if (!unitId || !courier) return res.status(400).json({ error: "Daire ve kargo firması zorunludur." });
   const p = await prisma.package.create({ data: { unitId, courier, trackingNo: trackingNo || "", status: "Teslim Alındı", deliveredBy: deliveredBy || req.user.name } });
-  const owner = await prisma.user.findFirst({ where: { unitId } });
-  if (owner) {
-    await prisma.notification.create({ data: { userId: owner.id, message: `${courier} kargonuz yönetim ofisine teslim alındı.`, link: "#/kargo" } });
+  // findFirst({where:{unitId}}) sadece BIRINCIL sahibi bulurdu - coklu daireli
+  // bir sakinin EK dairesine (UserUnit) kargo gelirse hic bildirim gitmezdi.
+  const residents = await findUnitResidents(prisma, unitId);
+  if (residents.length) {
+    await prisma.notification.createMany({ data: residents.map((r) => ({ userId: r.id, message: `${courier} kargonuz yönetim ofisine teslim alındı.`, link: "#/kargo" })) });
   }
   res.status(201).json(p);
 });

@@ -117,6 +117,7 @@ model Site {
   archiveFolders          ArchiveFolder[]
   archiveFiles            ArchiveFile[]
   knowledgeArticles       KnowledgeArticle[]
+  userUnits               UserUnit[]
 }
 
 // Bir kullanicinin bir siteye erisim yetkisi - many-to-many. Ayni kullanici
@@ -188,7 +189,27 @@ model Unit {
   creditApplications CreditApplication[]
   householdMembers   HouseholdMember[]
   legalCases         LegalCase[]
+  userUnits          UserUnit[]
 
+  @@index([siteId])
+}
+
+// Ayni sitede birden fazla daireye sahip/erisen bir sakin icin (orn. ayni
+// kisinin 2 evi) EK daire baglantilari - User.unitId "birincil" daire olarak
+// kalir (JWT/kayit/etiketleme akislarinda degisiklik gerektirmeden), bu
+// tablo sadece EKLENEN dairelerdir. Bir sakinin TUM daireleri = User.unitId
+// + burdaki satirlar (bkz. lib/residentUnits.js).
+model UserUnit {
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitId    String
+  unit      Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, unitId])
   @@index([siteId])
 }
 
@@ -303,6 +324,7 @@ model User {
   receivedMessages Message[]        @relation("MessageRecipient")
   notes            UserNote[]
   siteAccess       UserSiteAccess[]
+  additionalUnits  UserUnit[]
 }
 
 // Yonetimcell karsilastirmasindan: guvenlik/kapi gorevlisinin gozle

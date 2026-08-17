@@ -7,6 +7,50 @@ yardım istediğini anlayabilir.
 
 ---
 
+## 🏠 Çok-Daireli Sakin Desteği — TAMAMLANDI (2026-08-18)
+
+Kullanıcı sordu: "Mert Odacı A sitesinde iki farklı evi var, ikisinin
+aidatlarını ayrı ayrı görmek veya birleşik görmek isteyebilir bunu
+destekliyor muyuz?" — Cevap o an HAYIR'dı (`User.unitId` tekil bir ilişkiydi).
+Yeni `UserUnit` join-table modeli eklendi: `User.unitId` "birincil" daire
+olarak KALIYOR (JWT/kayıt akışlarında hiçbir değişiklik yok, tek-daireli
+%99 sakin için davranış birebir aynı), `UserUnit` sadece EK daireleri tutuyor.
+
+- `lib/residentUnits.js`: `myUnitIds` (birincil+ek), `resolveUnitScope`
+  (`?unitId=` sorgusunu güvenli çözer), `ownsUnit`, `findUnitResidents`
+  (bir dairenin TÜM sakinlerini bulur - bildirimler için).
+- **Test sırasında bulunan gerçek bir güvenlik açığı**: `finance.js`'teki
+  `GET /charges`, `/payments`, `/credit-applications` uçlarında sakin
+  rolündeki kullanıcılar için `?unitId=` sorgu parametresi **hiç
+  doğrulanmadan** kullanılıyordu — bir sakin başka birinin unitId'sini
+  vererek onun borç/ödeme geçmişini görebiliyordu (IDOR). `resolveUnitScope`
+  ile düzeltildi: sakin artık sadece KENDİ dairelerinden birini isteyebilir,
+  aksi halde 403.
+- Sakin taraflı ekranlar (Aidat, Dashboard, Sayaçlar, Kargo, Şeffaflık) artık
+  varsayılan olarak TÜM dairelerin BİRLEŞİK görünümünü gösteriyor;
+  `finance.js`/`dashboard.js`'e eklenen `?unitId=` ile TEK bir daireye
+  daraltılabiliyor (Aidat ekranında yeni bir "Daire" seçici).
+  Ödeme/belge gibi tek-daireye özgü işlemler birleşik görünümde
+  devre dışı — önce bir daire seçilmesi gerekiyor.
+- Talep/rezervasyon oluşturma formlarına, çok-daireli sakin için "Daire"
+  seçici eklendi (tek daireli sakinler için görünmez, davranış değişmedi).
+- **Test sırasında bulunan ikinci bir siteler-arası sızıntı**: `ops.js`'teki
+  yeni-talep bildirimi `prisma.user.findMany({where:{role:"yonetici"}})` ile
+  TÜM platformdaki yöneticileri buluyordu (Aşama 5/6'da auth.js'de düzeltilen
+  ama ops.js'de gözden kaçan aynı hata). `UserSiteAccess` üzerinden site-bazlı
+  bulacak şekilde düzeltildi.
+- **Bulunan üçüncü bir hata**: paket teslimatı ve otomatik aylık aidat
+  bildirimleri sadece dairenin BİRİNCİL sahibini buluyordu
+  (`findFirst({where:{unitId}})`) - çok-daireli bir sakinin EK dairesine
+  bildirim hiç gitmiyordu. `findUnitResidents` ile düzeltildi (ops.js, jobs.js).
+- Yönetici tarafı: `POST/DELETE /api/users/:id/units` + Kullanıcılar
+  ekranındaki kullanıcı düzenleme modaline "Daireleri" bölümü (ekle/kaldır).
+- Uçtan uca doğrulandı: bir sakine ikinci bir daire bağlandı, birleşik/tekil
+  görünüm anahtarlandı, ödeme SADECE seçilen daireye uygulandı (diğer daire
+  etkilenmedi), admin arayüzünden ekleme/kaldırma test edildi.
+
+---
+
 ## ✅ İş Akışı Bütünlüğü Düzeltmeleri — TAMAMLANDI (2026-08-17)
 
 Kullanıcı uygulamayı gerçek sakinlere vermeden önce genel bir "iş akışı

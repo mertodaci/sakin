@@ -2,13 +2,10 @@ const express = require("express");
 const { Prisma } = require("@prisma/client");
 const db = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { resolveUnitScope, myUnitIds } = require("../lib/residentUnits");
 
 const router = express.Router();
 const prisma = db.prisma;
-
-function scopedUnitId(req) {
-  return req.user.role === "sakin" ? req.user.unitId : null;
-}
 
 async function formatUnit(unitId) {
   const u = await prisma.unit.findUnique({ where: { id: unitId } });
@@ -18,9 +15,10 @@ async function formatUnit(unitId) {
 /* ---------------- CHARGES (Borclandirmalar: aidat, sayac, diger) ---------------- */
 
 router.get("/charges", requireAuth, async (req, res) => {
-  const unitFilter = req.query.unitId || scopedUnitId(req);
+  const scope = await resolveUnitScope(prisma, req);
+  if (!scope.ok) return res.status(403).json({ error: "Bu daireye erişim yetkiniz yok." });
   const charges = await prisma.charge.findMany({
-    where: unitFilter ? { unitId: unitFilter } : undefined,
+    where: scope.filter !== undefined ? { unitId: scope.filter } : undefined,
     orderBy: { dueDate: "desc" },
     include: { category: true },
   });
@@ -135,9 +133,10 @@ function toAppliedTo(payment) {
 }
 
 router.get("/payments", requireAuth, async (req, res) => {
-  const unitFilter = req.query.unitId || scopedUnitId(req);
+  const scope = await resolveUnitScope(prisma, req);
+  if (!scope.ok) return res.status(403).json({ error: "Bu daireye erişim yetkiniz yok." });
   const payments = await prisma.payment.findMany({
-    where: unitFilter ? { unitId: unitFilter } : undefined,
+    where: scope.filter !== undefined ? { unitId: scope.filter } : undefined,
     include: { allocations: true },
     orderBy: { date: "desc" },
   });
@@ -227,8 +226,16 @@ async function applyPayment(tx, { unitId, amount, method, userId, userName, note
 // ikinci kez islenmez (idempotency key deseni - PaymentRequest tablosunda unique
 // constraint, mukerrer istek Prisma P2002 hatasiyla yakalanip 409 donduruluyor).
 router.post("/payments/pay", requireAuth, async (req, res) => {
-  const unitId = req.user.role === "sakin" ? req.user.unitId : req.body.unitId;
   const { amount, method, requestId, accountId, chargeIds } = req.body || {};
+  let unitId = req.body.unitId;
+  if (req.user.role === "sakin") {
+    // Coklu daireli sakin (orn. ayni sitede 2 evi olan) HANGI daire icin
+    // odeme yaptigini secebilir; belirtmezse birincil dairesi varsayilir
+    // (tek daireli sakinler icin davranis eskisiyle birebir ayni).
+    if (!unitId) unitId = req.user.unitId;
+    const mine = await myUnitIds(prisma, req.user);
+    if (!mine.includes(unitId)) return res.status(403).json({ error: "Bu daireye erişim yetkiniz yok." });
+  }
   if (!unitId || !amount || Number(amount) <= 0) return res.status(400).json({ error: "Geçerli bir daire ve tutar giriniz." });
 
   try {
@@ -380,8 +387,9 @@ router.post("/units/:id/apply-credit", requireAuth, requireRole("yonetici"), asy
 
 // Hesap Ozeti ekstresinde odemelerle birlikte gosterebilmek icin.
 router.get("/credit-applications", requireAuth, async (req, res) => {
-  const unitFilter = req.query.unitId || scopedUnitId(req);
-  const apps = await prisma.creditApplication.findMany({ where: unitFilter ? { unitId: unitFilter } : undefined, orderBy: { date: "desc" } });
+  const scope = await resolveUnitScope(prisma, req);
+  if (!scope.ok) return res.status(403).json({ error: "Bu daireye erişim yetkiniz yok." });
+  const apps = await prisma.creditApplication.findMany({ where: scope.filter !== undefined ? { unitId: scope.filter } : undefined, orderBy: { date: "desc" } });
   res.json(apps);
 });
 

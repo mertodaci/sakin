@@ -6,6 +6,7 @@ const db = require("../db");
 const { sign, requireAuth, SECRET } = require("../middleware/auth");
 const tenantContext = require("../lib/tenantContext");
 const { validatePassword } = require("../lib/validation");
+const { myUnitIds } = require("../lib/residentUnits");
 
 const router = express.Router();
 const prisma = db.prisma;
@@ -207,6 +208,14 @@ router.get("/me", requireAuth, async (req, res) => {
   const unit = user.unitId ? await prisma.unit.findUnique({ where: { id: user.unitId } }) : null;
   const sites = await accessibleSites(user.id);
   const currentSite = sites.find((s) => s.id === req.user.siteId) || null;
+  // Coklu daireli sakinler icin (orn. ayni sitede 2 evi olan) frontend'in
+  // daire secici/birlestirici gosterebilmesi icin TUM daireleri.
+  let units = [];
+  if (user.role === "sakin") {
+    const ids = await myUnitIds(prisma, req.user);
+    const unitRows = await prisma.unit.findMany({ where: { id: { in: ids } }, orderBy: [{ block: "asc" }, { no: "asc" }] });
+    units = unitRows.map((u) => ({ id: u.id, label: `${u.block} - Daire ${u.no}` }));
+  }
   res.json({
     id: user.id,
     name: user.name,
@@ -216,6 +225,7 @@ router.get("/me", requireAuth, async (req, res) => {
     unitId: user.unitId,
     department: user.department || null,
     unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null,
+    units,
     mustChangePassword: !!user.mustChangePassword,
     favoriteTabs: user.favoriteTabs || [],
     siteId: req.user.siteId,

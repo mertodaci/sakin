@@ -1,16 +1,18 @@
 const express = require("express");
 const db = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { myUnitIds } = require("../lib/residentUnits");
 
 const router = express.Router();
 
-// Seffaflik sayfasi: yonetici tum kayitlari, sakin sadece kendi dairesiyle
+// Seffaflik sayfasi: yonetici tum kayitlari, sakin sadece kendi daire(leri)yle
 // ilgili veya kendi yaptigi islemleri gorur.
 router.get("/activity-log", requireAuth, async (req, res) => {
   const data = await db.load();
   let list = data.activityLog;
   if (req.user.role !== "yonetici") {
-    list = list.filter((l) => l.scopeUnitId === req.user.unitId || l.actorId === req.user.id);
+    const unitIds = req.user.role === "sakin" ? await myUnitIds(db.prisma, req.user) : [req.user.unitId];
+    list = list.filter((l) => unitIds.includes(l.scopeUnitId) || l.actorId === req.user.id);
   }
   res.json(list.slice(0, 300));
 });

@@ -1,6 +1,7 @@
 const { Prisma } = require("@prisma/client");
 const db = require("./db");
 const tenantContext = require("./lib/tenantContext");
+const { findUnitResidents } = require("./lib/residentUnits");
 
 const prisma = db.prisma;
 
@@ -116,9 +117,12 @@ async function autoGenerateMonthlyDues(site) {
           description: `${period} ayı aidatı (otomatik borçlandırma)`,
         },
       });
-      const owner = await tx.user.findFirst({ where: { unitId: u.id } });
-      if (owner) {
-        await tx.notification.create({ data: { userId: owner.id, message: `${period} ayı aidatınız (${autoDueAmount}₺) borcunuza eklendi.`, read: false, link: "#/aidat" } });
+      // findFirst({where:{unitId}}) sadece BIRINCIL sahibi bulurdu - coklu
+      // daireli bir sakinin EK dairesine (UserUnit) borc eklenince hic
+      // bildirim gitmezdi.
+      const residents = await findUnitResidents(tx, u.id);
+      for (const r of residents) {
+        await tx.notification.create({ data: { userId: r.id, message: `${period} ayı aidatınız (${autoDueAmount}₺) borcunuza eklendi.`, read: false, link: "#/aidat" } });
       }
       created++;
     }

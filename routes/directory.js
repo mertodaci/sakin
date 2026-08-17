@@ -208,11 +208,48 @@ router.get("/reports/arac-plaka-listesi", requireAuth, requireRole("yonetici", "
 
 router.get("/users", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();
+  const extra = await prisma.userUnit.findMany();
+  const extraByUser = new Map();
+  for (const e of extra) {
+    if (!extraByUser.has(e.userId)) extraByUser.set(e.userId, []);
+    extraByUser.get(e.userId).push(e.unitId);
+  }
   const list = data.users.map((u) => {
     const unit = u.unitId ? data.units.find((x) => x.id === u.unitId) : null;
-    return { id: u.id, name: u.name, email: u.email, email2: u.email2 || null, phone: u.phone, phone2: u.phone2 || null, role: u.role, unitId: u.unitId, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, department: u.department || null, nationalId: u.nationalId || null, isApproved: u.isApproved, isActive: u.isActive !== false, createdAt: u.createdAt, resetRequestedAt: u.resetRequestedAt || null, gender: u.gender || null, birthDate: u.birthDate || null, bloodType: u.bloodType || null, sector: u.sector || null, workplace: u.workplace || null, workAddress: u.workAddress || null, homeAddress: u.homeAddress || null };
+    const additionalUnits = (extraByUser.get(u.id) || [])
+      .map((id) => data.units.find((x) => x.id === id))
+      .filter(Boolean)
+      .map((x) => ({ id: x.id, label: `${x.block} - Daire ${x.no}` }));
+    return { id: u.id, name: u.name, email: u.email, email2: u.email2 || null, phone: u.phone, phone2: u.phone2 || null, role: u.role, unitId: u.unitId, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, additionalUnits, department: u.department || null, nationalId: u.nationalId || null, isApproved: u.isApproved, isActive: u.isActive !== false, createdAt: u.createdAt, resetRequestedAt: u.resetRequestedAt || null, gender: u.gender || null, birthDate: u.birthDate || null, bloodType: u.bloodType || null, sector: u.sector || null, workplace: u.workplace || null, workAddress: u.workAddress || null, homeAddress: u.homeAddress || null };
   });
   res.json(list);
+});
+
+// Yonetici, bir sakine (mevcut birincil dairesine EK olarak) baska bir daire
+// erisimi verir - ayni sitede birden fazla daireye sahip/eris sakinler icin
+// (orn. ayni kisinin 2 evi). unitId, tenant-scope'lu Unit sorgusu sayesinde
+// baska bir siteye aitse zaten null doner (404) - siteler-arasi kontrol gerekmez.
+router.post("/users/:id/units", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const user = await findSiteUser(req.params.id, req.user.siteId);
+  if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
+  const { unitId } = req.body || {};
+  if (!unitId) return res.status(400).json({ error: "Daire seçimi zorunludur." });
+  if (unitId === user.unitId) return res.status(400).json({ error: "Bu daire zaten kullanıcının birincil dairesi." });
+  const unit = await prisma.unit.findUnique({ where: { id: unitId } });
+  if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
+  await prisma.userUnit.upsert({
+    where: { userId_unitId: { userId: user.id, unitId } },
+    create: { userId: user.id, unitId },
+    update: {},
+  });
+  res.status(201).json({ message: `${unit.block} - Daire ${unit.no} kullanıcıya eklendi.` });
+});
+
+router.delete("/users/:id/units/:unitId", requireAuth, requireRole("yonetici"), async (req, res) => {
+  const user = await findSiteUser(req.params.id, req.user.siteId);
+  if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
+  await prisma.userUnit.deleteMany({ where: { userId: user.id, unitId: req.params.unitId } });
+  res.json({ message: "Daire erişimi kaldırıldı." });
 });
 
 // Ad/telefon/TC kimlik no gibi temel profil alanlarini duzenler (Yonetimcell

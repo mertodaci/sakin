@@ -377,6 +377,7 @@ function logout() {
   state.tab = "ozet";
   expandedGroups = null;
   navSearchQuery = "";
+  residentAidatUnit = "all";
   renderLogin();
 }
 
@@ -677,6 +678,14 @@ async function renderUserEditModal(u) {
         <div class="field" style="flex:1 1 220px;"><label>Yeni Not</label><input name="text" required placeholder="Örn. anahtarı komşuya bıraktı" /></div>
         <button class="btn btn-ghost btn-sm" type="submit">Ekle</button>
       </form>
+      ${u.role === "sakin" ? `
+      <div class="ledger-title" style="padding-top:18px;">Daireleri</div>
+      <p class="small muted" style="margin-top:-6px;">Aynı sitede birden fazla daireye sahip/erişen sakinler için (örn. aynı kişinin 2 evi). Birincil daire buradan kaldırılamaz - "Düzenle" ile değiştirilir.</p>
+      <div id="unitLinkList" class="small muted">Yükleniyor…</div>
+      <form id="unitLinkForm" class="form-row" style="margin-top:10px;">
+        <div class="field" style="flex:1 1 220px;"><label>Ek Daire</label><select id="unitLinkSelect" name="unitId"></select></div>
+        <button class="btn btn-ghost btn-sm" type="submit">Ekle</button>
+      </form>` : ""}
     </div>`;
   document.body.appendChild(overlay);
   overlay.querySelector("#userEditCancel").addEventListener("click", () => overlay.remove());
@@ -734,6 +743,44 @@ async function renderUserEditModal(u) {
       loadNotes();
     } catch (err) { toast(err.message); }
   });
+
+  if (u.role === "sakin") {
+    async function loadUnitLinks() {
+      const allUnits = await api("/units");
+      const linkedIds = new Set([u.unitId, ...(u.additionalUnits || []).map((x) => x.id)].filter(Boolean));
+      const box = overlay.querySelector("#unitLinkList");
+      const rows = [];
+      if (u.unitId) rows.push(`<div class="ledger-row" style="padding:6px 0;"><span>${esc(u.unitLabel || "-")} <span class="small muted">(birincil)</span></span></div>`);
+      for (const eu of u.additionalUnits || []) {
+        rows.push(`<div class="ledger-row" style="padding:6px 0;"><span>${esc(eu.label)}</span><button class="btn-danger" data-delunitlink="${eu.id}">Kaldır</button></div>`);
+      }
+      box.innerHTML = rows.join("") || '<div class="empty-row" style="padding:4px 0;">Bağlı daire yok.</div>';
+      box.querySelectorAll("[data-delunitlink]").forEach((b) => b.addEventListener("click", async () => {
+        try { await api("/users/" + u.id + "/units/" + b.dataset.delunitlink, { method: "DELETE" }); u.additionalUnits = (u.additionalUnits || []).filter((x) => x.id !== b.dataset.delunitlink); loadUnitLinks(); } catch (err) { toast(err.message); }
+      }));
+      const select = overlay.querySelector("#unitLinkSelect");
+      const options = allUnits.filter((au) => !linkedIds.has(au.id));
+      select.innerHTML = options.length
+        ? options.map((au) => `<option value="${au.id}">${esc(au.block)} - Daire ${esc(au.no)}</option>`).join("")
+        : '<option value="" disabled selected>Eklenecek başka daire yok</option>';
+      overlay.querySelector("#unitLinkForm button[type=submit]").disabled = !options.length;
+    }
+    loadUnitLinks();
+
+    overlay.querySelector("#unitLinkForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      try {
+        await api("/users/" + u.id + "/units", { method: "POST", body: Object.fromEntries(f) });
+        toast("Daire eklendi.");
+        u.additionalUnits = null; // yeniden cekilecek (loadUnitLinks allUnits'i her seferinde tazeliyor, linkedIds'i de guncel u'dan hesaplamak icin listeyi tekrar okuyalim)
+        const fresh = await api("/users");
+        const freshUser = fresh.find((x) => x.id === u.id);
+        u.additionalUnits = freshUser ? freshUser.additionalUnits : [];
+        loadUnitLinks();
+      } catch (err) { toast(err.message); }
+    });
+  }
 }
 
 function toggleSidebar() {
@@ -1016,16 +1063,37 @@ async function renderResidentOzet(c) {
   c.querySelectorAll("[data-goto]").forEach((el) => el.addEventListener("click", () => goToTab(el.dataset.goto)));
 }
 
+// Coklu daireli bir sakin (orn. ayni sitede 2 evi olan) Aidat ekraninda hangi
+// daireyi gorduguna gore - "all" = tum dairelerin birlesik gorunumu (varsayilan).
+// Sekmeler arasi degisince sifirlanmasin diye modul seviyesinde tutulur.
+let residentAidatUnit = "all";
+
 async function renderResidentAidat(c) {
-  const [charges, payments, dash] = await Promise.all([api("/charges"), api("/payments"), api("/dashboard")]);
+  const units = state.user.units || [];
+  const multiUnit = units.length > 1;
+  const qs = residentAidatUnit !== "all" ? `?unitId=${residentAidatUnit}` : "";
+  const [charges, payments, dash] = await Promise.all([api("/charges" + qs), api("/payments" + qs), api("/dashboard" + qs)]);
   const debt = dash.debt;
+  // Birlesik (tum daireler) gorunumdeyken tek-daire islemleri (odeme, borcu
+  // yoktur belgesi) anlamsiz - kullanicinin once bir daire secmesi gerekir.
+  const needsUnitPick = multiUnit && residentAidatUnit === "all";
   c.innerHTML = `
     ${sectionTitle("Borç ve Ödemelerim", "Hesap özeti banka ekstresi mantığıyla listelenir")}
+    ${multiUnit ? `
+    <div class="card pad mb-16">
+      <label class="small muted" style="display:block;margin-bottom:6px;">Daire</label>
+      <select id="aidatUnitSelect">
+        <option value="all" ${residentAidatUnit === "all" ? "selected" : ""}>Tümü (${units.length} daire, birleşik)</option>
+        ${units.map((u) => `<option value="${u.id}" ${residentAidatUnit === u.id ? "selected" : ""}>${esc(u.label)}</option>`).join("")}
+      </select>
+    </div>` : ""}
     <div class="card pad mb-16 flex-between">
       <div><div class="stat-label">${debt < 0 ? "ALACAKLI BAKİYE" : "ÖDENECEK TUTAR"}</div><div class="f-num stat-value" style="color:${debtColor(debt)}">${tl(Math.abs(debt))}</div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        ${debt <= 0 ? '<button class="btn btn-ghost" id="debtLetterBtn">📄 Borcu Yoktur Belgesi</button>' : ""}
-        <button class="btn btn-primary" id="payBtn" ${debt <= 0 ? "disabled" : ""}>${debt > 0 ? "Ödeme Yap" : "Borç Yok"}</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        ${needsUnitPick ? '<span class="small muted">Ödeme yapmak/belge almak için önce bir daire seçin.</span>' : `
+          ${debt <= 0 ? '<button class="btn btn-ghost" id="debtLetterBtn">📄 Borcu Yoktur Belgesi</button>' : ""}
+          <button class="btn btn-primary" id="payBtn" ${debt <= 0 ? "disabled" : ""}>${debt > 0 ? "Ödeme Yap" : "Borç Yok"}</button>
+        `}
       </div>
     </div>
     <div class="card tight mb-16">
@@ -1041,6 +1109,10 @@ async function renderResidentAidat(c) {
         </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
   `;
+  document.getElementById("aidatUnitSelect")?.addEventListener("change", (e) => {
+    residentAidatUnit = e.target.value;
+    renderTab("aidat");
+  });
   document.getElementById("payBtn")?.addEventListener("click", async (e) => {
     if (!confirm(`${tl(debt)} tutarında ödeme yapılsın mı? (Demo ortamı — gerçek kart bilgisi istenmez)`)) return;
     e.target.disabled = true; e.target.textContent = "İşleniyor…";
@@ -1048,12 +1120,12 @@ async function renderResidentAidat(c) {
     // her deneme benzersiz bir requestId ile gonderilir (backend bunu tekrar isleme almaz).
     const requestId = crypto.randomUUID();
     try {
-      await api("/payments/pay", { method: "POST", body: { amount: debt, method: "Kredi Kartı", requestId } });
+      await api("/payments/pay", { method: "POST", body: { amount: debt, method: "Kredi Kartı", requestId, unitId: residentAidatUnit !== "all" ? residentAidatUnit : undefined } });
       toast("Ödemeniz alındı, teşekkürler.");
       renderTab("aidat");
     } catch (err) { toast(err.message); e.target.disabled = false; e.target.textContent = "Ödeme Yap"; }
   });
-  document.getElementById("debtLetterBtn")?.addEventListener("click", () => downloadFile("/documents/debt-letter", "borcu-yoktur.pdf"));
+  document.getElementById("debtLetterBtn")?.addEventListener("click", () => downloadFile("/documents/debt-letter" + qs, "borcu-yoktur.pdf"));
   c.querySelectorAll("[data-receipt]").forEach((b) => b.addEventListener("click", () => downloadFile("/documents/receipt/" + b.dataset.receipt, "makbuz.pdf")));
 }
 
@@ -1166,6 +1238,7 @@ async function renderRezervasyon(c) {
     ${sectionTitle("Ortak Alan Rezervasyonu")}
     ${!canManage ? `
     <form id="resForm" class="card form-card form-row">
+      ${(state.user.units || []).length > 1 ? `<div class="field"><label>Daire</label><select name="unitId">${state.user.units.map((u) => `<option value="${u.id}">${esc(u.label)}</option>`).join("")}</select></div>` : ""}
       <div class="field"><label>Tesis</label><select name="facilityId">${facilities.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join("")}</select></div>
       <div class="field"><label>Tarih</label><input type="date" name="date" required /></div>
       <div class="field"><label>Başlangıç</label><input type="time" name="startTime" value="18:00" required /></div>
@@ -1223,6 +1296,7 @@ async function renderTalep(c) {
     document.getElementById("newTicketBtn").addEventListener("click", () => {
       document.getElementById("ticketForm").innerHTML = `
         <form id="ticketCreateForm" class="card form-card">
+          ${(state.user.units || []).length > 1 ? `<div class="field"><label>Daire</label><select name="unitId">${state.user.units.map((u) => `<option value="${u.id}">${esc(u.label)}</option>`).join("")}</select></div>` : ""}
           <div class="field"><label>Kategori</label><select name="category">${categories.map((cat) => `<option>${esc(cat)}</option>`).join("")}</select></div>
           <div class="field"><label>Başlık</label><input name="title" required /></div>
           <div class="field"><label>Açıklama</label><textarea name="description" rows="3" required></textarea></div>

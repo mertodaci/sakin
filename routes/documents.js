@@ -2,6 +2,7 @@ const express = require("express");
 const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
 const db = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { ownsUnit } = require("../lib/residentUnits");
 
 const router = express.Router();
 
@@ -61,7 +62,12 @@ async function buildDocument({ heading, lines, footerNote }) {
 router.get("/documents/debt-letter", requireAuth, async (req, res) => {
   const data = await db.load();
   if (req.user.role !== "sakin") return res.status(403).json({ error: "Bu belge yalnızca sakinler için üretilir." });
-  const unit = data.units.find((u) => u.id === req.user.unitId);
+  // Coklu daireli bir sakin ?unitId= ile HANGI dairesi icin belge istedigini
+  // secebilir (belge dogasi geregi tek bir tasinmaz icindir, birlesik olamaz);
+  // belirtmezse birincil dairesi varsayilir.
+  const targetUnitId = req.query.unitId || req.user.unitId;
+  if (!(await ownsUnit(db.prisma, req.user, targetUnitId))) return res.status(403).json({ error: "Bu daireye erişim yetkiniz yok." });
+  const unit = data.units.find((u) => u.id === targetUnitId);
   if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
   const debt = netDebt(data, unit.id);
   if (debt > 0) {
@@ -95,7 +101,7 @@ router.get("/documents/receipt/:paymentId", requireAuth, async (req, res) => {
   const data = await db.load();
   const payment = data.payments.find((p) => p.id === req.params.paymentId);
   if (!payment) return res.status(404).json({ error: "Ödeme kaydı bulunamadı." });
-  if (req.user.role === "sakin" && payment.unitId !== req.user.unitId) return res.status(403).json({ error: "Bu makbuza erişim yetkiniz yok." });
+  if (req.user.role === "sakin" && !(await ownsUnit(db.prisma, req.user, payment.unitId))) return res.status(403).json({ error: "Bu makbuza erişim yetkiniz yok." });
   const unit = data.units.find((u) => u.id === payment.unitId);
 
   const bytes = await buildDocument({
@@ -180,7 +186,7 @@ router.get("/documents/toplu-makbuz", requireAuth, requireRole("yonetici"), asyn
 // (Yonetimcell karsilastirmasi: Uye Listesi'ndeki "Borc Dokumu" aksiyonu).
 router.get("/documents/borc-dokumu/:unitId", requireAuth, async (req, res) => {
   const data = await db.load();
-  if (req.user.role === "sakin" && req.user.unitId !== req.params.unitId) return res.status(403).json({ error: "Bu belgeye erişim yetkiniz yok." });
+  if (req.user.role === "sakin" && !(await ownsUnit(db.prisma, req.user, req.params.unitId))) return res.status(403).json({ error: "Bu belgeye erişim yetkiniz yok." });
   const unit = data.units.find((u) => u.id === req.params.unitId);
   if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
 

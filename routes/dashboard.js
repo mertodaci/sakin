@@ -2,6 +2,7 @@ const express = require("express");
 const db = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { accountBalance } = require("./accounts");
+const { myUnitIds } = require("../lib/residentUnits");
 
 const router = express.Router();
 
@@ -9,8 +10,16 @@ router.get("/dashboard", requireAuth, async (req, res) => {
   const data = await db.load();
 
   if (req.user.role === "sakin") {
-    const unitId = req.user.unitId;
-    const debt = db.netDebt(data, unitId);
+    // Coklu daireli bir sakin icin (orn. ayni sitede 2 evi olan) varsayilan
+    // TUM dairelerinin BIRLESIMI - ?unitId= ile TEK bir daireye daraltilabilir
+    // (finance.js'teki ayni desen, IDOR'a karsi kendi dairelerinden biri mi diye dogrulanir).
+    const allUnitIds = await myUnitIds(db.prisma, req.user);
+    let unitIds = allUnitIds;
+    if (req.query.unitId) {
+      if (!allUnitIds.includes(req.query.unitId)) return res.status(403).json({ error: "Bu daireye erişim yetkiniz yok." });
+      unitIds = [req.query.unitId];
+    }
+    const debt = unitIds.reduce((sum, id) => sum + db.netDebt(data, id), 0);
     const myTickets = data.tickets.filter((t) => t.userId === req.user.id);
     const myReservations = data.reservations.filter((r) => r.userId === req.user.id && new Date(r.date) >= new Date());
     const unread = data.notifications.filter((n) => n.userId === req.user.id && !n.read).length;
@@ -19,7 +28,7 @@ router.get("/dashboard", requireAuth, async (req, res) => {
       openTickets: myTickets.filter((t) => t.status !== "Çözüldü").length,
       upcomingReservations: myReservations.length,
       unreadNotifications: unread,
-      pendingPackages: data.packages.filter((p) => p.unitId === unitId && p.status === "Teslim Alındı").length,
+      pendingPackages: data.packages.filter((p) => unitIds.includes(p.unitId) && p.status === "Teslim Alındı").length,
     });
   }
 
