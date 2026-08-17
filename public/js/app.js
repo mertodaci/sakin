@@ -1290,15 +1290,15 @@ async function renderHesapOzetiModal(unit) {
     </div>`).join("");
   body.innerHTML = `
     <div class="scroll-x" style="display:flex;border:1px solid var(--line);border-radius:8px;margin-bottom:14px;">${categoryChips}</div>
-    <div class="scroll-x">
-      <table class="simple">
-        <thead><tr><th>Tarih</th><th>Açıklama</th><th style="text-align:right;">Tutar</th><th style="text-align:right;">Bakiye</th></tr></thead>
+    <div class="report-wrap">
+      <table class="report">
+        <thead><tr><th>Tarih</th><th>Açıklama</th><th class="num">Tutar</th><th class="num">Bakiye</th></tr></thead>
         <tbody>${entries.slice().reverse().map((e) => `
           <tr style="${e.info ? "opacity:.6;" : ""}">
             <td>${dt(e.date)}</td>
             <td>${esc(e.label)}</td>
-            <td class="f-num" style="text-align:right;color:${e.info ? "var(--mist)" : e.amount > 0 ? "var(--red)" : "var(--green)"};">${e.info ? "—" : (e.amount > 0 ? "+" : "") + tl(e.amount)}</td>
-            <td class="f-num" style="text-align:right;font-weight:600;">${tl(e.balance)}</td>
+            <td class="f-num num" style="color:${e.info ? "var(--mist)" : e.amount > 0 ? "var(--red)" : "var(--green)"};">${e.info ? "—" : (e.amount > 0 ? "+" : "") + tl(e.amount)}</td>
+            <td class="f-num num" style="font-weight:600;">${tl(e.balance)}</td>
           </tr>`).join("")}</tbody>
       </table>
     </div>
@@ -1337,15 +1337,15 @@ async function renderPartyHesapHareketleriModal(partyType, partyId, label) {
   const body = overlay.querySelector("#partyHesapBody");
   if (!entries.length) { body.innerHTML = '<div class="empty-row">Hareket kaydı yok.</div>'; return; }
   body.innerHTML = `
-    <div class="scroll-x">
-      <table class="simple">
-        <thead><tr><th>Tarih</th><th>Açıklama</th><th style="text-align:right;">Tutar</th><th style="text-align:right;">Bakiye</th></tr></thead>
+    <div class="report-wrap">
+      <table class="report">
+        <thead><tr><th>Tarih</th><th>Açıklama</th><th class="num">Tutar</th><th class="num">Bakiye</th></tr></thead>
         <tbody>${entries.slice().reverse().map((e) => `
           <tr>
             <td>${dt(e.date)}</td>
             <td>${e.label}</td>
-            <td class="f-num" style="text-align:right;color:${e.amount > 0 ? "var(--red)" : "var(--green)"};">${(e.amount > 0 ? "+" : "") + tl(e.amount)}</td>
-            <td class="f-num" style="text-align:right;font-weight:600;">${tl(e.balance)}</td>
+            <td class="f-num num" style="color:${e.amount > 0 ? "var(--red)" : "var(--green)"};">${(e.amount > 0 ? "+" : "") + tl(e.amount)}</td>
+            <td class="f-num num" style="font-weight:600;">${tl(e.balance)}</td>
           </tr>`).join("")}</tbody>
       </table>
     </div>
@@ -1404,9 +1404,9 @@ async function renderBorcDokumuModal(unit) {
   const body = overlay.querySelector("#borcDokumuBody");
   body.innerHTML = `
     ${isMultiProperty ? `<div class="small muted" style="margin-bottom:10px;">Bu malikin ${unitsById.size} taşınmazı bulundu, hepsinin açık borçları aşağıda birlikte listeleniyor.</div>` : ""}
-    <div class="scroll-x">
-      <table class="simple">
-        <thead><tr><th></th>${isMultiProperty ? "<th>Daire</th>" : ""}<th>Vade</th><th>Açıklama</th><th style="text-align:right;">Kalan</th></tr></thead>
+    <div class="report-wrap">
+      <table class="report">
+        <thead><tr><th></th>${isMultiProperty ? "<th>Daire</th>" : ""}<th>Vade</th><th>Açıklama</th><th class="num">Kalan</th></tr></thead>
         <tbody>${rows.map((c) => {
           const u = unitsById.get(c.unitId);
           return `
@@ -1415,7 +1415,7 @@ async function renderBorcDokumuModal(unit) {
             ${isMultiProperty ? `<td>${esc(u.block)} - ${esc(u.no)}</td>` : ""}
             <td>${dt(c.dueDate)}</td>
             <td>${esc(chargeTypeLabel(c))}${c.description ? " — " + esc(c.description) : ""}</td>
-            <td class="f-num" style="text-align:right;font-weight:600;">${tl(Number(c.amount) - Number(c.paidAmount))}</td>
+            <td class="f-num num" style="font-weight:600;">${tl(Number(c.amount) - Number(c.paidAmount))}</td>
           </tr>`;
         }).join("") || `<tr><td colspan="${isMultiProperty ? 5 : 4}" class="empty-row">Açık borç kaydı yok.</td></tr>`}</tbody>
       </table>
@@ -3181,9 +3181,9 @@ async function renderBorcListesi(c) {
         <td>${esc(ch.invoiceNo)}</td>
         <td>${esc(partyLabel(ch))}</td>
         <td>${esc(ch.description)}</td>
-        <td class="f-num">${tl(ch.amount)}</td>
-        <td class="f-num">${tl(ch.paidAmount)}</td>
-        <td class="f-num" style="font-weight:600;">${tl(kalan)}</td>
+        <td class="f-num num">${tl(ch.amount)}</td>
+        <td class="f-num num">${tl(ch.paidAmount)}</td>
+        <td class="f-num num" style="font-weight:600;">${tl(kalan)}</td>
         <td>
           ${ch.attachmentOriginalName
             ? `<button class="btn btn-ghost btn-sm" data-download-attachment="${ch.id}" title="${esc(ch.attachmentOriginalName)}">📎</button>`
@@ -3196,9 +3196,9 @@ async function renderBorcListesi(c) {
 
   function renderTable() {
     return `
-      <div class="scroll-x">
-        <table class="simple">
-          <thead><tr><th>Vade</th><th>Fatura No</th><th>Taraf / Kategori</th><th>Açıklama</th><th>Borç</th><th>Ödenen</th><th>Kalan</th><th>Ek</th><th></th></tr></thead>
+      <div class="report-wrap">
+        <table class="report">
+          <thead><tr><th>Vade</th><th>Fatura No</th><th>Taraf / Kategori</th><th>Açıklama</th><th class="num">Borç</th><th class="num">Ödenen</th><th class="num">Kalan</th><th>Ek</th><th></th></tr></thead>
           <tbody>${charges.map(row).join("") || '<tr><td colspan="9" class="empty-row">Açık borç yok.</td></tr>'}</tbody>
         </table>
       </div>`;
