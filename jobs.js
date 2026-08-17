@@ -11,67 +11,75 @@ function currentPeriod() {
 // Gecikme faizi: son odeme tarihinin uzerinden (tolerans suresi + 1 ay) gectikce,
 // her takvim ayinda BIR KEZ, kalan borcun uzerine belirlenen yuzde kadar ek
 // borclandirma satiri eklenir. Ayni donem icin ikinci kez uygulanmaz (lateFeeAppliedPeriods).
+// Tum okuma+kontrol+yazma islemi tek $transaction icinde - runMaintenanceTasks
+// ileride eszamanli iki kez tetiklenirse (orn. sunucu yeniden baslatma 6 saatlik
+// setInterval ile cakisirsa) yari-tamamlanmis bir durumda kalinmaz.
 async function applyLateFees(settings) {
   const { lateFeeRate, lateFeeGraceDays } = settings;
   if (!lateFeeRate || lateFeeRate.lte(0)) return 0;
   const now = Date.now();
   const period = currentPeriod();
-  let applied = 0;
 
-  const charges = await prisma.charge.findMany({ where: { type: "aidat", status: { not: "paid" } }, orderBy: { dueDate: "asc" } });
+  return prisma.$transaction(async (tx) => {
+    let applied = 0;
+    const charges = await tx.charge.findMany({ where: { type: "aidat", status: { not: "paid" } }, orderBy: { dueDate: "asc" } });
 
-  // Dairenin uygulanmamis alacak bakiyesi bir borcu karsiliyorsa gecikme faizi
-  // uygulanmaz (yonetici henuz "krediyi borca uygula" dememis olsa da, para
-  // zaten sitede duruyor). Butun daireleri tek seferde onceden cekip, bu
-  // calisma icinde "hala iddia edilebilir" kredi miktarini burada azaltarak
-  // takip ediyoruz - aksi halde ayni kredi, o dairenin birden fazla acik
-  // borcunu ayni anda "karsiliyor" sanilip hepsinde faiz atlanabilirdi.
-  const unitIds = [...new Set(charges.map((c) => c.unitId))];
-  const units = await prisma.unit.findMany({ where: { id: { in: unitIds } } });
-  const remainingCreditByUnit = new Map(units.map((u) => [u.id, u.creditBalance]));
+    // Dairenin uygulanmamis alacak bakiyesi bir borcu karsiliyorsa gecikme faizi
+    // uygulanmaz (yonetici henuz "krediyi borca uygula" dememis olsa da, para
+    // zaten sitede duruyor). Butun daireleri tek seferde onceden cekip, bu
+    // calisma icinde "hala iddia edilebilir" kredi miktarini burada azaltarak
+    // takip ediyoruz - aksi halde ayni kredi, o dairenin birden fazla acik
+    // borcunu ayni anda "karsiliyor" sanilip hepsinde faiz atlanabilirdi.
+    const unitIds = [...new Set(charges.map((c) => c.unitId))];
+    const units = await tx.unit.findMany({ where: { id: { in: unitIds } } });
+    const remainingCreditByUnit = new Map(units.map((u) => [u.id, u.creditBalance]));
 
-  for (const c of charges) {
-    if ((c.lateFeeAppliedPeriods || []).includes(period)) continue;
-    const dueTime = new Date(c.dueDate).getTime() + lateFeeGraceDays * 86400000;
-    if (now <= dueTime) continue;
+    for (const c of charges) {
+      if ((c.lateFeeAppliedPeriods || []).includes(period)) continue;
+      const dueTime = new Date(c.dueDate).getTime() + lateFeeGraceDays * 86400000;
+      if (now <= dueTime) continue;
 
-    const remaining = c.amount.minus(c.paidAmount);
-    if (remaining.lte(0)) continue;
+      const remaining = c.amount.minus(c.paidAmount);
+      if (remaining.lte(0)) continue;
 
-    const availableCredit = remainingCreditByUnit.get(c.unitId) || new Prisma.Decimal(0);
-    if (availableCredit.gte(remaining)) {
-      remainingCreditByUnit.set(c.unitId, availableCredit.minus(remaining));
-      continue;
+      const availableCredit = remainingCreditByUnit.get(c.unitId) || new Prisma.Decimal(0);
+      if (availableCredit.gte(remaining)) {
+        remainingCreditByUnit.set(c.unitId, availableCredit.minus(remaining));
+        continue;
+      }
+
+      const feeAmount = remaining.times(lateFeeRate).dividedBy(100).toDecimalPlaces(2);
+      if (feeAmount.lte(0)) continue;
+
+      await tx.charge.create({
+        data: {
+          unitId: c.unitId,
+          type: "gecikme_faizi",
+          period,
+          amount: feeAmount,
+          dueDate: new Date(),
+          status: "unpaid",
+          paidAmount: 0,
+          lateFeeAppliedPeriods: [],
+          description: `${c.period} dönemi gecikmiş aidat için %${lateFeeRate} gecikme faizi`,
+        },
+      });
+      await tx.charge.update({ where: { id: c.id }, data: { lateFeeAppliedPeriods: { push: period } } });
+      applied++;
     }
 
-    const feeAmount = remaining.times(lateFeeRate).dividedBy(100).toDecimalPlaces(2);
-    if (feeAmount.lte(0)) continue;
-
-    await prisma.charge.create({
-      data: {
-        unitId: c.unitId,
-        type: "gecikme_faizi",
-        period,
-        amount: feeAmount,
-        dueDate: new Date(),
-        status: "unpaid",
-        paidAmount: 0,
-        lateFeeAppliedPeriods: [],
-        description: `${c.period} dönemi gecikmiş aidat için %${lateFeeRate} gecikme faizi`,
-      },
-    });
-    await prisma.charge.update({ where: { id: c.id }, data: { lateFeeAppliedPeriods: { push: period } } });
-    applied++;
-  }
-
-  if (applied > 0) {
-    await prisma.activityLog.create({ data: { actorId: "sistem", actorName: "Otomatik Sistem", action: "latefee.apply", detail: `${applied} daireye gecikme faizi uygulandı (%${lateFeeRate}).` } });
-  }
-  return applied;
+    if (applied > 0) {
+      await tx.activityLog.create({ data: { actorId: "sistem", actorName: "Otomatik Sistem", action: "latefee.apply", detail: `${applied} daireye gecikme faizi uygulandı (%${lateFeeRate}).` } });
+    }
+    return applied;
+  }, { timeout: 30000 });
 }
 
 // Otomatik aylik aidat borclandirma: ayarlanan gunde, o donem icin daha once
-// borc olusturulmadiysa tum dairelere otomatik uygulanir.
+// borc olusturulmadiysa tum dairelere otomatik uygulanir. lastAutoDuePeriod
+// kontrolu + guncellemesi ARTIK AYNI transaction icinde - eskiden guncelleme
+// dongunun sonunda ayri bir cagriyla yapiliyordu, eszamanli iki calisma ayni
+// "henuz islenmedi" kontrolunden ikisi de gecebilirdi.
 async function autoGenerateMonthlyDues(settings) {
   const { autoDueEnabled, autoDueDay, autoDueAmount, lastAutoDuePeriod } = settings;
   if (!autoDueEnabled) return 0;
@@ -80,39 +88,47 @@ async function autoGenerateMonthlyDues(settings) {
   if (now.getDate() < autoDueDay) return 0;
   if (lastAutoDuePeriod === period) return 0;
 
-  const units = await prisma.unit.findMany();
-  const existing = await prisma.charge.findMany({ where: { type: "aidat", period }, select: { unitId: true } });
-  const existingUnitIds = new Set(existing.map((c) => c.unitId));
-  const toCreate = units.filter((u) => !existingUnitIds.has(u.id));
+  return prisma.$transaction(async (tx) => {
+    // Ayni transaction icinde tekrar kontrol et - bu fonksiyon cagrilirken
+    // kullanilan `settings` disaridan (runMaintenanceTasks'ta) tek seferlik
+    // okunmustu, baska bir eszamanli calisma arada guncellemis olabilir.
+    const fresh = await tx.settings.findUniqueOrThrow({ where: { id: "singleton" } });
+    if (fresh.lastAutoDuePeriod === period) return 0;
 
-  let created = 0;
-  for (const u of toCreate) {
-    await prisma.charge.create({
-      data: {
-        unitId: u.id,
-        type: "aidat",
-        period,
-        amount: new Prisma.Decimal(autoDueAmount),
-        dueDate: new Date(),
-        status: "unpaid",
-        paidAmount: 0,
-        lateFeeAppliedPeriods: [],
-        description: `${period} ayı aidatı (otomatik borçlandırma)`,
-      },
-    });
-    const owner = await prisma.user.findFirst({ where: { unitId: u.id } });
-    if (owner) {
-      await prisma.notification.create({ data: { userId: owner.id, message: `${period} ayı aidatınız (${autoDueAmount}₺) borcunuza eklendi.`, read: false, link: "#/aidat" } });
+    const units = await tx.unit.findMany();
+    const existing = await tx.charge.findMany({ where: { type: "aidat", period }, select: { unitId: true } });
+    const existingUnitIds = new Set(existing.map((c) => c.unitId));
+    const toCreate = units.filter((u) => !existingUnitIds.has(u.id));
+
+    let created = 0;
+    for (const u of toCreate) {
+      await tx.charge.create({
+        data: {
+          unitId: u.id,
+          type: "aidat",
+          period,
+          amount: new Prisma.Decimal(autoDueAmount),
+          dueDate: new Date(),
+          status: "unpaid",
+          paidAmount: 0,
+          lateFeeAppliedPeriods: [],
+          description: `${period} ayı aidatı (otomatik borçlandırma)`,
+        },
+      });
+      const owner = await tx.user.findFirst({ where: { unitId: u.id } });
+      if (owner) {
+        await tx.notification.create({ data: { userId: owner.id, message: `${period} ayı aidatınız (${autoDueAmount}₺) borcunuza eklendi.`, read: false, link: "#/aidat" } });
+      }
+      created++;
     }
-    created++;
-  }
 
-  await prisma.settings.update({ where: { id: "singleton" }, data: { lastAutoDuePeriod: period } });
+    await tx.settings.update({ where: { id: "singleton" }, data: { lastAutoDuePeriod: period } });
 
-  if (created > 0) {
-    await prisma.activityLog.create({ data: { actorId: "sistem", actorName: "Otomatik Sistem", action: "charge.autogenerate", detail: `${period} dönemi aidat borcu ${created} daireye otomatik uygulandı.` } });
-  }
-  return created;
+    if (created > 0) {
+      await tx.activityLog.create({ data: { actorId: "sistem", actorName: "Otomatik Sistem", action: "charge.autogenerate", detail: `${period} dönemi aidat borcu ${created} daireye otomatik uygulandı.` } });
+    }
+    return created;
+  }, { timeout: 30000 });
 }
 
 // Tekrarlayan/ileri tarihli fatura sablonlarini (RecurringPartyCharge)
