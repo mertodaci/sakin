@@ -8,6 +8,34 @@ const API_BASE = "/api";
 let state = { token: localStorage.getItem("sakin_token") || null, user: null, tab: "ozet" };
 let authMode = "login";
 
+/* ---------------- Tema (koyu mod) ---------------- */
+let theme = localStorage.getItem("sakin_theme") || "light";
+document.documentElement.setAttribute("data-theme", theme);
+function toggleTheme() {
+  theme = theme === "dark" ? "light" : "dark";
+  localStorage.setItem("sakin_theme", theme);
+  document.documentElement.setAttribute("data-theme", theme);
+  const btn = document.getElementById("themeToggleBtn");
+  if (btn) btn.innerHTML = theme === "dark" ? ICON.sun : ICON.moon;
+}
+
+/* ---------------- Yazı boyutu (min/max sınırlı) ---------------- */
+const FONT_SCALE_MIN = 0.85, FONT_SCALE_MAX = 1.25, FONT_SCALE_STEP = 0.05;
+let fontScale = Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, parseFloat(localStorage.getItem("sakin_font_scale")) || 1));
+function applyFontScale() { document.documentElement.style.zoom = fontScale; }
+applyFontScale();
+function updateFontScaleButtons() {
+  const dec = document.getElementById("fontDecBtn"), inc = document.getElementById("fontIncBtn");
+  if (dec) dec.disabled = fontScale <= FONT_SCALE_MIN + 1e-9;
+  if (inc) inc.disabled = fontScale >= FONT_SCALE_MAX - 1e-9;
+}
+function changeFontScale(delta) {
+  fontScale = Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, +(fontScale + delta).toFixed(2)));
+  localStorage.setItem("sakin_font_scale", fontScale);
+  applyFontScale();
+  updateFontScaleButtons();
+}
+
 /* ---------------- API helper ---------------- */
 async function api(path, opts = {}) {
   const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
@@ -245,6 +273,8 @@ const ICON = {
   bell: svgIcon('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>'),
   chevUpDown: svgIcon('<polyline points="7 15 12 20 17 15"/><polyline points="7 9 12 4 17 9"/>', 'class="chev"'),
   search: svgIcon('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),
+  sun: svgIcon('<circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.9" y1="4.9" x2="6.3" y2="6.3"/><line x1="17.7" y1="17.7" x2="19.1" y2="19.1"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.9" y1="19.1" x2="6.3" y2="17.7"/><line x1="17.7" y1="6.3" x2="19.1" y2="4.9"/>'),
+  moon: svgIcon('<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>'),
 };
 const NAV_ICON = {
   ozet: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -387,6 +417,11 @@ function renderShell() {
            <span class="page-title" id="pageTitle"></span>
          </div>
          <div class="right">
+           <div class="font-scale-controls">
+             <button class="icon-btn font-scale-btn" id="fontDecBtn" title="Yazı boyutunu küçült">A−</button>
+             <button class="icon-btn font-scale-btn" id="fontIncBtn" title="Yazı boyutunu büyüt">A+</button>
+           </div>
+           <button class="icon-btn" id="themeToggleBtn" title="Koyu/Açık mod">${theme === "dark" ? ICON.sun : ICON.moon}</button>
            <button class="bell" id="bellBtn">${ICON.bell}<span class="dot" id="bellDot" style="display:none;"></span></button>
          </div>
        </div>
@@ -404,6 +439,10 @@ function renderShell() {
     navSearchQuery = e.target.value;
     renderSidebarNav();
   });
+  document.getElementById("themeToggleBtn").addEventListener("click", toggleTheme);
+  document.getElementById("fontDecBtn").addEventListener("click", () => changeFontScale(-FONT_SCALE_STEP));
+  document.getElementById("fontIncBtn").addEventListener("click", () => changeFontScale(FONT_SCALE_STEP));
+  updateFontScaleButtons();
   refreshNotifBadge();
   renderTab(state.tab || "ozet");
 }
@@ -568,7 +607,21 @@ function toggleSidebar() {
 }
 
 function sidebarItemBtn(id, label) {
-  return `<button class="sidebar-item ${state.tab === id ? "active" : ""}" data-tab="${id}">${navIcon(id)}<span>${esc(label)}</span></button>`;
+  const isFav = (state.user.favoriteTabs || []).includes(id);
+  return `
+    <div class="sidebar-item-row">
+      <button class="sidebar-item ${state.tab === id ? "active" : ""}" data-tab="${id}">${navIcon(id)}<span>${esc(label)}</span></button>
+      <button class="fav-star ${isFav ? "active" : ""}" data-fav="${id}" title="${isFav ? "Favorilerden çıkar" : "Favorilere ekle"}">${isFav ? "★" : "☆"}</button>
+    </div>`;
+}
+
+async function toggleFavorite(id) {
+  const favs = new Set(state.user.favoriteTabs || []);
+  if (favs.has(id)) favs.delete(id); else favs.add(id);
+  state.user.favoriteTabs = [...favs];
+  renderSidebarNav();
+  try { await api("/auth/favorites", { method: "PATCH", body: { favoriteTabs: state.user.favoriteTabs } }); }
+  catch (err) { toast(err.message); }
 }
 
 // Menude arama: girilen metinle eslesen ogeler disindaki her sey elenir,
@@ -602,7 +655,17 @@ function renderSidebarNav() {
     nav.innerHTML = `<div class="sidebar-no-results">"${esc(navSearchQuery)}" için sonuç bulunamadı.</div>`;
     return;
   }
-  nav.innerHTML = groups.map((g) => {
+  // Yildizlanan sayfalar (profil ozelinde) sidebar'in en ustunde ayri bir
+  // "Favoriler" blogu olarak gosterilir - arama sirasinda karisikligi
+  // onlemek icin gizlenir.
+  const favIds = (state.user.favoriteTabs || []).filter((id) => tabLabel(id));
+  const favHtml = !searching && favIds.length
+    ? `<div class="sidebar-group sidebar-favorites">
+        <div class="sidebar-group-header" style="cursor:default;"><span>Favoriler</span></div>
+        <div class="sidebar-group-items">${favIds.map((id) => sidebarItemBtn(id, tabLabel(id))).join("")}</div>
+      </div>`
+    : "";
+  nav.innerHTML = favHtml + groups.map((g) => {
     const isOpen = searching || expandedGroups.has(g.group);
     const body = g.sections
       ? g.sections.map((s) => {
@@ -671,6 +734,10 @@ function renderSidebarNav() {
     renderTab(state.tab);
     document.getElementById("sidebar")?.classList.remove("open");
     document.getElementById("sidebarOverlay")?.classList.remove("visible");
+  }));
+  nav.querySelectorAll("[data-fav]").forEach((btn) => btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleFavorite(btn.dataset.fav);
   }));
 }
 

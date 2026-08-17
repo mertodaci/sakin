@@ -128,7 +128,20 @@ router.get("/me", requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.user.id } });
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   const unit = user.unitId ? await prisma.unit.findUnique({ where: { id: user.unitId } }) : null;
-  res.json({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, unitId: user.unitId, department: user.department || null, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, mustChangePassword: !!user.mustChangePassword });
+  res.json({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, unitId: user.unitId, department: user.department || null, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, mustChangePassword: !!user.mustChangePassword, favoriteTabs: user.favoriteTabs || [] });
+});
+
+// Sidebar'da yildizlanan sayfalar - profil ozelinde, herhangi bir rol
+// kendi favorilerini yonetebilir (yonetici yetkisi gerekmez). Frontend
+// her degisiklikte guncel listenin tamamini gonderir (ekle/cikar farki
+// yerine tek basit replace).
+router.patch("/favorites", requireAuth, async (req, res) => {
+  const { favoriteTabs } = req.body || {};
+  if (!Array.isArray(favoriteTabs) || !favoriteTabs.every((t) => typeof t === "string")) {
+    return res.status(400).json({ error: "favoriteTabs bir metin dizisi olmalıdır." });
+  }
+  const updated = await prisma.user.update({ where: { id: req.user.id }, data: { favoriteTabs } });
+  res.json({ favoriteTabs: updated.favoriteTabs });
 });
 
 router.post("/change-password", requireAuth, async (req, res) => {

@@ -182,6 +182,10 @@ model User {
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
   createdAt           DateTime  @default(now())
+  // Sidebar'da yildizlanan sayfalarin tab id'leri (profil ozelinde, cihazlar
+  // arasi kalici) - Mert'in "favori sayfa" istegi. Sira onemli degil, ama
+  // eklenme sirasi korunur.
+  favoriteTabs        String[]  @default([])
 
   personnel        Personnel?
   payments         Payment[]

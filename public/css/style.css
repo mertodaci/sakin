@@ -31,6 +31,29 @@
   --content-max: 1360px;
 }
 
+/* Koyu mod: sidebar zaten koyuydu (degismedi), asil "kagit/beyaz zemin"
+   taraf (kartlar, tablolar, formlar) burada tersine cevriliyor. --navy
+   koyu modda daha parlak bir maviye donusturuldu cunku hem arka plan
+   (butonlar) hem de metin rengi (ikonlar, linkler) olarak kullaniliyor -
+   koyu zeminde okunabilir kalmasi icin. */
+:root[data-theme="dark"] {
+  --navy: #4C8AFF;
+  --navy-deep: #17243A;
+  --azure: #5FA0FF;
+  --azure-light: rgba(95,160,255,.16);
+  --steel: #A9B4CC;
+  --ice: #19212F;
+  --paper: #121826;
+  --ink: #E7ECF5;
+  --mist: #8592A8;
+  --line: #2A3446;
+  --amber: #E3A84E;
+  --green: #46C08C;
+  --red: #E4746B;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.35), 0 2px 8px rgba(0,0,0,.25);
+  --shadow-md: 0 4px 16px rgba(0,0,0,.4);
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
@@ -39,6 +62,7 @@ body {
   color: var(--ink);
   min-height: 100vh;
 }
+[data-theme="dark"] body { background: linear-gradient(180deg, #0A0F1A 0%, #0D1420 100%) fixed; }
 h1, h2, h3, .f-display { font-family: 'Space Grotesk', sans-serif; }
 .f-num { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
 a { color: inherit; }
@@ -63,7 +87,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .sidebar-brand { padding: 22px 20px 18px; display: flex; align-items: center; gap: 11px; }
 .brand-mark {
   width: 34px; height: 34px; border-radius: 10px; flex: 0 0 34px;
-  background: linear-gradient(135deg, #4C8AFF, var(--navy));
+  background: linear-gradient(135deg, #4C8AFF, #14304A);
   display: flex; align-items: center; justify-content: center;
   font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; color: #fff;
   box-shadow: 0 4px 14px rgba(47,111,237,.35);
@@ -126,6 +150,18 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 }
 .sidebar-item.active svg { opacity: 1; color: var(--sb-active-border); }
 
+.sidebar-item-row { display: flex; align-items: center; gap: 1px; }
+.sidebar-item-row .sidebar-item { width: auto; flex: 1; min-width: 0; }
+.fav-star {
+  flex: 0 0 auto; background: transparent; border: none; cursor: pointer; padding: 6px 9px;
+  font-size: 14px; line-height: 1; color: var(--sb-text-dim); opacity: 0; border-radius: 6px;
+  transition: opacity .12s, color .12s, transform .1s;
+}
+.sidebar-item-row:hover .fav-star, .fav-star.active { opacity: 1; }
+.fav-star.active { color: #F5B800; }
+.fav-star:hover { transform: scale(1.2); background: var(--sb-hover); }
+.sidebar-favorites .sidebar-group-header { cursor: default; }
+
 .sidebar-help-card {
   display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; margin-top: 14px;
   padding: 12px; border-radius: 12px; border: 1px solid var(--sb-border); background: var(--sb-bg-2);
@@ -150,7 +186,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .sidebar-user-btn:hover { background: var(--sb-hover); }
 .sidebar-avatar {
   width: 32px; height: 32px; border-radius: 999px; flex: 0 0 32px; display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #4C8AFF, var(--navy)); color: #fff; font-size: 12.5px; font-weight: 700;
+  background: linear-gradient(135deg, #4C8AFF, #14304A); color: #fff; font-size: 12.5px; font-weight: 700;
 }
 .sidebar-user-info { min-width: 0; flex: 1; }
 .sidebar-user-info .name { font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -185,6 +221,15 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .bell:hover { background: var(--ice); color: var(--navy); }
 .bell svg { width: 19px; height: 19px; }
 .bell .dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; background: var(--red); border-radius: 999px; border: 1.5px solid var(--paper); }
+
+.icon-btn { position: relative; background: none; border: none; color: var(--steel); padding: 6px; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.icon-btn:hover { background: var(--ice); color: var(--navy); }
+.icon-btn svg { width: 19px; height: 19px; }
+.font-scale-controls { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.font-scale-controls .icon-btn.font-scale-btn { border-radius: 0; padding: 6px 10px; font-size: 12.5px; font-weight: 700; }
+.font-scale-controls .icon-btn.font-scale-btn:first-child { border-right: 1px solid var(--line); }
+.font-scale-controls .icon-btn.font-scale-btn:disabled { opacity: .35; cursor: not-allowed; }
+.font-scale-controls .icon-btn.font-scale-btn:disabled:hover { background: none; color: var(--steel); }
 
 /* .wrap, .main-col'un (display:flex) flex ogesi - flex ogelerinin
    varsayilan min-width:auto degeri, icindeki genis bir tablo/grid'in
@@ -278,6 +323,9 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .pill.red { background: #FBEAE9; color: var(--red); }
 .pill.amber { background: #FDF1E3; color: var(--amber); }
 .pill.grey { background: var(--ice); color: var(--steel); }
+[data-theme="dark"] .pill.green { background: rgba(70,192,140,.16); }
+[data-theme="dark"] .pill.red { background: rgba(228,116,107,.16); }
+[data-theme="dark"] .pill.amber { background: rgba(227,168,78,.16); }
 
 /* ---------- Buttons ---------- */
 .btn { border-radius: 10px; font-weight: 600; font-size: 14px; padding: 11px 20px; border: none; }
@@ -332,12 +380,14 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .login-form h1 { font-size: 24px; font-weight: 700; margin: 0 0 4px; }
 .login-form .sub { font-size: 13px; color: var(--mist); margin-bottom: 20px; }
 .role-toggle { display: flex; gap: 8px; margin-bottom: 18px; }
-.role-toggle button { flex: 1; padding: 10px 0; border-radius: 10px; border: 1px solid var(--line); background: #fff; font-weight: 600; font-size: 14px; }
+.role-toggle button { flex: 1; padding: 10px 0; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font-weight: 600; font-size: 14px; }
 .role-toggle button.active { background: var(--navy); color: #fff; border-color: var(--navy); }
 .auth-switch { text-align: center; font-size: 13px; color: var(--mist); margin-top: 16px; }
 .auth-switch button { background: none; border: none; color: var(--navy); font-weight: 600; text-decoration: underline; padding: 0; }
 .error-box { background: #FBEAE9; color: var(--red); font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; }
 .success-box { background: #E6F4EC; color: var(--green); font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; }
+[data-theme="dark"] .error-box { background: rgba(228,116,107,.14); }
+[data-theme="dark"] .success-box { background: rgba(70,192,140,.14); }
 
 @media (max-width: 640px) { .login-side { display: none; } }
 
