@@ -32,6 +32,43 @@ zaten bu süreçte yapıldı, listeyi güncellemek gerekebilir).
 
 ---
 
+## 🏢 Çoklu-Kiracı (Multi-Tenant) Dönüşümü — 5/6 AŞAMA TAMAMLANDI (2026-08-17)
+
+Hedef: tek sunucu üzerinden 50 farklı site/apartman kompleksini (~5.000 daire)
+tek platformdan yönetmek. Mekanizma: Prisma Client Extension (`lib/prismaClient.js`)
++ `AsyncLocalStorage` (`lib/tenantContext.js`) tabanlı otomatik `siteId`
+filtrelemesi — Postgres RLS değil (paylaşılan pool bağlantılarıyla güvenilir
+çalışmıyor, gerekçe için plan dosyasına bak).
+
+1. ✅ Aşama 1: Şema temelleri — `Site`, `UserSiteAccess` (many-to-many), 46
+   modele nullable `siteId` + index
+2. ✅ Aşama 2: Backfill (mevcut tek site'a tüm veriyi bağla) + `siteId` NOT NULL
+3. ✅ Aşama 3: Çekirdek geçiş — Prisma extension + AsyncLocalStorage, `requireAuth`
+   her istekte `UserSiteAccess` doğruluyor, 3 iç-içe (nested) Prisma yazması
+   düz `.create()` çağrılarına bölündü (extension'lar nested write'ları yakalamıyor)
+4. ✅ Aşama 4: Frontend site seçici/değiştirici (`renderSitePicker`, `switch-site`)
+5. ✅ Aşama 5: Kayıt akışı yeniden tasarımı — `Site.inviteCode` ile site-bazlı
+   kayıt linki (`#/kayit/<kod>`), eski sızıntılı `units-for-signup` (tüm sitelerin
+   tüm daireleri) silindi. `POST /api/owner/sites` + `requireOwner` +
+   `User.isPlatformOwner` ile platform sahibi yeni bir site + ilk yöneticisini
+   tek seferde oluşturabiliyor (`routes/owner.js`). Site-aşırı toplu özet
+   (`GET /api/owner/overview`) her siteyi ayrı ayrı kendi tenant bağlamında
+   sorgulayıp JS'te topluyor — extension'a "unscoped mode" kaçış kapısı eklenmedi.
+   - **Test sırasında bulunup düzeltilen hata:** `owner.js`'teki ilk taslak
+     `prisma.user.count()` ile site-bazlı kullanıcı sayısı hesaplıyordu — ama
+     `User` modeli bilerek `GLOBAL_MODELS` deny-list'inde (çok-siteli personelin
+     tek giriş kimliği olması için), yani extension onu asla `siteId`'ye göre
+     filtrelemiyor. Gerçek testte site 2 için "11 kullanıcı" (aslında 1 olması
+     gerekirken) dönmesiyle yakalandı; düzeltme `UserSiteAccess.count({where:{siteId}})`
+     kullanmak oldu.
+6. ⏳ Aşama 6 (sıradaki): İkinci gerçek bir siteyi `/api/owner/sites` ile
+   oluşturup uçtan uca izolasyonu kanıtlamak — site 2 yöneticisinin site 1'in
+   hiçbir verisini (legacy shim'li uçlar dahil) görememesi, çok-siteli
+   kullanıcı için giriş seçici/değiştiricinin gerçek ikinci bir siteyle
+   çalışması, `/api/owner/overview` toplamlarının doğru olması.
+
+---
+
 ## 🎯 Şu An Neredeyiz
 
 Uygulama **çalışır durumda ve production'a yakın** — demo değil, gerçek bir

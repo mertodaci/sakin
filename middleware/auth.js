@@ -8,7 +8,7 @@ const SECRET = process.env.JWT_SECRET || "dev-secret-degistirin";
 // hicbir site secilmemis token'i temsil eder, bkz. routes/auth.js login).
 function sign(user, siteId) {
   return jwt.sign(
-    { id: user.id, role: user.role, unitId: user.unitId || null, name: user.name, tokenVersion: user.tokenVersion || 0, siteId: siteId || null },
+    { id: user.id, role: user.role, unitId: user.unitId || null, name: user.name, tokenVersion: user.tokenVersion || 0, siteId: siteId || null, isPlatformOwner: !!user.isPlatformOwner },
     SECRET,
     { expiresIn: "30d" }
   );
@@ -71,4 +71,12 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { sign, requireAuth, requireRole, SECRET };
+// Site-bazli role'den bagimsiz, global platform-sahibi yetkisi (routes/owner.js).
+function requireOwner(req, res, next) {
+  if (!req.user || !req.user.isPlatformOwner) {
+    return res.status(403).json({ error: "Bu işlem için platform sahibi yetkisi gerekir." });
+  }
+  next();
+}
+
+module.exports = { sign, requireAuth, requireRole, requireOwner, SECRET };

@@ -5,6 +5,7 @@ const rateLimit = require("express-rate-limit");
 const db = require("../db");
 const { sign, requireAuth, SECRET } = require("../middleware/auth");
 const tenantContext = require("../lib/tenantContext");
+const { validatePassword } = require("../lib/validation");
 
 const router = express.Router();
 const prisma = db.prisma;
@@ -18,40 +19,26 @@ const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHead
 const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: "Çok fazla kayıt denemesi yapıldı. Lütfen daha sonra tekrar deneyin." } });
 const forgotLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 8, standardHeaders: true, legacyHeaders: false, message: { error: "Çok fazla talep gönderildi. Lütfen daha sonra tekrar deneyin." } });
 
-// Sifre politikasi: en az 8 karakter, en az bir harf ve bir rakam icermeli.
-function validatePassword(pw) {
-  if (!pw || pw.length < 8) return "Şifre en az 8 karakter olmalıdır.";
-  if (!/[A-Za-zÇĞİÖŞÜçğıöşü]/.test(pw)) return "Şifre en az bir harf içermelidir.";
-  if (!/[0-9]/.test(pw)) return "Şifre en az bir rakam içermelidir.";
-  return null;
-}
-
 function findByEmail(email) {
   return prisma.user.findFirst({ where: { email: { equals: email || "", mode: "insensitive" } } });
 }
 
-// GECICI (Asama 5'te degisecek): su an tek site oldugu icin kayit akisi o
-// tek site'i kullanir. Asama 5'te bunun yerine Site.inviteCode ile
-// cozulen site-bazli bir kayit linki gelecek - o zaman bu "ilk siteyi al"
-// yaklasimi kaldirilacak.
-async function getOnlySiteOrThrow() {
-  const site = await prisma.site.findFirst();
-  if (!site) throw new Error("Hicbir site bulunamadi.");
-  return site;
-}
-
-// Kayit icin bos/musait daire listesi (auth gerektirmez, kayit formunda kullanilir)
-router.get("/units-for-signup", async (req, res) => {
-  const site = await getOnlySiteOrThrow();
+// Kayit icin bos/musait daire listesi (auth gerektirmez, kayit formunda kullanilir).
+// Site.inviteCode ile cozulur - kod gecersizse/siteyse pasifse 404, boylece
+// ikinci bir site olustugunda daireler siteler arasi sizmaz (eskiden TUM
+// sitelerin TUM daireleri donuyordu, bkz. plan notu).
+router.get("/units-for-signup/:inviteCode", async (req, res) => {
+  const site = await prisma.site.findUnique({ where: { inviteCode: req.params.inviteCode } });
+  if (!site || !site.active) return res.status(404).json({ error: "Geçersiz veya süresi dolmuş davet linki." });
   const units = await tenantContext.run(site.id, () => prisma.unit.findMany({ orderBy: [{ block: "asc" }, { no: "asc" }] }));
-  res.json(units.map((u) => ({ id: u.id, label: `${u.block} - Daire ${u.no}` })));
+  res.json({ siteName: site.name, units: units.map((u) => ({ id: u.id, label: `${u.block} - Daire ${u.no}` })) });
 });
 
 router.post("/register", registerLimiter, async (req, res) => {
-  const { name, email, phone, password, unitId } = req.body || {};
+  const { name, email, phone, password, unitId, inviteCode } = req.body || {};
 
-  if (!name || !email || !password || !unitId) {
-    return res.status(400).json({ error: "Ad, e-posta, şifre ve daire seçimi zorunludur." });
+  if (!name || !email || !password || !unitId || !inviteCode) {
+    return res.status(400).json({ error: "Ad, e-posta, şifre, daire seçimi ve davet linki zorunludur." });
   }
   const pwError = validatePassword(password);
   if (pwError) return res.status(400).json({ error: pwError });
@@ -59,7 +46,9 @@ router.post("/register", registerLimiter, async (req, res) => {
     return res.status(409).json({ error: "Bu e-posta ile zaten bir hesap var." });
   }
 
-  const site = await getOnlySiteOrThrow();
+  const site = await prisma.site.findUnique({ where: { inviteCode } });
+  if (!site || !site.active) return res.status(400).json({ error: "Geçersiz veya süresi dolmuş davet linki." });
+
   await tenantContext.run(site.id, async () => {
     const unit = await prisma.unit.findUnique({ where: { id: unitId } });
     if (!unit) return res.status(400).json({ error: "Geçersiz daire seçimi." });
@@ -104,11 +93,17 @@ router.post("/login", loginLimiter, async (req, res) => {
         data: { failedLoginAttempts, lockedUntil: lockOut ? new Date(Date.now() + LOCK_DURATION_MS) : user.lockedUntil },
       });
       if (lockOut) {
-        await tenantContext.run((await getOnlySiteOrThrow()).id, () =>
-          prisma.activityLog.create({
-            data: { actorId: "sistem", actorName: "Sistem", action: "user.lockout", detail: `${user.name} hesabı ${MAX_FAILED_ATTEMPTS} hatalı denemeden sonra kilitlendi.`, scopeUnitId: user.unitId || null },
-          })
-        );
+        // Kullanicinin erisebildigi HER sitede kayit dusulur (forgot-password'daki
+        // ayni desen) - artik "tek site" varsayimi yok, kullanici birden fazla
+        // siteye erisiyor olabilir.
+        const userSites = await prisma.userSiteAccess.findMany({ where: { userId: user.id } });
+        for (const us of userSites) {
+          await tenantContext.run(us.siteId, () =>
+            prisma.activityLog.create({
+              data: { actorId: "sistem", actorName: "Sistem", action: "user.lockout", detail: `${user.name} hesabı ${MAX_FAILED_ATTEMPTS} hatalı denemeden sonra kilitlendi.`, scopeUnitId: user.unitId || null },
+            })
+          );
+        }
       }
     }
     return res.status(401).json({ error: "E-posta veya şifre hatalı." });

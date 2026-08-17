@@ -7,6 +7,10 @@
 const API_BASE = "/api";
 let state = { token: localStorage.getItem("sakin_token") || null, user: null, tab: "ozet" };
 let authMode = "login";
+// Kayit artik sitenin kendi davet linki uzerinden yapiliyor (#/kayit/<kod>) -
+// birden fazla site oldugunda "tum sitelerin tum daireleri" gibi bir sizinti
+// olmasin diye. boot() bu kodu URL'den okuyup burada tutar.
+let signupInviteCode = null;
 
 /* ---------------- Tema (koyu mod) ---------------- */
 let theme = localStorage.getItem("sakin_theme") || "light";
@@ -133,6 +137,9 @@ async function downloadFile(path, fallbackName) {
 window.addEventListener("DOMContentLoaded", boot);
 
 async function boot() {
+  const m = location.hash.match(/^#\/kayit\/(.+)$/);
+  if (m) signupInviteCode = decodeURIComponent(m[1]);
+
   if (state.token) {
     try {
       state.user = await api("/auth/me");
@@ -163,7 +170,7 @@ function loginTemplate() {
 }
 
 function renderLogin() {
-  authMode = "login";
+  authMode = signupInviteCode ? "register" : "login";
   document.getElementById("app").innerHTML = loginTemplate();
   renderAuthArea();
 }
@@ -206,12 +213,21 @@ function renderAuthArea() {
       catch (err) { msg.innerHTML = `<div class="error-box">${esc(err.message)}</div>`; }
     });
     document.getElementById("toLogin2").addEventListener("click", () => { authMode = "login"; renderAuthArea(); });
+  } else if (!signupInviteCode) {
+    // Davet linki olmadan kayit ekranina ulasilmis (orn. login ekranindan
+    // "Kayıt olun" - siteye ozel davet linki artik zorunlu, bkz. routes/auth.js).
+    area.innerHTML = `
+      <h1>Sakin kaydı oluştur</h1>
+      <div class="error-box">Kayıt olmak için sitenizin yöneticisinden aldığınız davet linkini kullanmanız gerekiyor. Böyle bir linkiniz yoksa yöneticinizle iletişime geçin.</div>
+      <div class="auth-switch">Zaten hesabınız var mı? <button id="toLogin">Giriş yapın</button></div>
+    `;
+    document.getElementById("toLogin").addEventListener("click", () => { authMode = "login"; renderAuthArea(); });
   } else {
     area.innerHTML = `<p class="sub">Yükleniyor…</p>`;
-    api("/auth/units-for-signup").then((units) => {
+    api(`/auth/units-for-signup/${encodeURIComponent(signupInviteCode)}`).then(({ siteName, units }) => {
       area.innerHTML = `
         <h1>Sakin kaydı oluştur</h1>
-        <p class="sub">Kaydınız, yönetici onayından sonra aktif olur.</p>
+        <p class="sub">${esc(siteName)} sitesine kayıt oluyorsunuz. Kaydınız, yönetici onayından sonra aktif olur.</p>
         <div id="authMsg"></div>
         <form id="registerForm">
           <div class="field"><label>Ad Soyad</label><input name="name" required /></div>
@@ -224,6 +240,13 @@ function renderAuthArea() {
         <div class="auth-switch">Zaten hesabınız var mı? <button id="toLogin">Giriş yapın</button></div>
       `;
       document.getElementById("registerForm").addEventListener("submit", handleRegister);
+      document.getElementById("toLogin").addEventListener("click", () => { authMode = "login"; renderAuthArea(); });
+    }).catch((err) => {
+      area.innerHTML = `
+        <h1>Sakin kaydı oluştur</h1>
+        <div class="error-box">${esc(err.message)}</div>
+        <div class="auth-switch">Zaten hesabınız var mı? <button id="toLogin">Giriş yapın</button></div>
+      `;
       document.getElementById("toLogin").addEventListener("click", () => { authMode = "login"; renderAuthArea(); });
     });
   }
@@ -305,7 +328,7 @@ async function handleRegister(e) {
   const msg = document.getElementById("authMsg");
   msg.innerHTML = "";
   try {
-    const r = await api("/auth/register", { method: "POST", body: Object.fromEntries(f) });
+    const r = await api("/auth/register", { method: "POST", body: { ...Object.fromEntries(f), inviteCode: signupInviteCode } });
     msg.innerHTML = `<div class="success-box">${esc(r.message)}</div>`;
     e.target.reset();
   } catch (err) {

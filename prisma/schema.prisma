@@ -277,6 +277,9 @@ model User {
   mustChangePassword  Boolean   @default(false)
   resetRequestedAt    DateTime?
   isActive            Boolean   @default(true)
+  // Platform sahibi (Mert) - site-bazli degil, global bir yetki. routes/owner.js
+  // altindaki site-asiri (cross-site) yonetim/toplu-gorunum uclarini korur.
+  isPlatformOwner     Boolean   @default(false)
   tokenVersion        Int       @default(0)
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
