@@ -154,8 +154,8 @@ model Settings {
 // ---------------- Daire / Kullanici ----------------
 
 model Unit {
-  siteId         String?
-  site           Site?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId         String
+  site           Site      @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id             String    @id @default(uuid())
   block          String
   no             String
@@ -197,8 +197,8 @@ model Unit {
 // es/cocuk/kiracidan misafire kadar). isCurrent=false olanlar "eski sakin"
 // gecmisini tutar, silinmez.
 model HouseholdMember {
-  siteId       String?
-  site         Site?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId       String
+  site         Site      @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id           String    @id @default(uuid())
   unitId       String
   unit         Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
@@ -215,8 +215,8 @@ model HouseholdMember {
 // Uye bazli serbest not - CRM tarzi, islem kaydi degil (orn. "asansor
 // anahtarini komsuya birakti" gibi yoneticinin hatirlamak istedigi bir sey).
 model UserNote {
-  siteId    String?
-  site      Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String   @id @default(uuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -231,8 +231,8 @@ model UserNote {
 // Yonetimcell karsilastirmasindan: "Icradaki Uyeler Listesi" ve "Icradaki
 // Dosyalar Listesi" ayni verinin iki farkli filtrelemesi - tek model yeterli.
 model LegalCase {
-  siteId      String?
-  site        Site?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId      String
+  site        Site      @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id          String    @id @default(uuid())
   unitId      String
   unit        Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
@@ -305,11 +305,11 @@ model User {
 // Yonetimcell karsilastirmasindan: guvenlik/kapi gorevlisinin gozle
 // tanimasi icin plaka yaninda marka/renk de tutuluyor.
 model Vehicle {
-  siteId String?
-  site   Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
-  id     String  @id @default(uuid())
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id     String @id @default(uuid())
   userId String
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   plate  String
   brand  String
   color  String
@@ -320,8 +320,8 @@ model Vehicle {
 // ---------------- Kasa / Banka Hesabi ----------------
 
 model Account {
-  siteId         String?
-  site           Site?       @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId         String
+  site           Site        @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id             String      @id @default(uuid())
   name           String
   type           AccountType
@@ -346,8 +346,8 @@ model Account {
 }
 
 model Transfer {
-  siteId        String?
-  site          Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId        String
+  site          Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id            String   @id @default(uuid())
   fromAccountId String
   fromAccount   Account  @relation("TransferFrom", fields: [fromAccountId], references: [id], onDelete: Restrict)
@@ -368,8 +368,8 @@ model Transfer {
 // Tazminati Fonu gibi site'ye ozel kategoriler). Uygulama katmaninda
 // tutarlilik icin mevcut kategoriler bir datalist ile onerilir.
 model Charge {
-  siteId                String?
-  site                  Site?            @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId                String
+  site                  Site             @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id                    String           @id @default(uuid())
   unitId                String
   unit                  Unit             @relation(fields: [unitId], references: [id], onDelete: Restrict)
@@ -402,8 +402,8 @@ model Charge {
 }
 
 model Payment {
-  siteId          String?
-  site            Site?        @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId          String
+  site            Site         @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id              String       @id @default(uuid())
   unitId          String
   unit            Unit         @relation(fields: [unitId], references: [id], onDelete: Restrict)
@@ -442,8 +442,8 @@ model Payment {
 // bilincli, tek tikla uygulanmasinin kaydi (otomatik/sessiz degil - Sakin'in
 // "her sey gorunur ve izlenebilir olsun" ilkesine uygun).
 model CreditApplication {
-  siteId    String?
-  site      Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String   @id @default(uuid())
   unitId    String
   unit      Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
@@ -457,8 +457,8 @@ model CreditApplication {
 }
 
 model PaymentAllocation {
-  siteId    String?
-  site      Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId    String
+  site      Site    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String  @id @default(uuid())
   paymentId String
   payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
@@ -470,8 +470,8 @@ model PaymentAllocation {
 }
 
 model Transaction {
-  siteId      String?
-  site        Site?           @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId      String
+  site        Site            @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id          String          @id @default(uuid())
   type        TransactionType
   category    String
@@ -497,8 +497,8 @@ model PaymentRequest {
 }
 
 model Budget {
-  siteId        String?
-  site          Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId        String
+  site          Site    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id            String  @id @default(uuid())
   year          Int
   category      String
@@ -512,8 +512,8 @@ model Budget {
 // ---------------- Firma & Personel Cari Hesap ----------------
 
 model Vendor {
-  siteId         String?
-  site           Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId         String
+  site           Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id             String   @id @default(uuid())
   name           String
   category       String
@@ -533,8 +533,8 @@ model Vendor {
 // "Giderler (Odeme)" modulunun temeli - her borc/fatura bir kategoriye
 // baglanabilir, taraf zorunlu degil).
 model ExpenseCategory {
-  siteId         String?
-  site           Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId         String
+  site           Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id             String   @id @default(uuid())
   accountingCode String?
   group          String
@@ -555,8 +555,8 @@ model ExpenseCategory {
 // gore tasinmazlara TOPLU borclandiran arac. "Kaydet" ile her ay+tasinmaz
 // icin ayri bir Charge olusturur (bkz. routes/finance.js apply-project).
 model ExpenseProject {
-  siteId        String?
-  site          Site?            @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId        String
+  site          Site             @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id            String           @id @default(uuid())
   name          String
   startPeriod   String // "2026-01" (Charge.period ile ayni format)
@@ -580,8 +580,8 @@ model ExpenseProject {
 // ise bir kez calisip pasif olur, "monthly"/"yearly" ise bir sonraki
 // vadeye atlar.
 model RecurringPartyCharge {
-  siteId      String?
-  site        Site?            @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId      String
+  site        Site             @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id          String           @id @default(uuid())
   partyType   PartyType?
   partyId     String?
@@ -605,8 +605,8 @@ model RecurringPartyCharge {
 // partyType/partyId ikisi de null olabilir - "genel gider" (belirli bir
 // firma/personele bagli olmayan, sadece kategoriye baglanan borc) icin.
 model PartyCharge {
-  siteId                 String?
-  site                   Site?            @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId                 String
+  site                   Site             @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id                     String           @id @default(uuid())
   partyType              PartyType?
   partyId                String?
@@ -634,8 +634,8 @@ model PartyCharge {
 }
 
 model PartyPayment {
-  siteId        String?
-  site          Site?        @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId        String
+  site          Site         @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id            String       @id @default(uuid())
   partyType     PartyType?
   partyId       String?
@@ -660,8 +660,8 @@ model PartyPayment {
 }
 
 model PartyPaymentAllocation {
-  siteId         String?
-  site           Site?        @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId         String
+  site           Site         @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id             String       @id @default(uuid())
   partyPaymentId String
   partyPayment   PartyPayment @relation(fields: [partyPaymentId], references: [id], onDelete: Cascade)
@@ -675,8 +675,8 @@ model PartyPaymentAllocation {
 // ---------------- Personel ----------------
 
 model Personnel {
-  siteId         String?
-  site           Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId         String
+  site           Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id             String   @id @default(uuid())
   name           String
   phone          String
@@ -697,8 +697,8 @@ model Personnel {
 // ---------------- Demirbas / Bakim ----------------
 
 model Equipment {
-  siteId                 String?
-  site                   Site?      @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId                 String
+  site                   Site       @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id                     String     @id @default(uuid())
   name                   String
   location               String
@@ -716,8 +716,8 @@ model Equipment {
 }
 
 model MaintenanceRecord {
-  siteId      String?
-  site        Site?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId      String
+  site        Site      @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id          String    @id @default(uuid())
   equipmentId String
   equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
@@ -731,11 +731,11 @@ model MaintenanceRecord {
 // ---------------- Sayac ----------------
 
 model Meter {
-  siteId   String?
-  site     Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
-  id       String  @id @default(uuid())
+  siteId   String
+  site     Site   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id       String @id @default(uuid())
   unitId   String
-  unit     Unit    @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  unit     Unit   @relation(fields: [unitId], references: [id], onDelete: Restrict)
   type     String
   serialNo String
 
@@ -745,8 +745,8 @@ model Meter {
 }
 
 model MeterReading {
-  siteId   String?
-  site     Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId   String
+  site     Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id       String   @id @default(uuid())
   meterId  String
   meter    Meter    @relation(fields: [meterId], references: [id], onDelete: Restrict)
@@ -764,8 +764,8 @@ model MeterReading {
 // ---------------- Kargo ----------------
 
 model Package {
-  siteId        String?
-  site          Site?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId        String
+  site          Site      @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id            String    @id @default(uuid())
   unitId        String
   unit          Unit      @relation(fields: [unitId], references: [id], onDelete: Restrict)
@@ -782,8 +782,8 @@ model Package {
 // ---------------- Karar Defteri / Anahtar ----------------
 
 model Decision {
-  siteId     String?
-  site       Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId     String
+  site       Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id         String   @id @default(uuid())
   decisionNo Int
   date       DateTime @default(now())
@@ -797,8 +797,8 @@ model Decision {
 }
 
 model Key {
-  siteId       String?
-  site         Site?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId       String
+  site         Site      @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id           String    @id @default(uuid())
   keyName      String
   location     String
@@ -813,8 +813,8 @@ model Key {
 }
 
 model KeyAssignment {
-  siteId       String?
-  site         Site?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId       String
+  site         Site      @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id           String    @id @default(uuid())
   keyId        String
   key          Key       @relation(fields: [keyId], references: [id], onDelete: Cascade)
@@ -828,8 +828,8 @@ model KeyAssignment {
 // ---------------- Duyuru / Anket / Ortak Alan / Ariza ----------------
 
 model Announcement {
-  siteId   String?
-  site     Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId   String
+  site     Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id       String   @id @default(uuid())
   title    String
   body     String
@@ -841,8 +841,8 @@ model Announcement {
 }
 
 model Survey {
-  siteId    String?
-  site      Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String   @id @default(uuid())
   question  String
   active    Boolean  @default(true)
@@ -855,18 +855,18 @@ model Survey {
 }
 
 model SurveyOption {
-  siteId   String?
-  site     Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
-  id       String  @id @default(uuid())
+  siteId   String
+  site     Site   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id       String @id @default(uuid())
   surveyId String
-  survey   Survey  @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
   text     String
-  votes    Int     @default(0)
+  votes    Int    @default(0)
   // Anket olustururken girilen sirayi korur - optionIndex (frontend'in
   // gonderdigi, dizideki konumu belirten sayi) her sorguda AYNI sirayla
   // eslessin diye zorunlu. id (UUID) sirasina gore siralamak eklenme
   // sirasiyla ilgisiz oldugu icin kullanilamaz.
-  position Int     @default(0)
+  position Int    @default(0)
 
   @@index([siteId])
 }
@@ -874,8 +874,8 @@ model SurveyOption {
 // "bir kullanici bir kere oy verebilir" kisitini DB'ye devreder (eski
 // votedBy[] dizisindeki .includes() kontrolunun yerini alir).
 model SurveyVote {
-  siteId    String?
-  site      Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String   @id @default(uuid())
   surveyId  String
   survey    Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
@@ -888,9 +888,9 @@ model SurveyVote {
 }
 
 model Facility {
-  siteId   String?
-  site     Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
-  id       String  @id @default(uuid())
+  siteId   String
+  site     Site   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id       String @id @default(uuid())
   name     String
   capacity Int
   rules    String
@@ -901,8 +901,8 @@ model Facility {
 }
 
 model Reservation {
-  siteId     String?
-  site       Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId     String
+  site       Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id         String   @id @default(uuid())
   facilityId String
   facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Restrict)
@@ -920,8 +920,8 @@ model Reservation {
 }
 
 model Ticket {
-  siteId              String?
-  site                Site?      @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId              String
+  site                Site       @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id                  String     @id @default(uuid())
   unitId              String
   unit                Unit       @relation(fields: [unitId], references: [id], onDelete: Restrict)
@@ -943,8 +943,8 @@ model Ticket {
 }
 
 model TicketComment {
-  siteId   String?
-  site     Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId   String
+  site     Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id       String   @id @default(uuid())
   ticketId String
   ticket   Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
@@ -957,8 +957,8 @@ model TicketComment {
 }
 
 model Classifieds {
-  siteId      String?
-  site        Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id          String   @id @default(uuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -972,8 +972,8 @@ model Classifieds {
 }
 
 model Notification {
-  siteId  String?
-  site    Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId  String
+  site    Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id      String   @id @default(uuid())
   userId  String
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -988,8 +988,8 @@ model Notification {
 // ---------------- Seffaflik / Rehber ----------------
 
 model ActivityLog {
-  siteId      String?
-  site        Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id          String   @id @default(uuid())
   actorId     String
   actorName   String
@@ -1004,9 +1004,9 @@ model ActivityLog {
 }
 
 model Contact {
-  siteId String?
-  site   Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
-  id     String  @id @default(uuid())
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id     String @id @default(uuid())
   name   String
   role   String
   phone  String
@@ -1029,8 +1029,8 @@ enum AgendaKind {
 // sonuc) icin resmi rapor sablonu. type alaniyla iki rapor turu ayni
 // tabloda tutulur (Ajanda pattern'iyle tutarli).
 model OfficialReport {
-  siteId     String?
-  site       Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId     String
+  site       Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id         String   @id @default(uuid())
   type       String // "denetim" | "faaliyet"
   title      String
@@ -1049,8 +1049,8 @@ model OfficialReport {
 // paylasiyor, sadece cerceveleme (serbest not vs. sitede gerceklesen olay)
 // farkli - bu yuzden tek model + kind alani yeterli, iki ayri tablo gerekmiyor.
 model AgendaItem {
-  siteId    String?
-  site      Site?      @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId    String
+  site      Site       @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String     @id @default(uuid())
   kind      AgendaKind
   date      DateTime
@@ -1068,8 +1068,8 @@ model AgendaItem {
 // "asansor firmasini ara" gibi disariya kapali islerdir. Durum serbest metin
 // (Ticket.status ile ayni desen): Devam Eden / Tamamlanan / Kapatilan.
 model InternalTask {
-  siteId              String?
-  site                Site?      @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId              String
+  site                Site       @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id                  String     @id @default(uuid())
   title               String
   description         String
@@ -1092,8 +1092,8 @@ model InternalTask {
 // oldugu icin ayri. recipientId bos ise "yonetime" (tum yoneticilere) gonderilmis
 // sayilir; yonetici cevaplarken belirli bir sakine (recipientId) yazar.
 model Message {
-  siteId      String?
-  site        Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id          String   @id @default(uuid())
   senderId    String
   sender      User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
@@ -1114,8 +1114,8 @@ model Message {
 // saklanir - orijinal dosya adi asla disk yolu olarak kullanilmaz (path
 // traversal riskini onlemek icin), sadece indirirken oneri adi olarak gosterilir.
 model ArchiveFolder {
-  siteId    String?
-  site      Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String   @id @default(uuid())
   name      String
   createdAt DateTime @default(now())
@@ -1127,8 +1127,8 @@ model ArchiveFolder {
 }
 
 model ArchiveFile {
-  siteId       String?
-  site         Site?         @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId       String
+  site         Site          @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id           String        @id @default(uuid())
   folderId     String
   folder       ArchiveFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
@@ -1151,8 +1151,8 @@ model ArchiveFile {
 // bagimsiz/orijinal olarak yazildi, yonetici sonradan kendi metinleriyle
 // dolduracak.
 model KnowledgeArticle {
-  siteId    String?
-  site      Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String   @id @default(uuid())
   category  String
   title     String
