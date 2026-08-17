@@ -1485,14 +1485,14 @@ async function renderKullanicilar(c) {
     ${sectionTitle("Kullanıcılar")}
     ${pending.length ? `<div class="card tight mb-16"><div class="ledger-title">Onay Bekleyenler</div>${pending.map((u) => {
       const days = daysSince(u.createdAt);
-      return `<div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(u.name)} ${days >= 3 ? '<span class="pill red"><span class="dot"></span>Gecikti</span>' : ""}</div><div class="small muted">${esc(u.email)} · ${esc(u.unitLabel || "-")} · ${days === 0 ? "bugün" : days + " gündür bekliyor"}</div></div>
+      return `<div class="ledger-row"><div class="person-row"><span class="avatar-chip md">${esc(initials(u.name))}</span><div class="person-row-text"><div style="font-size:14px;font-weight:600;">${esc(u.name)} ${days >= 3 ? '<span class="pill red"><span class="dot"></span>Gecikti</span>' : ""}</div><div class="small muted">${esc(u.email)} · ${esc(u.unitLabel || "-")} · ${days === 0 ? "bugün" : days + " gündür bekliyor"}</div></div></div>
       <div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" data-approve="${u.id}">Onayla</button><button class="btn-danger" data-deluser="${u.id}">Reddet</button></div></div>`;
     }).join("")}</div>` : ""}
     ${resetRequests.length ? `<div class="card tight mb-16"><div class="ledger-title">Şifre Sıfırlama Talepleri</div>${resetRequests.map((u) => `
-      <div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(u.name)}</div><div class="small muted">${esc(u.email)} · Talep: ${dt(u.resetRequestedAt)}</div></div>
+      <div class="ledger-row"><div class="person-row"><span class="avatar-chip md">${esc(initials(u.name))}</span><div class="person-row-text"><div style="font-size:14px;font-weight:600;">${esc(u.name)}</div><div class="small muted">${esc(u.email)} · Talep: ${dt(u.resetRequestedAt)}</div></div></div>
       <button class="btn btn-primary btn-sm" data-reset="${u.id}">Geçici Şifre Oluştur</button></div>`).join("")}</div>` : ""}
     <div class="card tight mb-16"><div class="ledger-title">Sakinler &amp; Personel</div>${approved.map((u) => `
-      <div class="ledger-row" style="${u.isActive === false ? "opacity:.55;" : ""}"><div><div style="font-size:14px;font-weight:600;">${esc(u.name)} ${u.role === "yonetici" ? "👑" : ""} ${u.isActive === false ? pill("Pasif") : ""}</div><div class="small muted">${esc(u.email)} · ${u.role === "sakin" ? esc(u.unitLabel || "-") : u.role === "personel" ? esc(u.department || "Personel") : "Yönetici"}</div></div>
+      <div class="ledger-row" style="${u.isActive === false ? "opacity:.55;" : ""}"><div class="person-row"><span class="avatar-chip md">${esc(initials(u.name))}</span><div class="person-row-text"><div style="font-size:14px;font-weight:600;">${esc(u.name)} ${u.role === "yonetici" ? "👑" : ""} ${u.isActive === false ? pill("Pasif") : ""}</div><div class="small muted">${esc(u.email)} · ${u.role === "sakin" ? esc(u.unitLabel || "-") : u.role === "personel" ? esc(u.department || "Personel") : "Yönetici"}</div></div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-ghost btn-sm" data-edit="${u.id}">Düzenle</button>${u.role !== "yonetici" ? `<button class="btn btn-ghost btn-sm" data-reset="${u.id}">Şifre Sıfırla</button>` : ""}${u.role !== "yonetici" && u.id !== state.user.id ? (u.isActive === false ? `<button class="btn btn-ghost btn-sm" data-reactivate="${u.id}">Aktif Et</button>` : `<button class="btn btn-ghost btn-sm" data-deactivate="${u.id}">Pasife Al</button>`) : ""}${u.id !== state.user.id ? `<button class="btn-danger" data-deluser="${u.id}">Kalıcı Sil</button>` : ""}</div></div>`).join("")}</div>
     <div class="card form-card">
       <div class="ledger-title" style="padding:0 0 10px;">Yeni Personel Ekle</div>
@@ -1549,10 +1549,26 @@ async function renderDaireler(c) {
         <button class="btn btn-primary" type="submit">Ekle</button>
       </form>
     </div>
-    <div class="card tight">
+    <div class="grid grid-cards">
       ${list.map((u) => `
-        <div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(u.block)} - Daire ${esc(u.no)} ${u.occupancy === "vacant" ? pill("Boş") : ""}</div><div class="small muted">${esc(u.ownerName || "-")}${u.tenantName ? " (Kiracı: " + esc(u.tenantName) + ")" : ""}${u.feeGroup ? " · " + esc(u.feeGroup) : ""}${u.landShare ? " · Arsa Payı: " + esc(String(u.landShare)) : ""}${u.squareMeters ? " · " + esc(String(u.squareMeters)) + " m²" : ""}</div></div>
-        <div style="display:flex;align-items:center;gap:10px;"><div class="f-num" style="color:${debtColor(u.debt)};font-weight:600;">${tl(Math.abs(u.debt))}</div>${pill(debtStatusLabel(u.debt))}<button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button><button class="btn btn-ghost btn-sm" data-borcdokumu="${u.id}" title="Borç Dökümü">📋</button><button class="btn btn-ghost btn-sm" data-editunit="${u.id}">Düzenle</button></div></div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+        <div class="card pad">
+          <div class="icon-card-head">
+            <div class="icon-card-icon">${navIcon("daireler")}</div>
+            <div class="icon-card-text">
+              <div class="icon-card-title">${esc(u.block)} - Daire ${esc(u.no)}</div>
+              <div class="small muted">${esc(u.ownerName || "-")}${u.tenantName ? " (Kiracı: " + esc(u.tenantName) + ")" : ""}${u.feeGroup ? " · " + esc(u.feeGroup) : ""}${u.squareMeters ? " · " + esc(String(u.squareMeters)) + " m²" : ""}</div>
+            </div>
+            ${u.occupancy === "vacant" ? pill("Boş") : pill(debtStatusLabel(u.debt))}
+          </div>
+          <div class="flex-between" style="margin-top:12px;">
+            <div class="f-num" style="color:${debtColor(u.debt)};font-weight:700;font-size:16px;">${tl(Math.abs(u.debt))}</div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button>
+              <button class="btn btn-ghost btn-sm" data-borcdokumu="${u.id}" title="Borç Dökümü">📋</button>
+              <button class="btn btn-ghost btn-sm" data-editunit="${u.id}">Düzenle</button>
+            </div>
+          </div>
+        </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
     </div>
   `;
   document.getElementById("unitForm").addEventListener("submit", async (e) => {
@@ -2878,29 +2894,21 @@ async function renderKasalar(c) {
     <div id="transferForm"></div>
     <div id="topluMakbuzForm"></div>
     <div class="grid cols-3 mb-16">
-      <div class="card pad">
-        <div class="stat-label">TOPLAM KASA BAKİYESİ</div>
-        <div class="f-num stat-value" style="color:${totalBalance >= 0 ? "var(--green)" : "var(--red)"};font-size:28px;">${tl(totalBalance)}</div>
-      </div>
-      <div class="card pad clickable" data-goto="tahsilat">
-        <div class="stat-label">ALACAKLAR (ÜYE BORÇLARI)</div>
-        <div class="f-num stat-value" style="color:var(--red);font-size:28px;">${tl(dash.totalDebt)}</div>
-      </div>
-      <div class="card pad clickable" data-goto="borclistesi">
-        <div class="stat-label">BORÇLAR (ÖDENECEK)</div>
-        <div class="f-num stat-value" style="color:var(--amber);font-size:28px;">${tl(dash.totalPayables)}</div>
-      </div>
+      ${statCard("", "kasalar", "TOPLAM KASA BAKİYESİ", tl(totalBalance), totalBalance >= 0 ? "var(--green)" : "var(--red)")}
+      ${statCard("tahsilat", "tahsilat", "ALACAKLAR (ÜYE BORÇLARI)", tl(dash.totalDebt), "var(--red)")}
+      ${statCard("borclistesi", "borclistesi", "BORÇLAR (ÖDENECEK)", tl(dash.totalPayables), "var(--amber)")}
     </div>
-    <div class="grid" id="accountsGrid">
+    <div class="grid grid-cards" id="accountsGrid">
       ${accounts.map((a) => `
-        <div class="card pad mb-16">
-          <div class="flex-between">
-            <div>
-              <div style="font-weight:700;">${esc(a.name)}</div>
+        <div class="card pad">
+          <div class="icon-card-head">
+            <div class="icon-card-icon">${navIcon("kasalar")}</div>
+            <div class="icon-card-text">
+              <div class="icon-card-title">${esc(a.name)}</div>
               <div class="small muted">${typeLabel[a.type] || a.type}${a.bankName ? " · " + esc(a.bankName) : ""}${a.iban ? " · " + esc(a.iban) : ""}</div>
             </div>
-            <div class="f-num" style="font-weight:600;font-size:17px;color:${a.balance >= 0 ? "var(--green)" : "var(--red)"};">${tl(a.balance)}</div>
           </div>
+          <div class="f-num" style="font-weight:700;font-size:20px;margin-top:12px;color:${a.balance >= 0 ? "var(--green)" : "var(--red)"};">${tl(a.balance)}</div>
           <button class="btn btn-ghost btn-sm" style="margin-top:10px;" data-ledger="${a.id}">Hesap Ekstresi</button>
           <div id="ledger-${a.id}" style="margin-top:10px;"></div>
         </div>`).join("")}
@@ -2975,9 +2983,13 @@ async function renderCari(c) {
   function partyCard(name, sub, debt, partyType, partyId) {
     partyNameMap.set(`${partyType}|${partyId}`, name);
     return `
-      <div class="card pad mb-16">
-        <div class="flex-between">
-          <div><div style="font-weight:700;">${esc(name)}</div><div class="small muted">${esc(sub)}</div></div>
+      <div class="card pad">
+        <div class="icon-card-head">
+          <div class="icon-card-icon">${navIcon(partyType === "firma" ? "cari" : "personel")}</div>
+          <div class="icon-card-text">
+            <div class="icon-card-title">${esc(name)}</div>
+            <div class="small muted">${esc(sub)}</div>
+          </div>
           <div class="f-num" style="font-weight:600;color:${debt > 0 ? "var(--red)" : "var(--green)"};">${tl(debt)}</div>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
@@ -3004,9 +3016,9 @@ async function renderCari(c) {
       </form>
     </div>
     <h3 class="f-display" style="font-size:15px;margin:18px 0 10px;">Firmalar</h3>
-    <div class="grid">${vendors.map((v) => partyCard(v.name, v.category || "Firma", v.debt, "firma", v.id)).join("") || '<div class="empty-row">Kayıtlı firma yok.</div>'}</div>
+    <div class="grid grid-cards">${vendors.map((v) => partyCard(v.name, v.category || "Firma", v.debt, "firma", v.id)).join("") || '<div class="empty-row">Kayıtlı firma yok.</div>'}</div>
     <h3 class="f-display" style="font-size:15px;margin:18px 0 10px;">Personel</h3>
-    <div class="grid">${personnel.map((p) => partyCard(p.name, p.department || "Personel", personnelDebt(p.id), "personel", p.id)).join("") || '<div class="empty-row">Kayıtlı personel yok.</div>'}</div>
+    <div class="grid grid-cards">${personnel.map((p) => partyCard(p.name, p.department || "Personel", personnelDebt(p.id), "personel", p.id)).join("") || '<div class="empty-row">Kayıtlı personel yok.</div>'}</div>
   `;
 
   document.getElementById("vendorForm").addEventListener("submit", async (e) => {
@@ -3950,13 +3962,19 @@ async function renderButce(c) {
         <button class="btn btn-primary" type="submit">Kaydet</button>
       </form>
     </div>
-    <div class="grid">
+    <div class="grid grid-cards">
       ${budgets.map((b) => {
         const pct = Math.min(100, Math.round((b.actualAmount / b.plannedAmount) * 100));
         const over = b.actualAmount > b.plannedAmount;
-        return `<div class="card pad mb-16">
-          <div class="flex-between"><div style="font-weight:700;">${esc(b.category)}</div><div class="small muted">${tl(b.actualAmount)} / ${tl(b.plannedAmount)}</div></div>
-          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${over ? "var(--red)" : "var(--navy)"};"></div></div>
+        return `<div class="card pad">
+          <div class="icon-card-head">
+            <div class="icon-card-icon">${navIcon("butce")}</div>
+            <div class="icon-card-text">
+              <div class="icon-card-title">${esc(b.category)}</div>
+              <div class="small muted">${tl(b.actualAmount)} / ${tl(b.plannedAmount)}</div>
+            </div>
+          </div>
+          <div class="progress-bar" style="margin-top:12px;"><div class="progress-fill" style="width:${pct}%;background:${over ? "var(--red)" : "var(--navy)"};"></div></div>
           <div class="small muted" style="margin-top:6px;">${over ? "⚠ Bütçe aşıldı" : pct + "% kullanıldı"}</div>
         </div>`;
       }).join("") || '<div class="empty-row">Henüz bütçe kalemi yok.</div>'}

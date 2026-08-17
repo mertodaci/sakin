@@ -269,6 +269,9 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 /* ---------- Avatar chip (kucuk, yeniden kullanilabilir kisi rozeti) ---------- */
 .avatar-chip { border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: var(--azure-light); color: var(--azure); font-weight: 700; flex: 0 0 auto; }
 .avatar-chip.sm { width: 22px; height: 22px; font-size: 10px; }
+.avatar-chip.md { width: 34px; height: 34px; font-size: 12px; }
+.person-row { display: flex; align-items: center; gap: 12px; }
+.person-row-text { flex: 1; min-width: 0; }
 
 /* ---------- Segmented control (butce/talep gibi durum secicileri icin) ---------- */
 .segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
