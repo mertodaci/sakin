@@ -296,23 +296,29 @@ const NAV_GROUPS = {
   ],
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
-    { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"]] },
-    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["isletmeprojesi", "İşletme Projesi"], ["butce", "Bütçe"]] },
+    // Yonetimcell karsilastirmasi: "menu ayrimi (Islemler/Raporlar)" - Mert'in
+    // istegi uzerine, ERP mantigina uygun sekilde, veri GIRISI/islem yapilan
+    // ekranlarla GORUNTULEME/analiz icin acilan rapor ekranlari, ilgili oldugu
+    // her modulun (Uyeler/Finans/Kurul&Hukuk) KENDI icinde Islemler/Raporlar
+    // alt basliklarina ayrildi (tek duz "genel Raporlar" grubu yerine).
+    { group: "Üyeler", sections: [
+      { label: "İşlemler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"]] },
+      { label: "Raporlar", items: [["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"], ["detayliuyelistesi", "Detaylı Üye Listesi"]] },
+    ] },
+    { group: "Finans", sections: [
+      { label: "İşlemler", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["isletmeprojesi", "İşletme Projesi"], ["butce", "Bütçe"]] },
+      { label: "Raporlar", items: [
+        ["geneldurum", "Genel Durum Raporu"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"],
+        ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["uyedonem", "Üye/Dönem Raporu"], ["uyedetay", "Üye/Detay Raporu"],
+        ["tahsilatraporu", "Tahsilat Raporu"], ["giderraporu", "Detaylı Gider Raporu"], ["gidergrubu", "Gider Grubu Raporu"],
+        ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["aylikbilanco", "Aylık Bilanço"], ["genelbilanco", "Genel Bilanço"],
+      ] },
+    ] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
-    { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"], ["bilgibankasi", "Bilgi Bankası"]] },
-    // Yonetimcell karsilastirmasi: "menu ayrimi (Islemler/Raporlar)" - Mert'in
-    // istegi uzerine, veri GIRISI/islem yapilan ekranlarla sadece
-    // GORUNTULEME/analiz icin acilan rapor ekranlari ayri gruplara alindi.
-    // Ayni NAV_GROUPS mekanizmasi, sadece yeniden bucketleme - render/routing
-    // hicbir sekilde degismedi (dusuk riskli, saf navigasyon degisikligi).
-    { group: "Raporlar", items: [
-      ["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"], ["detayliuyelistesi", "Detaylı Üye Listesi"],
-      ["geneldurum", "Genel Durum Raporu"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"],
-      ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["uyedonem", "Üye/Dönem Raporu"], ["uyedetay", "Üye/Detay Raporu"],
-      ["tahsilatraporu", "Tahsilat Raporu"], ["giderraporu", "Detaylı Gider Raporu"], ["gidergrubu", "Gider Grubu Raporu"],
-      ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["aylikbilanco", "Aylık Bilanço"], ["genelbilanco", "Genel Bilanço"],
-      ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"],
+    { group: "Kurul & Hukuk", sections: [
+      { label: "İşlemler", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"], ["bilgibankasi", "Bilgi Bankası"]] },
+      { label: "Raporlar", items: [["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"]] },
     ] },
     { group: "Sistem", items: [["seffaflik", "Şeffaflık"], ["ayarlar", "Ayarlar"]] },
   ],
@@ -325,10 +331,14 @@ const NAV_GROUPS = {
 const ROLE_LABEL = { sakin: "Sakin Paneli", yonetici: "Yönetim Paneli", personel: "Personel Paneli" };
 let expandedGroups = null;
 
+function groupItems(g) {
+  return g.items || g.sections.flatMap((s) => s.items);
+}
+
 function tabLabel(tab) {
   const groups = NAV_GROUPS[state.user?.role] || [];
   for (const g of groups) {
-    const found = g.items.find(([id]) => id === tab);
+    const found = groupItems(g).find(([id]) => id === tab);
     if (found) return found[1];
   }
   return "";
@@ -545,15 +555,22 @@ function toggleSidebar() {
   document.getElementById("sidebarOverlay")?.classList.toggle("visible");
 }
 
+function sidebarItemBtn(id, label) {
+  return `<button class="sidebar-item ${state.tab === id ? "active" : ""}" data-tab="${id}">${navIcon(id)}<span>${esc(label)}</span></button>`;
+}
+
 function renderSidebarNav() {
   const groups = NAV_GROUPS[state.user.role] || [];
   if (!expandedGroups) {
-    const activeGroup = groups.find((g) => g.items.some(([id]) => id === state.tab));
+    const activeGroup = groups.find((g) => groupItems(g).some(([id]) => id === state.tab));
     expandedGroups = new Set([(activeGroup || groups[0])?.group]);
   }
   const nav = document.getElementById("sidebarNav");
   nav.innerHTML = groups.map((g) => {
     const isOpen = expandedGroups.has(g.group);
+    const body = g.sections
+      ? g.sections.map((s) => `<div class="sidebar-subheading">${esc(s.label)}</div>${s.items.map(([id, label]) => sidebarItemBtn(id, label)).join("")}`).join("")
+      : g.items.map(([id, label]) => sidebarItemBtn(id, label)).join("");
     return `
       <div class="sidebar-group">
         <button class="sidebar-group-header" data-group="${esc(g.group)}">
@@ -561,7 +578,7 @@ function renderSidebarNav() {
           <span class="chevron ${isOpen ? "open" : ""}">›</span>
         </button>
         <div class="sidebar-group-items" style="display:${isOpen ? "block" : "none"};">
-          ${g.items.map(([id, label]) => `<button class="sidebar-item ${state.tab === id ? "active" : ""}" data-tab="${id}">${navIcon(id)}<span>${esc(label)}</span></button>`).join("")}
+          ${body}
         </div>
       </div>`;
   }).join("");

@@ -85,6 +85,11 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .sidebar-group-header .chevron { transition: transform .15s; display: inline-flex; color: var(--sb-text-dim); }
 .sidebar-group-header .chevron.open { transform: rotate(90deg); }
 .sidebar-group-items { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 6px; }
+.sidebar-subheading {
+  padding: 10px 12px 4px; font-size: 9.5px; font-weight: 700; letter-spacing: .7px;
+  color: var(--sb-text-dim); opacity: .7; text-transform: uppercase;
+}
+.sidebar-subheading:first-child { padding-top: 2px; }
 .sidebar-item {
   display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; padding: 9px 12px; font-size: 13.5px;
   font-weight: 500; border: none; background: transparent; color: var(--sb-text); cursor: pointer;
