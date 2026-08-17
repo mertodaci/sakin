@@ -28,7 +28,7 @@ router.post("/accounts", requireAuth, requireRole("yonetici"), async (req, res) 
   const acc = { id: db.uid(), name, type: type || "banka", bankName: bankName || "", iban: iban || "", openingBalance: Number(openingBalance) || 0, createdAt: new Date().toISOString() };
   data.accounts.push(acc);
   db.logActivity(data, req.user, "account.create", `Yeni kasa/hesap eklendi: ${name}`, null);
-  await db.save(data);
+  await db.save(data, ["accounts"]);
   res.status(201).json(acc);
 });
 
@@ -41,7 +41,7 @@ router.patch("/accounts/:id", requireAuth, requireRole("yonetici"), async (req, 
   if (type !== undefined) acc.type = type;
   if (bankName !== undefined) acc.bankName = bankName;
   if (iban !== undefined) acc.iban = iban;
-  await db.save(data);
+  await db.save(data, ["accounts"]);
   res.json(acc);
 });
 
@@ -52,7 +52,7 @@ router.delete("/accounts/:id", requireAuth, requireRole("yonetici"), async (req,
   if (inUse) return res.status(400).json({ error: "Bu hesaba bağlı işlemler var, silinemez. Önce işlemleri başka bir hesaba taşıyın." });
   if (data.meta.defaultAccountId === req.params.id) return res.status(400).json({ error: "Varsayılan tahsilat hesabı silinemez. Önce Ayarlar'dan başka bir hesabı varsayılan yapın." });
   data.accounts = data.accounts.filter((a) => a.id !== req.params.id);
-  await db.save(data);
+  await db.save(data, ["accounts"]);
   res.json({ message: "Hesap silindi." });
 });
 
@@ -88,7 +88,7 @@ router.post("/accounts/transfer", requireAuth, requireRole("yonetici"), async (r
   const fromName = data.accounts.find((a) => a.id === fromAccountId).name;
   const toName = data.accounts.find((a) => a.id === toAccountId).name;
   db.logActivity(data, req.user, "account.transfer", `${amount}₺ ${fromName} hesabından ${toName} hesabına transfer edildi.`, null);
-  await db.save(data);
+  await db.save(data, ["transfers"]);
   res.status(201).json(transfer);
 });
 

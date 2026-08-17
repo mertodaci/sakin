@@ -229,25 +229,43 @@ async function saveCollection(tx, def, rows) {
   await tx[def.model].deleteMany({ where: { id: { notIn: ids } } });
 }
 
-async function save(data) {
+const LEGACY_COLLECTION_NAMES = LEGACY_COLLECTIONS.map((c) => c.name);
+
+// touchedCollections: cagiran route'un GERCEKTEN mutasyona ugrattigi
+// koleksiyon adlarinin listesi. save() SADECE bunlari (+ her zaman
+// activityLog, cunku logActivity() hemen her route'ta kullanilir) Postgres'e
+// yeniden yazar - eskiden butun 20+ legacy koleksiyon her save()'de yeniden
+// yazilirdi, bu da alakasiz eszamanli isteklerin birbirinin verisini sessizce
+// silmesine/geri almasina yol aciyordu (bkz. ROADMAP.md "Iş Akışı Bütünlüğü").
+// touchedCollections verilmezse (eski cagri tarzi) geriye donuk uyumluluk icin
+// TUM koleksiyonlar yazilir - ama tum call site'lar bu fonksiyonun yaninda
+// guncellendigi icin bu sadece bir guvenlik agi, kullanilmamasi beklenir.
+async function save(data, touchedCollections) {
+  const names = touchedCollections === undefined ? LEGACY_COLLECTION_NAMES : Array.from(new Set(["activityLog", ...touchedCollections]));
+  const defs = LEGACY_COLLECTIONS.filter((c) => names.includes(c.name));
+
   await prisma.$transaction(
     async (tx) => {
-      await tx.settings.update({
-        where: { id: "singleton" },
-        data: { ...data.meta, ticketCategories: data.ticketCategories },
-      });
+      if (names.includes("meta")) {
+        await tx.settings.update({
+          where: { id: "singleton" },
+          data: { ...data.meta, ticketCategories: data.ticketCategories },
+        });
+      }
 
-      for (const def of LEGACY_COLLECTIONS) {
+      for (const def of defs) {
         await saveCollection(tx, def, data[def.name]);
       }
 
-      const currentRequestIds = data.usedPaymentRequestIds || [];
-      const existing = await tx.paymentRequest.findMany({ select: { id: true } });
-      const existingIds = existing.map((r) => r.id);
-      const toAdd = currentRequestIds.filter((id) => !existingIds.includes(id));
-      for (const id of toAdd) await tx.paymentRequest.create({ data: { id } });
-      const toRemove = existingIds.filter((id) => !currentRequestIds.includes(id));
-      if (toRemove.length) await tx.paymentRequest.deleteMany({ where: { id: { in: toRemove } } });
+      if (names.includes("usedPaymentRequestIds")) {
+        const currentRequestIds = data.usedPaymentRequestIds || [];
+        const existing = await tx.paymentRequest.findMany({ select: { id: true } });
+        const existingIds = existing.map((r) => r.id);
+        const toAdd = currentRequestIds.filter((id) => !existingIds.includes(id));
+        for (const id of toAdd) await tx.paymentRequest.create({ data: { id } });
+        const toRemove = existingIds.filter((id) => !currentRequestIds.includes(id));
+        if (toRemove.length) await tx.paymentRequest.deleteMany({ where: { id: { in: toRemove } } });
+      }
     },
     { timeout: 30000 }
   );

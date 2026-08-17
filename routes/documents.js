@@ -83,7 +83,7 @@ router.get("/documents/debt-letter", requireAuth, async (req, res) => {
   });
 
   db.logActivity(data, req.user, "document.debt-letter", `${unit.block} - Daire ${unit.no} için borcu yoktur belgesi indirildi.`, unit.id);
-  await db.save(data);
+  await db.save(data, []); // sadece activityLog'a yazar, baska koleksiyon mutasyona ugramadi
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="borcu-yoktur-${unit.block}-${unit.no}.pdf"`);
@@ -205,7 +205,7 @@ router.get("/documents/borc-dokumu/:unitId", requireAuth, async (req, res) => {
   });
 
   db.logActivity(data, req.user, "document.borc-dokumu", `${unit.block} - Daire ${unit.no} için borç dökümü indirildi.`, unit.id);
-  await db.save(data);
+  await db.save(data, []); // sadece activityLog'a yazar, baska koleksiyon mutasyona ugramadi
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="borc-dokumu-${unit.block}-${unit.no}.pdf"`);
@@ -265,7 +265,7 @@ router.get("/documents/toplu-borc-dokumu", requireAuth, requireRole("yonetici"),
 
   const bytes = await doc.save();
   db.logActivity(data, req.user, "document.toplu-borc-dokumu", `${units.length} taşınmaz için toplu borç dökümü indirildi.`, null);
-  await db.save(data);
+  await db.save(data, []); // sadece activityLog'a yazar, baska koleksiyon mutasyona ugramadi
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="toplu-borc-dokumu.pdf"`);
@@ -315,7 +315,7 @@ router.get("/documents/debt-list", requireAuth, requireRole("yonetici"), async (
 
   const bytes = await doc.save();
   db.logActivity(data, req.user, "document.debt-list", "İlan panosu için aidat borç listesi PDF'i indirildi.", null);
-  await db.save(data);
+  await db.save(data, []); // sadece activityLog'a yazar, baska koleksiyon mutasyona ugramadi
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="aidat-borc-listesi.pdf"`);
@@ -345,7 +345,7 @@ router.get("/documents/debt-list.csv", requireAuth, requireRole("yonetici"), asy
   const csv = "﻿" + lines.join("\r\n");
 
   db.logActivity(data, req.user, "document.debt-list-csv", "Aidat borç listesi CSV/Excel olarak indirildi.", null);
-  await db.save(data);
+  await db.save(data, []); // sadece activityLog'a yazar, baska koleksiyon mutasyona ugramadi
 
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="aidat-borc-listesi.csv"`);
@@ -398,7 +398,7 @@ router.get("/documents/tebligat/:unitId", requireAuth, requireRole("yonetici"), 
   });
 
   db.logActivity(data, req.user, "document.tebligat", `${unit.block} - Daire ${unit.no} için ${tier === "ihtarname" ? "ihtarname" : "ödeme çağrısı"} oluşturuldu.`, unit.id);
-  await db.save(data);
+  await db.save(data, []); // sadece activityLog'a yazar, baska koleksiyon mutasyona ugramadi
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="${tier}-${unit.block}-${unit.no}.pdf"`);
@@ -460,7 +460,7 @@ router.get("/documents/toplu-tebligat", requireAuth, requireRole("yonetici"), as
 
   const bytes = await doc.save();
   db.logActivity(data, req.user, "document.toplu-tebligat", `${units.length} borçlu taşınmaza toplu ${tier === "ihtarname" ? "ihtarname" : "ödeme çağrısı"} oluşturuldu.`, null);
-  await db.save(data);
+  await db.save(data, []); // sadece activityLog'a yazar, baska koleksiyon mutasyona ugramadi
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="toplu-${tier}.pdf"`);
@@ -570,7 +570,7 @@ router.get("/documents/hazirun-cetveli", requireAuth, requireRole("yonetici"), a
 
   const bytes = await doc.save();
   db.logActivity(data, req.user, "document.hazirun", "Hazirun (yoklama) cetveli oluşturuldu.", null);
-  await db.save(data);
+  await db.save(data, []); // sadece activityLog'a yazar, baska koleksiyon mutasyona ugramadi
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="hazirun-cetveli.pdf"`);
@@ -659,7 +659,7 @@ router.get("/documents/toplu-hesap-ozeti", requireAuth, requireRole("yonetici"),
 
   const bytes = await doc.save();
   db.logActivity(data, req.user, "document.toplu-hesap-ozeti", `Toplu hesap özeti dökümü indirildi (${units.length} daire).`, null);
-  await db.save(data);
+  await db.save(data, []); // sadece activityLog'a yazar, baska koleksiyon mutasyona ugramadi
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="toplu-hesap-ozeti.pdf"`);
@@ -795,7 +795,7 @@ router.get("/documents/firma-mutabakat/:vendorId", requireAuth, requireRole("yon
     footerNote: "Bu mektup site yönetim sistemi tarafından otomatik oluşturulmuştur.",
   });
   db.logActivity(data, req.user, "document.firma-mutabakat", `${vendor.name} için mutabakat mektubu indirildi.`, null);
-  await db.save(data);
+  await db.save(data, []); // sadece activityLog'a yazar, baska koleksiyon mutasyona ugramadi
   // Content-Disposition header'i Turkce karakter icerince Node ERR_INVALID_CHAR
   // firlatir (raw header sadece Latin-1 kabul eder) - dosya adi ASCII'ye
   // indirgeniyor (trSafe) ve kalan gecersiz karakterler temizleniyor.

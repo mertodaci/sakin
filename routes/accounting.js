@@ -46,7 +46,7 @@ router.patch("/accounting/codes", requireAuth, requireRole("yonetici"), async (r
   const row = data[collectionName].find((x) => x.id === id);
   if (!row) return res.status(404).json({ error: "Kayıt bulunamadı." });
   row.accountingCode = code || null;
-  await db.save(data);
+  await db.save(data, [collectionName]);
   res.json({ id: row.id, code: row.accountingCode });
 });
 
@@ -78,7 +78,7 @@ router.post("/accounting/codes/auto-assign", requireAuth, requireRole("yonetici"
       }
     });
   }
-  await db.save(data);
+  await db.save(data, ["accounts", "units", "vendors", "personnel"]);
 
   const existingCat = new Set(categories.filter((c) => c.accountingCode).map((c) => c.accountingCode));
   for (const cat of categories) {
