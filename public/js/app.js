@@ -792,9 +792,9 @@ async function renderResidentOzet(c) {
       </div>
     </div>
     <div class="grid cols-3 mb-16">
-      <div class="card stat-card clickable" data-goto="talep"><div class="stat-label">AÇIK TALEP</div><div class="stat-value">${dash.openTickets}</div></div>
-      <div class="card stat-card clickable" data-goto="rezervasyon"><div class="stat-label">YAKLAŞAN REZERVASYON</div><div class="stat-value">${dash.upcomingReservations}</div></div>
-      <div class="card stat-card clickable" data-goto="kargo"><div class="stat-label">BEKLEYEN KARGO</div><div class="stat-value">${dash.pendingPackages}</div></div>
+      ${statCard("talep", "talep", "AÇIK TALEP", dash.openTickets)}
+      ${statCard("rezervasyon", "rezervasyon", "YAKLAŞAN REZERVASYON", dash.upcomingReservations)}
+      ${statCard("kargo", "kargo", "BEKLEYEN KARGO", dash.pendingPackages)}
     </div>
     <div class="card tight">
       <div class="ledger-title">Güncel Duyurular</div>
@@ -1107,11 +1107,11 @@ async function renderPano(c) {
   c.querySelectorAll("[data-resolve]").forEach((b) => b.addEventListener("click", async () => { try { await api("/classifieds/" + b.dataset.resolve + "/resolve", { method: "PATCH" }); renderTab("pano"); } catch (err) { toast(err.message); } }));
 }
 
-/* ================= MANAGER-ONLY VIEWS ================= */
-
+// Tum rollerde (yonetici/sakin/personel) paylasilan ikonlu stat karti.
+// goto verilmezse (bos/null) karta sekme-gecisi eklenmez, sadece bilgi amacli render edilir.
 function statCard(goto, icon, label, value, color, compact) {
   return `
-    <div class="card stat-card${compact ? " compact" : ""} clickable" data-goto="${esc(goto)}">
+    <div class="card stat-card${compact ? " compact" : ""}${goto ? ` clickable" data-goto="${esc(goto)}` : ""}">
       <div class="stat-icon">${navIcon(icon)}</div>
       <div class="stat-text">
         <div class="stat-label">${esc(label)}</div>
@@ -1874,8 +1874,8 @@ async function renderTahsilat(c) {
 async function renderMuhasebe(c) {
   const [transactions, accounts] = await Promise.all([api("/transactions"), api("/accounts")]);
   const accName = (id) => accounts.find((a) => a.id === id)?.name || "-";
-  const income = transactions.filter((t) => t.type === "gelir").reduce((s, t) => s + t.amount, 0);
-  const expense = transactions.filter((t) => t.type === "gider").reduce((s, t) => s + t.amount, 0);
+  const income = transactions.filter((t) => t.type === "gelir").reduce((s, t) => s + Number(t.amount), 0);
+  const expense = transactions.filter((t) => t.type === "gider").reduce((s, t) => s + Number(t.amount), 0);
   // Ay etiketiyle birlikte gercek siralama anahtari (yyyy-mm) da tutulur; boylece
   // grafik islem ekleme sirasina degil, takvim sirasina (eskiden yeniye) gore cizilir.
   const byMonth = {};
@@ -1884,7 +1884,7 @@ async function renderMuhasebe(c) {
     const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const label = d.toLocaleDateString("tr-TR", { month: "short", year: "2-digit" });
     if (!byMonth[sortKey]) byMonth[sortKey] = { label, gelir: 0, gider: 0 };
-    byMonth[sortKey][t.type] += t.amount;
+    byMonth[sortKey][t.type] += Number(t.amount);
   });
   const months = Object.keys(byMonth).sort().slice(-6);
   const maxVal = Math.max(1, ...months.flatMap((m) => [byMonth[m].gelir, byMonth[m].gider]));
@@ -1893,8 +1893,8 @@ async function renderMuhasebe(c) {
     <div class="flex-between mb-16"><div></div><button class="btn btn-ghost btn-sm" id="newTxnBtn">+ Hareket Ekle</button></div>
     <div id="txnForm"></div>
     <div class="grid cols-2 mb-16">
-      <div class="card stat-card"><div class="stat-label">TOPLAM GELİR</div><div class="f-num stat-value" style="color:var(--green);">${tl(income)}</div></div>
-      <div class="card stat-card"><div class="stat-label">TOPLAM GİDER</div><div class="f-num stat-value" style="color:var(--red);">${tl(expense)}</div></div>
+      ${statCard(null, "tahsilat", "TOPLAM GELİR", tl(income), "var(--green)")}
+      ${statCard(null, "giderler", "TOPLAM GİDER", tl(expense), "var(--red)")}
     </div>
     <div class="card pad mb-16">
       <div class="ledger-title" style="padding:0 0 10px;">Aylık Gelir / Gider</div>
@@ -4012,8 +4012,8 @@ async function renderPersonelOzet(c) {
   c.innerHTML = `
     ${sectionTitle("Merhaba, " + state.user.name.split(" ")[0], state.user.department || "")}
     <div class="grid cols-2">
-      <div class="card stat-card clickable" data-goto="talep"><div class="stat-label">SİZE ATANAN AÇIK TALEP</div><div class="stat-value">${dash.openTickets}</div></div>
-      <div class="card stat-card clickable" data-goto="demirbas"><div class="stat-label">BAKIMI GECİKEN DEMİRBAŞ</div><div class="stat-value">${dash.overdueEquipment}</div></div>
+      ${statCard("talep", "talep", "SİZE ATANAN AÇIK TALEP", dash.openTickets)}
+      ${statCard("demirbas", "demirbas", "BAKIMI GECİKEN DEMİRBAŞ", dash.overdueEquipment)}
     </div>
   `;
   c.querySelectorAll("[data-goto]").forEach((el) => el.addEventListener("click", () => goToTab(el.dataset.goto)));
