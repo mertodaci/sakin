@@ -236,15 +236,67 @@ async function handleLogin(e) {
   msg.innerHTML = "";
   try {
     const r = await api("/auth/login", { method: "POST", body: { email: f.get("email"), password: f.get("password") } });
-    state.token = r.token;
-    localStorage.setItem("sakin_token", r.token);
-    state.user = await api("/auth/me");
-    state.tab = "ozet";
-    if (r.mustChangePassword) renderForceChangePassword();
-    else renderShell();
+    if (r.requiresSiteSelection) {
+      renderSitePicker(r.sites, r.preAuthToken, "/auth/select-site", completeLogin);
+      return;
+    }
+    await completeLogin(r);
   } catch (err) {
     msg.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
   }
+}
+
+// login/select-site/switch-site'in hepsi ayni sekle sahip bir yanit doner
+// ({token, mustChangePassword, user}) - basari sonrasi ortak devam noktasi.
+async function completeLogin(r) {
+  state.token = r.token;
+  localStorage.setItem("sakin_token", r.token);
+  state.user = await api("/auth/me");
+  state.tab = "ozet";
+  if (r.mustChangePassword) renderForceChangePassword();
+  else renderShell();
+}
+
+// Birden fazla siteye erisimi olan bir kullanici giris yaparken (login'in
+// requiresSiteSelection dondugu durum) VEYA oturum ortasinda site
+// degistirirken (switchSite) gosterilen ekran. preAuthToken: giriste kisa
+// omurlu, siteId'siz token; site degistirmede ise kullanicinin zaten
+// sahip oldugu tam token (endpoint farki disinda ayni akis).
+function renderSitePicker(sites, token, endpoint, onComplete) {
+  const app = document.getElementById("app");
+  app.innerHTML = `
+  <div class="login-screen">
+    <div class="login-side">
+      <div><div class="eyebrow">SAKİN</div><h1>Hangi siteye bakmak istiyorsunuz?</h1></div>
+      <div class="foot">Birden fazla siteye erişiminiz var. Devam etmek için birini seçin.</div>
+    </div>
+    <div class="login-main">
+      <div class="login-form">
+        <h1>Site seçin</h1>
+        <div id="authMsg"></div>
+        <div id="sitePickerList" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
+          ${sites.map((s) => `<button type="button" class="btn btn-secondary" data-site="${s.id}" style="text-align:left;">${esc(s.name)}</button>`).join("")}
+        </div>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById("sitePickerList").querySelectorAll("button[data-site]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const msg = document.getElementById("authMsg");
+      try {
+        const res = await fetch(API_BASE + endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+          body: JSON.stringify({ siteId: btn.dataset.site }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Bir hata oluştu.");
+        await onComplete(data);
+      } catch (err) {
+        msg.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
+      }
+    });
+  });
 }
 
 async function handleRegister(e) {
@@ -497,7 +549,9 @@ function toggleUserMenu() {
   const panel = document.createElement("div");
   panel.id = "userMenuPanel";
   panel.className = "notif-panel user-menu-panel";
+  const hasMultipleSites = Array.isArray(state.user.sites) && state.user.sites.length > 1;
   panel.innerHTML = `
+    ${hasMultipleSites ? `<div class="small muted" style="padding:2px 4px 6px;">Site: <strong>${esc(state.user.siteName || "-")}</strong></div><button class="btn btn-ghost btn-sm" id="switchSiteBtn" style="width:100%;margin-bottom:8px;">Site Değiştir</button>` : ""}
     <button class="btn btn-ghost btn-sm" id="changePwBtn" style="width:100%;margin-bottom:8px;">Şifre Değiştir</button>
     <button class="btn btn-ghost btn-sm" id="highContrastBtn" style="width:100%;margin-bottom:8px;">${highContrast ? "Yüksek Kontrastı Kapat" : "Yüksek Kontrastı Aç"}</button>
     <button class="btn btn-ghost btn-sm" id="logoutAllBtn" style="width:100%;margin-bottom:8px;">Tüm Oturumları Kapat</button>
@@ -507,6 +561,18 @@ function toggleUserMenu() {
   document.getElementById("changePwBtn").addEventListener("click", () => { panel.remove(); renderChangePasswordModal(); });
   document.getElementById("highContrastBtn").addEventListener("click", toggleHighContrast);
   document.getElementById("logoutBtn").addEventListener("click", logout);
+  if (hasMultipleSites) {
+    document.getElementById("switchSiteBtn").addEventListener("click", () => {
+      panel.remove();
+      // Site degistirmek tum sayfalarin bellekteki state'ini eski site'a ait
+      // kilitli birakir - kismi state gecersiz kilma yerine, secim sonrasi
+      // basit bir tam sayfa yenilemesi (location.reload) en guvenli v1 yaklasimi.
+      renderSitePicker(state.user.sites, state.token, "/auth/switch-site", async (data) => {
+        localStorage.setItem("sakin_token", data.token);
+        location.reload();
+      });
+    });
+  }
   document.getElementById("logoutAllBtn").addEventListener("click", async () => {
     if (!confirm("Tüm oturumlar kapatılsın mı? Diğer cihazlardaki oturumlar sonlandırılacak.")) return;
     try {
