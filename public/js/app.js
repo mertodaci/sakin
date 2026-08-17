@@ -4187,7 +4187,7 @@ async function renderRehber(c) {
 }
 
 async function renderAyarlar(c) {
-  const settings = await api("/settings");
+  const [settings, accounts] = await Promise.all([api("/settings"), api("/accounts")]);
   c.innerHTML = `
     ${sectionTitle("Ayarlar")}
     <div class="card form-card">
@@ -4216,6 +4216,18 @@ async function renderAyarlar(c) {
         <button class="btn btn-primary" type="submit">Kaydet</button>
       </form>
     </div>
+    <div class="card form-card">
+      <div class="ledger-title" style="padding:0 0 10px;">Varsayılan Tahsilat Hesabı</div>
+      <p class="small muted" style="margin-top:-6px;margin-bottom:10px;">Tahsilat ekranında hesap seçilmezse ödemeler bu hesaba yazılır.</p>
+      <form id="defaultAccountForm" class="form-row">
+        <div class="field" style="flex:1 1 100%;"><label>Hesap</label>
+          <select name="defaultAccountId" required>
+            ${accounts.length ? accounts.map((a) => `<option value="${a.id}" ${a.id === settings.defaultAccountId ? "selected" : ""}>${esc(a.name)}</option>`).join("") : '<option value="" disabled selected>Önce Kasalar sekmesinden bir hesap oluşturun</option>'}
+          </select>
+        </div>
+        <button class="btn btn-primary" type="submit" ${accounts.length ? "" : "disabled"}>Kaydet</button>
+      </form>
+    </div>
   `;
   document.getElementById("lateFeeForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -4234,6 +4246,12 @@ async function renderAyarlar(c) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
     try { await api("/settings", { method: "PATCH", body: f }); toast("Site bilgisi kaydedildi."); }
+    catch (err) { toast(err.message); }
+  });
+  document.getElementById("defaultAccountForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    try { await api("/settings", { method: "PATCH", body: f }); toast("Varsayılan hesap kaydedildi."); }
     catch (err) { toast(err.message); }
   });
 }

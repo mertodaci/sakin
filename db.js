@@ -16,6 +16,7 @@
 // gibi hala tasinmamis baska route'lar o veriyi okumaya devam eder).
 const { randomUUID } = require("crypto");
 const prisma = require("./lib/prismaClient");
+const tenantContext = require("./lib/tenantContext");
 const { Prisma } = prisma;
 
 function uid() {
@@ -43,11 +44,18 @@ function toPlain(value) {
    LOAD: her koleksiyonu Postgres'ten okuyup eski JSON sekline donusturur
    ========================================================================= */
 
+// DIKKAT: eskiden burasi global, TEK satirlik Settings singleton'ini
+// okuyordu - coklu-kiraci donusumunden sonra bu, HER sitenin "ayarlar"
+// (bina adi/adres/gecikme faizi/varsayilan hesap vb.) icin AYNI satiri
+// gormesi demekti (siteler-arasi sizinti + belge/PDF'lerde yanlis site
+// bilgisi). Artik cagiran istegin kendi tenant baglamindaki Site satirini
+// okur - Settings modeli sadece seed.js'in gecmis uyumlulugu icin duruyor,
+// hicbir route artik ondan okumuyor/yazmiyor.
 async function loadMeta() {
-  const s = await prisma.settings.findUniqueOrThrow({ where: { id: "singleton" } });
+  const s = await prisma.site.findUniqueOrThrow({ where: { id: tenantContext.getSiteId() } });
   const plain = toPlain(s);
-  const { id, ticketCategories, ...meta } = plain;
-  return { meta, ticketCategories };
+  const { id, name, inviteCode, active, createdAt, ticketCategories, ...meta } = plain;
+  return { meta: { buildingName: name, ...meta }, ticketCategories };
 }
 
 async function loadUsers() {
@@ -261,9 +269,10 @@ async function save(data, touchedCollections) {
   await prisma.$transaction(
     async (tx) => {
       if (names.includes("meta")) {
-        await tx.settings.update({
-          where: { id: "singleton" },
-          data: { ...data.meta, ticketCategories: data.ticketCategories },
+        const { buildingName, ...rest } = data.meta;
+        await tx.site.update({
+          where: { id: tenantContext.getSiteId() },
+          data: { ...rest, name: buildingName, ticketCategories: data.ticketCategories },
         });
       }
 

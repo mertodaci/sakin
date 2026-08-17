@@ -10,6 +10,19 @@ const prisma = db.prisma;
 // dashboard.js, documents.js ve comms.js hepsi ayni fonksiyonu kullanir.
 const unitDebt = db.netDebt;
 
+// User modeli BILEREK global (coklu-siteli personelin tek giris kimligi
+// olmasi icin, bkz. lib/tenantScope.js) - yani prisma.user.findUnique({where:{id}})
+// TEK BASINA hicbir site kontrolu yapmaz. Asagidaki /users/:id... uclarinin
+// hepsi, hedef kullanicinin GERCEKTEN caginin sitesine (UserSiteAccess)
+// uye oldugunu burada ELLE dogrular - aksi halde herhangi bir yonetici, id'sini
+// bilerek/tahmin ederek BASKA bir sitenin kullanicisini onaylayabilir,
+// pasife alabilir, sifresini sifirlayabilir hatta silebilirdi.
+async function findSiteUser(userId, siteId) {
+  const access = await prisma.userSiteAccess.findUnique({ where: { userId_siteId: { userId, siteId } } });
+  if (!access) return null;
+  return prisma.user.findUnique({ where: { id: userId } });
+}
+
 /* ---------------- UNITS (Daireler) ---------------- */
 
 router.get("/units", requireAuth, async (req, res) => {
@@ -205,7 +218,7 @@ router.get("/users", requireAuth, requireRole("yonetici"), async (req, res) => {
 // Ad/telefon/TC kimlik no gibi temel profil alanlarini duzenler (Yonetimcell
 // karsilastirmasindan: "Detayli Uye Listesi" alan seti).
 router.patch("/users/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  const user = await findSiteUser(req.params.id, req.user.siteId);
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   const { name, phone, phone2, email2, nationalId, gender, birthDate, bloodType, sector, workplace, workAddress, homeAddress } = req.body || {};
   const data = {};
@@ -234,7 +247,7 @@ router.get("/users/:id/vehicles", requireAuth, requireRole("yonetici"), async (r
 });
 
 router.post("/users/:id/vehicles", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  const user = await findSiteUser(req.params.id, req.user.siteId);
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   const { plate, brand, color } = req.body || {};
   if (!plate) return res.status(400).json({ error: "Plaka zorunludur." });
@@ -255,7 +268,7 @@ router.get("/users/:id/notes", requireAuth, requireRole("yonetici"), async (req,
 });
 
 router.post("/users/:id/notes", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  const user = await findSiteUser(req.params.id, req.user.siteId);
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   const { text } = req.body || {};
   if (!text) return res.status(400).json({ error: "Not metni zorunludur." });
@@ -269,7 +282,7 @@ router.delete("/notes/:id", requireAuth, requireRole("yonetici"), async (req, re
 });
 
 router.patch("/users/:id/approve", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  const user = await findSiteUser(req.params.id, req.user.siteId);
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   await prisma.user.update({ where: { id: user.id }, data: { isApproved: true } });
   await prisma.activityLog.create({ data: { actorId: req.user.id, actorName: req.user.name, action: "user.approve", detail: `${user.name} kaydı onaylandı.`, scopeUnitId: user.unitId || null } });
@@ -279,7 +292,7 @@ router.patch("/users/:id/approve", requireAuth, requireRole("yonetici"), async (
 // Sakini/personeli KALICI OLARAK SILMEDEN pasife alir - gecmis odeme/talep kayitlari
 // korunur, ancak giris yapamaz hale gelir. Tasinan sakinler icin dogru yontem budur.
 router.patch("/users/:id/deactivate", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  const user = await findSiteUser(req.params.id, req.user.siteId);
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   if (req.params.id === req.user.id) return res.status(400).json({ error: "Kendi hesabınızı pasife alamazsınız." });
   await prisma.user.update({ where: { id: user.id }, data: { isActive: false, tokenVersion: { increment: 1 } } });
@@ -288,7 +301,7 @@ router.patch("/users/:id/deactivate", requireAuth, requireRole("yonetici"), asyn
 });
 
 router.patch("/users/:id/reactivate", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  const user = await findSiteUser(req.params.id, req.user.siteId);
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   await prisma.user.update({ where: { id: user.id }, data: { isActive: true } });
   await prisma.activityLog.create({ data: { actorId: req.user.id, actorName: req.user.name, action: "user.reactivate", detail: `${user.name} yeniden aktif edildi.`, scopeUnitId: user.unitId || null } });
@@ -299,7 +312,7 @@ router.patch("/users/:id/reactivate", requireAuth, requireRole("yonetici"), asyn
 // yanitta bir kere gorunur - yonetici bunu kullaniciya sozlu/mesaj yoluyla iletir.
 // Sifre politikasina uygun (harf+rakam+8 karakter) bir gecici sifre uretilir.
 router.post("/users/:id/reset-password", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  const user = await findSiteUser(req.params.id, req.user.siteId);
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   const tempPassword = Math.random().toString(36).slice(-5) + Math.floor(10 + Math.random() * 89) + "A";
   await prisma.user.update({
@@ -319,7 +332,7 @@ router.post("/users/:id/reset-password", requireAuth, requireRole("yonetici"), a
 // "hayalet" bir personele bagli gibi gorunmeye devam eder.
 router.delete("/users/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
   if (req.params.id === req.user.id) return res.status(400).json({ error: "Kendi hesabınızı silemezsiniz." });
-  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  const user = await findSiteUser(req.params.id, req.user.siteId);
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
 
   const [reservationCount, ticketCount, commentCount, classifiedCount] = await Promise.all([
@@ -361,6 +374,11 @@ router.post("/users/personnel", requireAuth, requireRole("yonetici"), async (req
   const user = await prisma.user.create({
     data: { name, email, phone: phone || "", passwordHash: bcrypt.hashSync(password, 10), role: "personel", department: department || "Genel", isApproved: true },
   });
+  // User global (siteId'siz) oldugu icin UserSiteAccess satiri ELLE eklenmezse
+  // bu personel hicbir siteye erisemez, giris yapamaz (login'in accessibleSites'i
+  // 0 doner) - digger kullanici olusturma yollarinda (register, owner.js) zaten
+  // yapilan bu adim burada eksikti.
+  await prisma.userSiteAccess.create({ data: { userId: user.id, siteId: req.user.siteId } });
   await prisma.personnel.create({ data: { id: user.id, name, phone: phone || "", department: department || "Genel", active: true, userId: user.id } });
   res.status(201).json({ message: "Personel hesabı oluşturuldu." });
 });

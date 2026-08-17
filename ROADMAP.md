@@ -32,7 +32,7 @@ zaten bu süreçte yapıldı, listeyi güncellemek gerekebilir).
 
 ---
 
-## 🏢 Çoklu-Kiracı (Multi-Tenant) Dönüşümü — 5/6 AŞAMA TAMAMLANDI (2026-08-17)
+## 🏢 Çoklu-Kiracı (Multi-Tenant) Dönüşümü — TAMAMLANDI (2026-08-17/18)
 
 Hedef: tek sunucu üzerinden 50 farklı site/apartman kompleksini (~5.000 daire)
 tek platformdan yönetmek. Mekanizma: Prisma Client Extension (`lib/prismaClient.js`)
@@ -61,11 +61,56 @@ filtrelemesi — Postgres RLS değil (paylaşılan pool bağlantılarıyla güve
      filtrelemiyor. Gerçek testte site 2 için "11 kullanıcı" (aslında 1 olması
      gerekirken) dönmesiyle yakalandı; düzeltme `UserSiteAccess.count({where:{siteId}})`
      kullanmak oldu.
-6. ⏳ Aşama 6 (sıradaki): İkinci gerçek bir siteyi `/api/owner/sites` ile
-   oluşturup uçtan uca izolasyonu kanıtlamak — site 2 yöneticisinin site 1'in
-   hiçbir verisini (legacy shim'li uçlar dahil) görememesi, çok-siteli
-   kullanıcı için giriş seçici/değiştiricinin gerçek ikinci bir siteyle
-   çalışması, `/api/owner/overview` toplamlarının doğru olması.
+6. ✅ Aşama 6: `/api/owner/sites` ile gerçek bir ikinci site ("Deniz Sitesi")
+   oluşturulup uçtan uca test edildi, sonra temizlendi (demo veri tek site
+   olarak kalsın diye — ama akışın kendisi kanıtlanmış durumda, kod her an
+   tekrar kullanılabilir). Test SIRASINDA bulunup düzeltilen **gerçek
+   siteler-arası güvenlik açıkları**:
+   - **`routes/settings.js`** (Ayarlar ekranı) hâlâ eski global `Settings`
+     singleton'ını okuyup yazıyordu — her sitenin yöneticisi AYNI bina adı/
+     gecikme faizi/otomatik borçlandırma ayarlarını görüyor ve **birbirininkini
+     sessizce eziyordu**. Kök neden `db.js`'in `loadMeta()`/`save()`
+     fonksiyonlarıydı; düzeltme merkezi (db.js) yapıldığı için
+     `routes/accounts.js` ve `routes/documents.js`'teki (PDF belgelerde site
+     adı/adresi) aynı sınıftan sızıntılar da otomatik kapandı.
+   - **`routes/finance.js` ve `routes/parties.js`**: ödeme uygulama akışı
+     (`applyPayment`, `/transactions`) hesap belirtilmediğinde varsayılan
+     hesabı yine global `Settings` singleton'ından çözüyordu — bu, **bir
+     sitenin ödemesinin başka bir sitenin banka hesabına yazılabileceği**
+     anlamına geliyordu (kritik veri bütünlüğü açığı). `Site.defaultAccountId`
+     kullanacak şekilde düzeltildi.
+   - **`routes/directory.js`**: `/users/:id/...` uçlarının (onayla, pasife al,
+     şifre sıfırla, **kalıcı sil**, profil düzenle) HİÇBİRİ hedef kullanıcının
+     çağıranın sitesine ait olduğunu kontrol etmiyordu — `User` bilerek global
+     bir model olduğu için (çok-siteli personel), herhangi bir site
+     yöneticisi id'sini bilerek/tahmin ederek **başka bir sitenin
+     kullanıcısını silebilir veya şifresini sıfırlayabilirdi**. Yeni
+     `findSiteUser(userId, siteId)` yardımcı fonksiyonu (UserSiteAccess
+     üzerinden üyelik doğrulaması) tüm bu uçlara eklendi.
+   - **`routes/directory.js` `/users/personnel`**: yeni personel hesabı
+     oluştururken `UserSiteAccess` satırı hiç eklenmiyordu — oluşturulan
+     personel hiçbir siteye giriş yapamıyordu (fonksiyonel regresyon, sadece
+     izolasyon değil).
+   - **Eksik özellik farkedildi ve eklendi**: `Site.defaultAccountId`'i
+     ayarlayacak HİÇBİR uç/arayüz yoktu (yeni bir site asla ödeme alamazdı).
+     `PATCH /settings`'e `defaultAccountId` + Ayarlar ekranına "Varsayılan
+     Tahsilat Hesabı" seçici eklendi.
+   - **Eksik özellik farkedildi ve eklendi**: mevcut bir kullanıcıya (örn.
+     birden fazla siteden sorumlu bölge yöneticisi) ek bir sitenin erişimini
+     verecek HİÇBİR uç yoktu — oturumun en başındaki "bazı personelin birden
+     fazla siteye erişmesi gerekiyor" gereksinimi karşılanamıyordu. Yeni
+     `GET /api/owner/users`, `POST /api/owner/users/:userId/site-access`,
+     `DELETE /api/owner/users/:userId/site-access/:siteId` eklendi.
+   Doğrulanan senaryolar: daire/kullanıcı sayıları doğru izole, id tahmin
+   ederek başka sitenin dairesini/kullanıcısını değiştirme→404, çok-siteli
+   kullanıcı için giriş seçici VE oturum-içi "Site Değiştir" gerçek ikinci
+   bir siteyle tarayıcıda uçtan uca çalıştı, `/api/owner/overview` iki
+   siteyi doğru topladı.
+
+**Sonuç: çoklu-kiracı dönüşümünün 6 aşaması da tamamlandı.** Bilinen kalan
+teknik borç: `Settings` modeli DB'de hâlâ duruyor ama artık hiçbir route
+okumuyor/yazmıyor (sadece `seed.js`'in tarihsel bir kalıntısı) — istenirse
+ayrı bir aşamada şemadan tamamen kaldırılabilir.
 
 ---
 

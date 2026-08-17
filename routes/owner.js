@@ -78,6 +78,46 @@ router.patch("/sites/:id", async (req, res) => {
   res.json({ id: site.id, name: site.name, active: site.active });
 });
 
+// Platformdaki TUM kullanicilari (hangi sitelere eristikleriyle birlikte)
+// listeler - coklu-site erisimi verirken kullaniciyi bulmak icin.
+router.get("/users", async (req, res) => {
+  const [users, access] = await Promise.all([
+    prisma.user.findMany({ orderBy: { name: "asc" } }),
+    prisma.userSiteAccess.findMany({ include: { site: true } }),
+  ]);
+  const accessByUser = new Map();
+  for (const a of access) {
+    if (!accessByUser.has(a.userId)) accessByUser.set(a.userId, []);
+    accessByUser.get(a.userId).push({ id: a.site.id, name: a.site.name });
+  }
+  res.json(users.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, sites: accessByUser.get(u.id) || [] })));
+});
+
+// Mevcut bir kullaniciya (orn. birden fazla siteden sorumlu bir bolge
+// yoneticisine) BASKA bir sitenin erisimini verir - kayit akisi/site
+// bootstrap'i sadece kullanicinin ILK sitesini olusturuyor, coklu-site
+// personeli icin bu ek erisimin ELLE verilmesi gerekiyor.
+router.post("/users/:userId/site-access", async (req, res) => {
+  const { siteId } = req.body || {};
+  if (!siteId) return res.status(400).json({ error: "siteId zorunludur." });
+  const [user, site] = await Promise.all([
+    prisma.user.findUnique({ where: { id: req.params.userId } }),
+    prisma.site.findUnique({ where: { id: siteId } }),
+  ]);
+  if (!user || !site) return res.status(404).json({ error: "Kullanıcı veya site bulunamadı." });
+  await prisma.userSiteAccess.upsert({
+    where: { userId_siteId: { userId: user.id, siteId } },
+    create: { userId: user.id, siteId },
+    update: {},
+  });
+  res.status(201).json({ message: `${user.name} artık ${site.name} sitesine de erişebiliyor.` });
+});
+
+router.delete("/users/:userId/site-access/:siteId", async (req, res) => {
+  await prisma.userSiteAccess.deleteMany({ where: { userId: req.params.userId, siteId: req.params.siteId } });
+  res.json({ message: "Site erişimi kaldırıldı." });
+});
+
 // Site-asiri toplu ozet: daire/kullanici sayisi ve acik talep sayisi, her
 // site icin kendi tenant baglaminda hesaplanip liste olarak dondurulur.
 router.get("/overview", async (req, res) => {

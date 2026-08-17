@@ -51,7 +51,7 @@ router.post("/charges/generate-month", requireAuth, requireRole("yonetici"), asy
         description: `${period} ayı aidatı`,
       })),
     }),
-    prisma.settings.update({ where: { id: "singleton" }, data: { monthlyDueDefault: new Prisma.Decimal(amount) } }),
+    prisma.site.update({ where: { id: req.user.siteId }, data: { monthlyDueDefault: new Prisma.Decimal(amount) } }),
     prisma.activityLog.create({
       data: { actorId: req.user.id, actorName: req.user.name, action: "charge.generate", detail: `${period} dönemi aidat borcu ${toCreate.length} daireye uygulandı (${amount}₺/daire).` },
     }),
@@ -153,7 +153,7 @@ router.get("/payments", requireAuth, async (req, res) => {
 // "Secerek tahsil etmek istiyorum" checkbox'i) odeme SADECE o kayitlara
 // uygulanir - saf FIFO yerine yoneticinin sectigi belirli borclar kapatilir.
 // Verilmezse eski davranis (tum acik borclar, en eski once) degismeden kalir.
-async function applyPayment(tx, { unitId, amount, method, userId, userName, note, accountId, chargeIds }) {
+async function applyPayment(tx, { unitId, amount, method, userId, userName, note, accountId, chargeIds, siteId }) {
   const amt = new Prisma.Decimal(amount);
   let remaining = amt;
   const appliedTo = [];
@@ -173,8 +173,8 @@ async function applyPayment(tx, { unitId, amount, method, userId, userName, note
     appliedTo.push({ chargeId: c.id, amount: applied });
   }
 
-  const settings = await tx.settings.findUniqueOrThrow({ where: { id: "singleton" } });
-  const resolvedAccountId = accountId || settings.defaultAccountId;
+  const site = await tx.site.findUniqueOrThrow({ where: { id: siteId } });
+  const resolvedAccountId = accountId || site.defaultAccountId;
   const receiptNo = "MK-" + Math.floor(100000 + Math.random() * 899999);
 
   const transaction = await tx.transaction.create({
@@ -243,7 +243,7 @@ router.post("/payments/pay", requireAuth, async (req, res) => {
           throw e;
         }
       }
-      return applyPayment(tx, { unitId, amount, method, userId: req.user.id, userName: req.user.name, accountId, chargeIds });
+      return applyPayment(tx, { unitId, amount, method, userId: req.user.id, userName: req.user.name, accountId, chargeIds, siteId: req.user.siteId });
     });
     res.status(201).json(toAppliedTo(payment));
   } catch (e) {
@@ -406,8 +406,8 @@ router.post("/transactions", requireAuth, requireRole("yonetici"), async (req, r
   if (!type || !category || !amount) return res.status(400).json({ error: "Tür, kategori ve tutar zorunludur." });
   let resolvedAccountId = accountId;
   if (!resolvedAccountId) {
-    const settings = await prisma.settings.findUniqueOrThrow({ where: { id: "singleton" } });
-    resolvedAccountId = settings.defaultAccountId;
+    const site = await prisma.site.findUniqueOrThrow({ where: { id: req.user.siteId } });
+    resolvedAccountId = site.defaultAccountId;
   }
   const t = await prisma.transaction.create({
     data: { type, category, amount: new Prisma.Decimal(amount), accountId: resolvedAccountId, date: date ? new Date(date) : new Date(), description: description || "", createdBy: req.user.id },

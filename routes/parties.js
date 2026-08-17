@@ -249,8 +249,8 @@ router.post("/party-payments/pay", requireAuth, requireRole("yonetici"), async (
         }
       }
 
-      const settings = await tx.settings.findUniqueOrThrow({ where: { id: "singleton" } });
-      const resolvedAccountId = accountId || settings.defaultAccountId;
+      const site = await tx.site.findUniqueOrThrow({ where: { id: req.user.siteId } });
+      const resolvedAccountId = accountId || site.defaultAccountId;
       if (!(await tx.account.findUnique({ where: { id: resolvedAccountId } }))) {
         throw Object.assign(new Error("ACCOUNT_NOT_FOUND"), { httpStatus: 404, msg: "Hesap bulunamadı." });
       }
