@@ -105,7 +105,7 @@ router.patch("/internal-tasks/:id", requireAuth, requireRole("yonetici", "person
 // Sakin: kendi gonderdigi + kendisine (veya genel olarak yonetime, recipientId
 // null olup kendi gonderdigi) mesajlari gorur. Yonetici: tum mesaj trafigini gorur.
 router.get("/messages", requireAuth, requireRole("yonetici", "sakin"), async (req, res) => {
-  const where = req.user.role === "sakin" ? { senderId: req.user.id } : {};
+  const where = req.user.role === "sakin" ? { OR: [{ senderId: req.user.id }, { recipientId: req.user.id }] } : {};
   const messages = await prisma.message.findMany({
     where,
     orderBy: { date: "desc" },
