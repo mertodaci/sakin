@@ -842,10 +842,36 @@ tek seferde bitmez — her modül test edilip commit'lenerek ilerleniyor.
   toplam planlanan/gerçekleşen/fark). "🖨️ Bütçe Raporu (PDF)" butonu
   eklendi. `test-butce-pdf.js` ile doğrulandı.
 
-**Bu turun (Tur 2) 18 maddelik uygulama backlog'u tamamlandı** — sıradaki
-tek büyük madde, önceden konuşulan menü ayrımı (İşlemler/Raporlar) ve bu
-turda kurulan koyu-başlıklı rapor tasarımının TÜM mevcut ekranlara
-uygulanması.
+- ✅ **Menü ayrımı + rapor tasarımının Raporlar grubuna tam uygulanması**
+  — Mert'in onayladığı plan üzerine (önce backlog, sonra menü/tasarım):
+  - **Menü ayrımı**: Yönetici sidebar'ında "Finans" grubuna sıkışmış
+    ~20 rapor ekranı + "Üyeler" altındaki 5 liste sayfası, İŞLEM
+    yapılan ekranlardan (Aidat Takibi, Kasalar, Giderler, İşletme
+    Projesi, Bütçe vb.) ayrılıp yeni bir **"Raporlar"** grubuna
+    taşındı (22 madde). Saf `NAV_GROUPS` yeniden-bucketleme — render/
+    routing hiç değişmedi, düşük riskli. Tüm 56 sekme hâlâ doğru
+    çözümleniyor, doğrulandı.
+  - **Tasarım**: Bu turda kurulan koyu-başlıklı `table.report` +
+    `report-filter-bar` bileşeni, yeni "Raporlar" grubundaki henüz
+    eski `table.simple` kullanan son 2 ekrana da (Mizan Raporu,
+    Muhasebe Tahakkuk Fişleri) uygulandı — ayrıca 4 basit liste
+    sayfasının (İkamet Edenler, Boş/Dolu, Tc Kimlik, Araç Plaka) arama
+    kutusu da `report-filter-bar` stiline geçirildi. Sonuç: **yeni
+    "Raporlar" grubundaki 22 ekranın TAMAMI artık aynı tutarlı koyu-
+    başlıklı tasarımı paylaşıyor** (computed style ile doğrulandı:
+    `background-color: rgb(20,48,74)`, `color: white`).
+  - **Bilinçli kapsam sınırı**: Kalan operasyonel ekranlar (Daireler,
+    Kullanıcılar, Kasalar, Cari, Giderler, Muhasebe, Borç Listesi gibi
+    ~15 ekran) hâlâ eski kart/`ledger-row` düzenini kullanıyor — bunlar
+    Mert'in orijinal eleştirisinin (İkamet Edenler Listesi örneği)
+    doğrudan hedefi olan RAPOR ekranları değil, farklı bir tasarım
+    dili (kart bazlı) kullanan, zaten makul ölçüde cilalı işlem
+    ekranları. Bunları da aynı tabloya geçirmek çok daha büyük, ayrı
+    bir görev (her ekranın kendi form/aksiyon düzenini yeniden
+    tasarlamayı gerektiriyor) — tek oturumda "hepsini sırayla uygula"
+    akışına sıkıştırmak yerine, ayrı bir görev olarak bırakıldı.
+
+**Bu turun (Tur 2) 20 maddelik uygulama backlog'u tamamlandı.**
 
 **Düşük öncelik / muhtemelen gereksiz** (menü denetiminde görüldü ama
 düşük değerli): "Üyelere Toplu Sms Gönder" altındaki hazır şablonlar

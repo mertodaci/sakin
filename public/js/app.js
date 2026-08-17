@@ -296,11 +296,24 @@ const NAV_GROUPS = {
   ],
   yonetici: [
     { group: "Genel", items: [["ozet", "Özet"], ["ajanda", "Ajanda"], ["istakibi", "İş Takibi"], ["mesajlar", "Gelen Mesajlar"]] },
-    { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"], ["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"], ["detayliuyelistesi", "Detaylı Üye Listesi"]] },
-    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"], ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["gidergrubu", "Gider Grubu Raporu"], ["genelbilanco", "Genel Bilanço"], ["geneldurum", "Genel Durum Raporu"], ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"], ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["uyedonem", "Üye/Dönem Raporu"], ["uyedetay", "Üye/Detay Raporu"], ["tahsilatraporu", "Tahsilat Raporu"], ["giderraporu", "Detaylı Gider Raporu"], ["aylikbilanco", "Aylık Bilanço"], ["isletmeprojesi", "İşletme Projesi"], ["butce", "Bütçe"]] },
+    { group: "Üyeler", items: [["kullanicilar", "Kullanıcılar"], ["daireler", "Daireler"]] },
+    { group: "Finans", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["isletmeprojesi", "İşletme Projesi"], ["butce", "Bütçe"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
     { group: "Kurul & Hukuk", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"], ["bilgibankasi", "Bilgi Bankası"]] },
+    // Yonetimcell karsilastirmasi: "menu ayrimi (Islemler/Raporlar)" - Mert'in
+    // istegi uzerine, veri GIRISI/islem yapilan ekranlarla sadece
+    // GORUNTULEME/analiz icin acilan rapor ekranlari ayri gruplara alindi.
+    // Ayni NAV_GROUPS mekanizmasi, sadece yeniden bucketleme - render/routing
+    // hicbir sekilde degismedi (dusuk riskli, saf navigasyon degisikligi).
+    { group: "Raporlar", items: [
+      ["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"], ["detayliuyelistesi", "Detaylı Üye Listesi"],
+      ["geneldurum", "Genel Durum Raporu"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"],
+      ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["uyedonem", "Üye/Dönem Raporu"], ["uyedetay", "Üye/Detay Raporu"],
+      ["tahsilatraporu", "Tahsilat Raporu"], ["giderraporu", "Detaylı Gider Raporu"], ["gidergrubu", "Gider Grubu Raporu"],
+      ["gunlukbilanco", "Günlük Bilanço"], ["aylikozet", "Aylık Özet Bilanço"], ["aylikbilanco", "Aylık Bilanço"], ["genelbilanco", "Genel Bilanço"],
+      ["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"],
+    ] },
     { group: "Sistem", items: [["seffaflik", "Şeffaflık"], ["ayarlar", "Ayarlar"]] },
   ],
   personel: [
@@ -1372,7 +1385,7 @@ async function renderDaireler(c) {
 // filtrelenebilir/yazdirilabilir liste sayfasi - hepsi ayni basit patern
 // (arama kutusu + tablo + tarayici yazdirma).
 function simpleListSearchBox(placeholder) {
-  return `<input type="text" id="listSearchInput" placeholder="${esc(placeholder)}" style="width:100%;max-width:320px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);font-size:13px;margin-bottom:12px;" />`;
+  return `<div class="report-filter-bar" style="border-radius:var(--radius);"><div class="field"><label>Ara</label><input type="text" id="listSearchInput" placeholder="${esc(placeholder)}" style="min-width:260px;" /></div></div>`;
 }
 function wireListSearch(c, rowSelector, matchFields) {
   const input = c.querySelector("#listSearchInput");
@@ -1391,7 +1404,7 @@ async function renderIkametEdenlerListesi(c) {
   c.innerHTML = `
     <div class="flex-between">${sectionTitle("İkamet Edenler Listesi", `${rows.length} kayıt`)}<button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Yazdır</button></div>
     ${simpleListSearchBox("Ad soyad ile ara…")}
-    <div class="scroll-x"><table class="simple">
+    <div class="report-wrap"><table class="report">
       <thead><tr><th>Blok</th><th>No</th><th>Sıfatı</th><th>Yakınlığı</th><th>Ad Soyad</th><th>Telefon</th></tr></thead>
       <tbody>
         ${rows.map((r) => `<tr data-listrow data-name="${esc(r.name)}"><td>${esc(r.block)}</td><td>${esc(r.no)}</td><td>${esc(r.sifat)}</td><td>${esc(r.relationship)}</td><td>${esc(r.name)}</td><td>${esc(r.phone)}</td></tr>`).join("") || '<tr><td colspan="6" class="empty-row">Kayıt yok.</td></tr>'}
@@ -1406,10 +1419,10 @@ async function renderBosDoluListesi(c) {
   c.innerHTML = `
     <div class="flex-between">${sectionTitle("Boş/Dolu Taşınmaz Listesi", `${rows.length} taşınmaz, ${bosCount} boş`)}<button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Yazdır</button></div>
     ${simpleListSearchBox("Malik/Kiracı adıyla ara…")}
-    <div class="scroll-x"><table class="simple">
-      <thead><tr><th>Blok</th><th>No</th><th>Durum</th><th>Malik</th><th>Kiracı</th><th style="text-align:right;">Bakiye</th></tr></thead>
+    <div class="report-wrap"><table class="report">
+      <thead><tr><th>Blok</th><th>No</th><th>Durum</th><th>Malik</th><th>Kiracı</th><th class="num">Bakiye</th></tr></thead>
       <tbody>
-        ${rows.map((r) => `<tr data-listrow data-name="${esc(r.malik + " " + r.kiraci)}"><td>${esc(r.block)}</td><td>${esc(r.no)}</td><td>${pill(r.durum)}</td><td>${esc(r.malik)}</td><td>${esc(r.kiraci)}</td><td class="f-num" style="text-align:right;color:${debtColor(r.debt)};">${tl(Math.abs(r.debt))} ${r.debt !== 0 ? (r.debt > 0 ? "(B)" : "(A)") : ""}</td></tr>`).join("") || '<tr><td colspan="6" class="empty-row">Kayıt yok.</td></tr>'}
+        ${rows.map((r) => `<tr data-listrow data-name="${esc(r.malik + " " + r.kiraci)}"><td>${esc(r.block)}</td><td>${esc(r.no)}</td><td>${pill(r.durum)}</td><td>${esc(r.malik)}</td><td>${esc(r.kiraci)}</td><td class="num f-num" style="color:${debtColor(r.debt)};">${tl(Math.abs(r.debt))} ${r.debt !== 0 ? (r.debt > 0 ? "(B)" : "(A)") : ""}</td></tr>`).join("") || '<tr><td colspan="6" class="empty-row">Kayıt yok.</td></tr>'}
       </tbody>
     </table></div>`;
   wireListSearch(c, "[data-listrow]", ["name"]);
@@ -1420,7 +1433,7 @@ async function renderTcKimlikListesi(c) {
   c.innerHTML = `
     <div class="flex-between">${sectionTitle("Tc Kimlik Numarası Listesi", `${rows.length} kayıt - sadece giriş hesabı olan sakinler`)}<button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Yazdır</button></div>
     ${simpleListSearchBox("Ad soyad ile ara…")}
-    <div class="scroll-x"><table class="simple">
+    <div class="report-wrap"><table class="report">
       <thead><tr><th>Blok</th><th>No</th><th>Durum</th><th>Ad Soyad</th><th>Tc Kimlik No</th></tr></thead>
       <tbody>
         ${rows.map((r) => `<tr data-listrow data-name="${esc(r.name)}"><td>${esc(r.block)}</td><td>${esc(r.no)}</td><td>${esc(r.durum)}</td><td>${esc(r.name)}</td><td>${esc(r.nationalId) || '<span class="muted">-</span>'}</td></tr>`).join("") || '<tr><td colspan="5" class="empty-row">Kayıt yok.</td></tr>'}
@@ -1434,7 +1447,7 @@ async function renderAracPlakaListesi(c) {
   c.innerHTML = `
     <div class="flex-between">${sectionTitle("Araç Plaka Listesi", `${rows.length} araç`)}<button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Yazdır</button></div>
     ${simpleListSearchBox("Ad soyad veya plaka ile ara…")}
-    <div class="scroll-x"><table class="simple">
+    <div class="report-wrap"><table class="report">
       <thead><tr><th>Blok</th><th>No</th><th>Durum</th><th>Ad Soyad</th><th>Telefon</th><th>Marka</th><th>Renk</th><th>Plaka</th></tr></thead>
       <tbody>
         ${rows.map((r) => `<tr data-listrow data-name="${esc(r.name + " " + r.plate)}"><td>${esc(r.block)}</td><td>${esc(r.no)}</td><td>${esc(r.durum)}</td><td>${esc(r.name)}</td><td>${esc(r.phone)}</td><td>${esc(r.brand)}</td><td>${esc(r.color)}</td><td style="font-weight:600;">${esc(r.plate)}</td></tr>`).join("") || '<tr><td colspan="8" class="empty-row">Kayıt yok.</td></tr>'}
@@ -1849,28 +1862,22 @@ async function renderMizanRaporu(c) {
     const totalBorc = rows.reduce((s, r) => s + r.borcBakiye, 0);
     const totalAlacak = rows.reduce((s, r) => s + r.alacakBakiye, 0);
     return `
-      <div class="scroll-x">
-        <table class="simple">
-          <thead><tr><th>Hesap Kodu</th><th>Tanım</th><th>Grup</th><th style="text-align:right;">Toplam Borç</th><th style="text-align:right;">Toplam Alacak</th><th style="text-align:right;">Borç Bakiye</th><th style="text-align:right;">Alacak Bakiye</th></tr></thead>
+      <div class="scroll-x"><div class="report-wrap"><table class="report">
+          <thead><tr><th>Hesap Kodu</th><th>Tanım</th><th>Grup</th><th class="num">Toplam Borç</th><th class="num">Toplam Alacak</th><th class="num">Borç Bakiye</th><th class="num">Alacak Bakiye</th></tr></thead>
           <tbody>
             ${rows.map((r) => `
               <tr>
                 <td>${esc(r.code || "-")}</td>
                 <td>${esc(r.label)}</td>
                 <td class="small muted">${esc(r.group)}</td>
-                <td class="f-num" style="text-align:right;">${tl(r.toplamBorc)}</td>
-                <td class="f-num" style="text-align:right;">${tl(r.toplamAlacak)}</td>
-                <td class="f-num" style="text-align:right;color:var(--red);">${r.borcBakiye ? tl(r.borcBakiye) : "-"}</td>
-                <td class="f-num" style="text-align:right;color:var(--green);">${r.alacakBakiye ? tl(r.alacakBakiye) : "-"}</td>
+                <td class="num f-num">${tl(r.toplamBorc)}</td>
+                <td class="num f-num">${tl(r.toplamAlacak)}</td>
+                <td class="num f-num" style="color:var(--red);">${r.borcBakiye ? tl(r.borcBakiye) : "-"}</td>
+                <td class="num f-num" style="color:var(--green);">${r.alacakBakiye ? tl(r.alacakBakiye) : "-"}</td>
               </tr>`).join("") || '<tr><td colspan="7" class="empty-row">Kayıt yok.</td></tr>'}
-            <tr style="font-weight:700;border-top:2px solid var(--line);">
-              <td colspan="5">TOPLAM</td>
-              <td class="f-num" style="text-align:right;">${tl(totalBorc)}</td>
-              <td class="f-num" style="text-align:right;">${tl(totalAlacak)}</td>
-            </tr>
           </tbody>
-        </table>
-      </div>`;
+          <tfoot><tr><td colspan="3">TOPLAM</td><td class="num">${tl(totalBorc)}</td><td class="num">${tl(totalAlacak)}</td><td></td><td></td></tr></tfoot>
+        </table></div></div>`;
   }
 
   c.innerHTML = `
@@ -1881,10 +1888,10 @@ async function renderMizanRaporu(c) {
         <button class="btn btn-ghost btn-sm" id="kapanisBtn">📕 Kapanış Mizanı (${year})</button>
       </div>
     </div>
-    <div class="card tight mb-16" style="padding:14px;">
-      <form id="mizanFilterForm" class="form-row">
-        <div class="field" style="flex:1 1 200px;"><label>Hesap Kodu Filtrele</label><input name="code" placeholder="Örn. 120" /></div>
-        <button class="btn btn-ghost btn-sm" type="submit">Filtrele</button>
+    <div class="report-wrap">
+      <form id="mizanFilterForm" class="report-filter-bar">
+        <div class="field"><label>Hesap Kodu Filtrele</label><input name="code" placeholder="Örn. 120" /></div>
+        <button class="btn btn-primary btn-sm" type="submit">Filtrele</button>
       </form>
     </div>
     <div id="mizanTable">${renderTable()}</div>
@@ -1916,9 +1923,8 @@ async function renderTahakkukFisleri(c) {
     const totalBorc = fisler.reduce((s, f) => s + f.borc, 0);
     const totalAlacak = fisler.reduce((s, f) => s + f.alacak, 0);
     return `
-      <div class="scroll-x">
-        <table class="simple">
-          <thead><tr><th>Fiş No</th><th>Tarih</th><th>Hesap Kodu</th><th>Açıklama</th><th style="text-align:right;">Borç</th><th style="text-align:right;">Alacak</th></tr></thead>
+      <div class="scroll-x"><div class="report-wrap"><table class="report">
+          <thead><tr><th>Fiş No</th><th>Tarih</th><th>Hesap Kodu</th><th>Açıklama</th><th class="num">Borç</th><th class="num">Alacak</th></tr></thead>
           <tbody>
             ${fisler.map((f) => `
               <tr>
@@ -1926,26 +1932,21 @@ async function renderTahakkukFisleri(c) {
                 <td>${dt(f.date)}</td>
                 <td>${esc(f.code || "-")}</td>
                 <td>${esc(f.description)}</td>
-                <td class="f-num" style="text-align:right;">${f.borc ? tl(f.borc) : "-"}</td>
-                <td class="f-num" style="text-align:right;">${f.alacak ? tl(f.alacak) : "-"}</td>
+                <td class="num f-num">${f.borc ? tl(f.borc) : "-"}</td>
+                <td class="num f-num">${f.alacak ? tl(f.alacak) : "-"}</td>
               </tr>`).join("") || '<tr><td colspan="6" class="empty-row">Bu aralıkta kayıt yok.</td></tr>'}
-            <tr style="font-weight:700;border-top:2px solid var(--line);">
-              <td colspan="4">TOPLAM</td>
-              <td class="f-num" style="text-align:right;">${tl(totalBorc)}</td>
-              <td class="f-num" style="text-align:right;">${tl(totalAlacak)}</td>
-            </tr>
           </tbody>
-        </table>
-      </div>`;
+          <tfoot><tr><td colspan="4">TOPLAM</td><td class="num">${tl(totalBorc)}</td><td class="num">${tl(totalAlacak)}</td></tr></tfoot>
+        </table></div></div>`;
   }
 
   c.innerHTML = `
     ${sectionTitle("Muhasebe Tahakkuk Fişleri", "Seçilen tarih aralığındaki tüm borç/tahsilat hareketleri")}
-    <div class="card tight mb-16" style="padding:14px;">
-      <form id="fisFilterForm" class="form-row">
+    <div class="report-wrap">
+      <form id="fisFilterForm" class="report-filter-bar">
         <div class="field"><label>Başlangıç</label><input name="from" type="date" /></div>
         <div class="field"><label>Bitiş</label><input name="to" type="date" /></div>
-        <button class="btn btn-ghost btn-sm" type="submit">Sorgula</button>
+        <button class="btn btn-primary btn-sm" type="submit">Sorgula</button>
       </form>
     </div>
     <div id="fisTable">${renderTable()}</div>
