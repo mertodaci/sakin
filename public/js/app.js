@@ -1100,7 +1100,7 @@ async function renderManagerOzet(c) {
 // Ozet ekranindaki istatistik kutucuklarindan ilgili sekmeye dogrudan gecis.
 function goToTab(tabId) {
   const groups = NAV_GROUPS[state.user.role] || [];
-  const owner = groups.find((g) => g.items.some(([id]) => id === tabId));
+  const owner = groups.find((g) => groupItems(g).some(([id]) => id === tabId));
   if (owner) { if (!expandedGroups) expandedGroups = new Set(); expandedGroups.add(owner.group); }
   state.tab = tabId;
   renderSidebarNav();
