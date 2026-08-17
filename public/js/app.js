@@ -435,6 +435,7 @@ const NAV_ICON = {
   bilgibankasi: '<circle cx="12" cy="12" r="10"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2 1.8-2 3.5"/><line x1="12" y1="16.5" x2="12" y2="16.5"/>',
   ayarlar: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/>',
   platform: '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><line x1="9" y1="11" x2="9.01" y2="11"/><line x1="15" y1="11" x2="15.01" y2="11"/>',
+  akillisite: '<rect x="9" y="9" width="6" height="6"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/><rect x="4" y="4" width="16" height="16" rx="2"/>',
 };
 function navIcon(id) { return svgIcon(NAV_ICON[id] || NAV_ICON.ozet); }
 
@@ -469,6 +470,7 @@ const NAV_GROUPS = {
     ] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"], ["toplusms", "Toplu SMS/E-posta"]] },
     { group: "Operasyon", items: [["rezervasyon", "Rezervasyonlar"], ["talep", "Talepler"], ["personel", "Personel"], ["demirbas", "Demirbaş"], ["sayac", "Sayaçlar"], ["kargo", "Kargo"], ["anahtar", "Anahtarlar"]] },
+    { group: "Akıllı Site", items: [["akillisite", "Akıllı Site Sistemleri"]] },
     { group: "Kurul & Hukuk", sections: [
       { label: "İşlemler", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"], ["bilgibankasi", "Bilgi Bankası"]] },
       { label: "Raporlar", items: [["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"]] },
@@ -1136,6 +1138,7 @@ async function renderTab(tab) {
     else if (tab === "bilgibankasi") await renderBilgiBankasi(c);
     else if (tab === "toplusms") await renderTopluSms(c);
     else if (tab === "platform") await renderPlatformYonetimi(c);
+    else if (tab === "akillisite") await renderAkilliSite(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
   } catch (err) {
     c.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
@@ -4549,6 +4552,135 @@ async function renderPlatformYonetimi(c) {
     }));
   }
   searchInput.addEventListener("input", () => renderUserList(searchInput.value));
+}
+
+/* ================= AKILLI SİTE SİSTEMLERİ (IoT) ================= */
+// DIKKAT: henuz gercek bir cihaz/sensor entegrasyonu yok - routes/iot.js
+// gercekci araliklarda simule edilmis okumalar uretiyor. Bu ekran, gelecekte
+// gercek donanim baglandiginda ayni sekilde calismaya devam edecek etkilesim
+// modelini (canli okuma, ac/kapa, kacak konumu) simdiden kuruyor.
+const IOT_TYPE_META = {
+  havuz: { icon: "🏊", label: "Havuz" },
+  aydinlatma: { icon: "💡", label: "Aydınlatma" },
+  kamera: { icon: "📷", label: "Kamera" },
+  otopark_bariyer: { icon: "🚧", label: "Otopark Bariyeri" },
+  sulama: { icon: "💧", label: "Sulama Hattı" },
+  jenerator: { icon: "🔋", label: "Jeneratör" },
+  asansor: { icon: "🛗", label: "Asansör" },
+};
+const IOT_TYPE_ORDER = ["havuz", "aydinlatma", "kamera", "otopark_bariyer", "sulama", "jenerator", "asansor"];
+
+// pill()/PILL_MAP'i bilerek KULLANMIYOR - "Açık"/"Kapalı" gibi kelimeler
+// baska ekranlarda (orn. talep durumu) farkli bir anlam/renk tasiyabilir,
+// paylasilan sozlugu kirletmemek icin bu ekrana ozel, dogrudan renkli bir pill.
+function iotPill(text, tone) {
+  return `<span class="pill ${tone}"><span class="dot"></span>${esc(text)}</span>`;
+}
+
+function iotDeviceCard(d) {
+  const meta = IOT_TYPE_META[d.type] || { icon: "📡", label: d.type };
+  const data = d.data || {};
+  let body = "";
+  let actions = "";
+  if (d.type === "havuz") {
+    body = `
+      <div class="grid cols-3" style="gap:8px;margin-top:10px;">
+        <div><div class="small muted">Klor</div><div class="f-num" style="font-weight:700;">${data.klor ?? "-"} ppm</div></div>
+        <div><div class="small muted">pH</div><div class="f-num" style="font-weight:700;">${data.ph ?? "-"}</div></div>
+        <div><div class="small muted">Sıcaklık</div><div class="f-num" style="font-weight:700;">${data.sicaklik ?? "-"}°C</div></div>
+      </div>
+      <div style="margin-top:10px;">${iotPill(data.durum === "ideal" ? "İdeal" : "Dikkat", data.durum === "ideal" ? "green" : "amber")}</div>`;
+    actions = `<button class="btn btn-ghost btn-sm" data-simulate="${d.id}">🔄 Yenile</button>`;
+  } else if (d.type === "aydinlatma") {
+    body = `<div style="margin-top:10px;">${iotPill(data.acik ? "Yanıyor" : "Sönük", data.acik ? "green" : "grey")}</div>`;
+    actions = `<button class="btn ${data.acik ? "btn-ghost" : "btn-primary"} btn-sm" data-action="${d.id}">${data.acik ? "Kapat" : "Aç"}</button>`;
+  } else if (d.type === "kamera") {
+    body = `
+      <div style="margin-top:10px;">${iotPill(data.cevrimici ? "Çevrimiçi" : "Çevrimdışı", data.cevrimici ? "green" : "red")}</div>
+      <div class="small muted" style="margin-top:8px;">Son hareket algılama: ${data.sonHareket ? dt(data.sonHareket) : "-"}</div>
+      <div class="small muted" style="margin-top:2px;font-style:italic;">Demo modu: canlı görüntü bu sürümde yok.</div>`;
+    actions = `<button class="btn btn-ghost btn-sm" data-simulate="${d.id}">🔄 Durumu Yenile</button>`;
+  } else if (d.type === "otopark_bariyer") {
+    body = `<div style="margin-top:10px;">${iotPill(data.acik ? "Açık" : "Kapalı", data.acik ? "amber" : "green")}</div>`;
+    actions = `<button class="btn ${data.acik ? "btn-ghost" : "btn-primary"} btn-sm" data-action="${d.id}">${data.acik ? "Kapat" : "Aç"}</button>`;
+  } else if (d.type === "sulama") {
+    const kacak = data.durum === "kacak_supheli";
+    body = `
+      <div style="margin-top:10px;">${iotPill(kacak ? "Kaçak Şüphesi" : "Normal", kacak ? "red" : "green")}</div>
+      <div class="small muted" style="margin-top:8px;">Debi: ${data.debi ?? "-"} L/dk</div>
+      ${kacak ? `<div class="small" style="margin-top:4px;color:var(--red);font-weight:600;">📍 Tahmini konum: ${esc(data.tahminiKonum)}</div>` : ""}`;
+    actions = `<button class="btn btn-ghost btn-sm" data-simulate="${d.id}">🔄 Yenile</button>`;
+  } else if (d.type === "jenerator") {
+    body = `
+      <div style="margin-top:10px;">${iotPill(data.durum === "calisiyor" ? "Çalışıyor" : "Bekleme Modu", data.durum === "calisiyor" ? "amber" : "grey")}</div>
+      <div class="small muted" style="margin-top:8px;">Yakıt: %${data.yakit ?? "-"}</div>`;
+    actions = `<button class="btn btn-ghost btn-sm" data-simulate="${d.id}">🔄 Yenile</button>`;
+  } else if (d.type === "asansor") {
+    body = `<div style="margin-top:10px;">${iotPill(data.durum === "arizali" ? "Arızalı" : "Normal", data.durum === "arizali" ? "red" : "green")}</div>`;
+    actions = `<button class="btn btn-ghost btn-sm" data-simulate="${d.id}">🔄 Yenile</button>`;
+  }
+  return `
+    <div class="card pad">
+      <div class="icon-card-head">
+        <div class="icon-card-icon" style="font-size:19px;">${meta.icon}</div>
+        <div class="icon-card-text">
+          <div class="icon-card-title">${esc(d.name)}</div>
+          <div class="small muted">${esc(d.location || meta.label)}</div>
+        </div>
+      </div>
+      ${body}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+        <div class="small muted">${d.lastReadingAt ? dt(d.lastReadingAt) : ""}</div>
+        <div style="display:flex;gap:6px;">${actions}<button class="btn-danger" data-delete-device="${d.id}">Kaldır</button></div>
+      </div>
+    </div>`;
+}
+
+async function renderAkilliSite(c) {
+  const devices = await api("/iot/devices");
+  const byType = {};
+  devices.forEach((d) => { (byType[d.type] = byType[d.type] || []).push(d); });
+  const typesInOrder = [...IOT_TYPE_ORDER.filter((t) => byType[t]), ...Object.keys(byType).filter((t) => !IOT_TYPE_ORDER.includes(t))];
+
+  c.innerHTML = `
+    ${sectionTitle("Akıllı Site Sistemleri", "Sitenizdeki IoT cihazlarını tek ekrandan izleyin ve yönetin")}
+    <div class="card pad mb-16" style="background:var(--azure-light);border:1px dashed var(--azure);">
+      <div class="small" style="line-height:1.65;">🚧 <strong>Demo modu:</strong> Bu ekranda henüz gerçek bir sensöre/cihaza bağlı değilsiniz — değerler gerçekçi aralıklarda simüle ediliyor. İleride gerçek bir havuz sensörü, kamera sistemi veya bariyer kontrolcüsü bağladığınızda bu ekranın tasarımı ve akışı aynen kullanılabilir.</div>
+    </div>
+    <div class="card form-card mb-16">
+      <div class="ledger-title" style="padding:0 0 10px;">Yeni Cihaz Ekle</div>
+      <form id="newDeviceForm" class="form-row">
+        <div class="field"><label>Tip</label><select name="type">${IOT_TYPE_ORDER.map((t) => `<option value="${t}">${IOT_TYPE_META[t].icon} ${IOT_TYPE_META[t].label}</option>`).join("")}</select></div>
+        <div class="field"><label>Ad</label><input name="name" required placeholder="Örn. B Blok Kamerası" /></div>
+        <div class="field"><label>Konum</label><input name="location" placeholder="Örn. B Blok Girişi" /></div>
+        <button class="btn btn-primary" type="submit">Ekle</button>
+      </form>
+    </div>
+    ${typesInOrder.map((type) => `
+      <div class="mb-16">
+        <div class="ledger-title" style="padding:0 0 10px;">${IOT_TYPE_META[type]?.icon || "📡"} ${esc(IOT_TYPE_META[type]?.label || type)}</div>
+        <div class="grid grid-cards">${byType[type].map(iotDeviceCard).join("")}</div>
+      </div>`).join("") || '<div class="empty-row">Henüz kayıtlı cihaz yok.</div>'}
+  `;
+  document.getElementById("newDeviceForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    try { await api("/iot/devices", { method: "POST", body: f }); toast("Cihaz eklendi."); renderTab("akillisite"); }
+    catch (err) { toast(err.message); }
+  });
+  c.querySelectorAll("[data-simulate]").forEach((b) => b.addEventListener("click", async () => {
+    try { await api("/iot/devices/" + b.dataset.simulate + "/simulate", { method: "POST" }); renderTab("akillisite"); }
+    catch (err) { toast(err.message); }
+  }));
+  c.querySelectorAll("[data-action]").forEach((b) => b.addEventListener("click", async () => {
+    try { await api("/iot/devices/" + b.dataset.action + "/action", { method: "POST" }); renderTab("akillisite"); }
+    catch (err) { toast(err.message); }
+  }));
+  c.querySelectorAll("[data-delete-device]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Bu cihaz kaldırılsın mı?")) return;
+    try { await api("/iot/devices/" + b.dataset.deleteDevice, { method: "DELETE" }); toast("Cihaz kaldırıldı."); renderTab("akillisite"); }
+    catch (err) { toast(err.message); }
+  }));
 }
 
 async function renderPersonelOzet(c) {

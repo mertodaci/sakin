@@ -185,6 +185,20 @@ const KB = [
     answer: "Platform sahibiyseniz **Platform Yönetimi** sayfasındaki \"Çoklu-Site Erişimi\" arama kutusundan kullanıcıyı bulup ek bir sitenin erişimini verebilirsiniz.",
     tab: "platform",
   },
+  {
+    id: "akilli-site-iot",
+    roles: ["yonetici"],
+    // DIKKAT: Turkce'nin eklemeli yapisi yuzunden (orn. "havuzun klor..."
+    // icinde "havuz klor" alt-dize olarak GECMEZ) coklu kelimeli anahtar
+    // kalipları yerine, kok kelimeyi tek basina kullanmak eklerden bagimsiz
+    // eslesme sagliyor - bu KB'deki diger coklu-kelimeli girdilerde ilk
+    // kelime genelde zaten ek almayan bir fiil/isim oldugu icin bu sorun
+    // cikmiyor, ama "havuz", "otopark" gibi ek alma ihtimali yuksek isimlerde
+    // tek kelime kullanmak daha guvenilir.
+    keywords: ["havuz", "klor", "otopark", "bariyer", "kamera izle", "sulama", "kaçak", "iot", "akıllı site", "aydınlatma", "jeneratör", "asansör"],
+    answer: "**Akıllı Site Sistemleri** sayfasında havuz, aydınlatma, kamera, otopark bariyeri, sulama hattı, jeneratör ve asansör cihazlarınızı görüp yönetebilirsiniz. Aydınlatma/bariyer için \"Aç\"/\"Kapat\", sensörler için \"🔄 Yenile\" butonlarını kullanın.",
+    tab: "akillisite",
+  },
 
   // ---------------- GENEL (tum roller) ----------------
   {

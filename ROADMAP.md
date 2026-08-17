@@ -7,6 +7,35 @@ yardım istediğini anlayabilir.
 
 ---
 
+## 🏠 Akıllı Site Sistemleri (IoT) — TAMAMLANDI (2026-08-18)
+
+Kullanıcı, henüz gerçek bir cihaz entegrasyonu olmasa da (havuz klor sensörü,
+aydınlatma, kamera, otopark bariyeri, sulama kaçak tespiti gibi) sitenin
+"akıllı" IoT sistemlerini gösterecek yaratıcı bir ekran istedi.
+
+- Yeni `IotDevice` modeli (`type`, `name`, `location`, esnek `data` Json alanı)
+  — site-scope'lu, ileride gerçek bir sensör/webhook bağlanacaksa şema/route
+  yapısı değişmeden sadece veri kaynağı değişecek şekilde tasarlandı.
+- `routes/iot.js`: 7 cihaz tipi — **havuz** (klor/pH/sıcaklık), **aydınlatma**
+  (aç/kapa), **kamera** (çevrimiçi durumu, son hareket algılama — "demo modu:
+  canlı görüntü yok" notuyla dürüst), **otopark bariyeri** (aç/kapa, denetim
+  kaydına işlenir), **sulama hattı** (kaçak şüphesi + tahmini konum),
+  **jeneratör** (çalışma durumu, yakıt seviyesi), **asansör** (arıza durumu).
+  Sensör tipleri "🔄 Yenile" ile gerçekçi aralıkta yeni bir simüle okuma
+  üretir; aç/kapa eylemleri gerçek bir eylem gibi `activityLog`'a işlenir.
+  Bir site ilk açıldığında 10 cihazlık makul bir başlangıç seti otomatik oluşur.
+- Yeni "Akıllı Site" nav grubu (sadece yönetici). Kapıcı AI'ya da ilgili
+  girdi eklendi — bu arada **Türkçe'nin eklemeli yapısından kaynaklanan bir
+  eşleştirme kırılganlığı** fark edildi ve düzeltildi: "havuz klor" gibi
+  çok-kelimeli anahtar kalıpları, ilk kelime çekim eki aldığında ("havuzUN
+  klor...") alt-dize olarak eşleşmiyordu — kök kelimeleri tek başına
+  kullanmak (örn. sadece "havuz") eklerden bağımsız eşleşme sağladı.
+- Tarayıcıda uçtan uca test edildi: bariyer aç/kapat (+ denetim kaydı),
+  aydınlatma aç/kapat, sensör okuması yenileme, yeni cihaz ekleme/kaldırma,
+  sakin/personel rolünün bu uca erişemediği (403) doğrulandı.
+
+---
+
 ## 💬 Kapıcı AI — Uygulama İçi Kullanım Yardımcısı — TAMAMLANDI (2026-08-18)
 
 Kullanıcı, "nasıl ödeme yaparım", "nasıl daire eklerim" gibi kullanım

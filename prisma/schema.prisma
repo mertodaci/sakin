@@ -118,6 +118,7 @@ model Site {
   archiveFiles            ArchiveFile[]
   knowledgeArticles       KnowledgeArticle[]
   userUnits               UserUnit[]
+  iotDevices              IotDevice[]
 }
 
 // Bir kullanicinin bir siteye erisim yetkisi - many-to-many. Ayni kullanici
@@ -133,6 +134,27 @@ model UserSiteAccess {
   createdAt DateTime @default(now())
 
   @@unique([userId, siteId])
+}
+
+// Akilli Site Sistemleri (IoT) - havuz klor sensoru, aydinlatma, kamera,
+// otopark bariyeri, sulama hatti kacak tespiti, jenerator, asansor vb.
+// Henuz GERCEK bir cihaz entegrasyonu yok (bkz. routes/iot.js) - `data`
+// alani tipe gore degisen olcum/durum bilgisini tutar (esnek Json, her tip
+// icin ayri sutun acmaktan kacinmak icin). Ileride gercek bir sensor/
+// webhook baglanacaksa sadece simulateReading() cagrisinin yerine gercek
+// veri yazilmasi yeterli - şema/route yapisi degismez.
+model IotDevice {
+  siteId        String
+  site          Site      @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id            String    @id @default(uuid())
+  type          String
+  name          String
+  location      String?
+  data          Json      @default("{}")
+  lastReadingAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([siteId])
 }
 
 model Settings {

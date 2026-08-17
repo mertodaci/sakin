@@ -22,6 +22,7 @@ const archiveRoutes = require("./routes/archive");
 const accountingRoutes = require("./routes/accounting");
 const knowledgeRoutes = require("./routes/knowledge");
 const helpRoutes = require("./routes/help");
+const iotRoutes = require("./routes/iot");
 const ownerRoutes = require("./routes/owner");
 const { runMaintenanceTasks } = require("./jobs");
 
@@ -47,6 +48,7 @@ app.use("/api", archiveRoutes);
 app.use("/api", accountingRoutes);
 app.use("/api", knowledgeRoutes);
 app.use("/api", helpRoutes);
+app.use("/api", iotRoutes);
 app.use("/api/owner", ownerRoutes);
 
 app.use(express.static(path.join(__dirname, "public")));
