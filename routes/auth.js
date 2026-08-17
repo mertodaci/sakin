@@ -226,6 +226,7 @@ router.get("/me", requireAuth, async (req, res) => {
     department: user.department || null,
     unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null,
     units,
+    isPlatformOwner: !!user.isPlatformOwner,
     mustChangePassword: !!user.mustChangePassword,
     favoriteTabs: user.favoriteTabs || [],
     siteId: req.user.siteId,

@@ -432,6 +432,7 @@ const NAV_ICON = {
   fisler: '<path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="5" y="4" width="14" height="17" rx="2"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/>',
   bilgibankasi: '<circle cx="12" cy="12" r="10"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2 1.8-2 3.5"/><line x1="12" y1="16.5" x2="12" y2="16.5"/>',
   ayarlar: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/>',
+  platform: '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><line x1="9" y1="11" x2="9.01" y2="11"/><line x1="15" y1="11" x2="15.01" y2="11"/>',
 };
 function navIcon(id) { return svgIcon(NAV_ICON[id] || NAV_ICON.ozet); }
 
@@ -479,6 +480,15 @@ const NAV_GROUPS = {
   ],
 };
 const ROLE_LABEL = { sakin: "Sakin Paneli", yonetici: "Yönetim Paneli", personel: "Personel Paneli" };
+
+// Platform sahibi (isPlatformOwner) - site-bazli role'den (her zaman yonetici)
+// bagimsiz, global bir yetki - siteler arasi/tum platforma ait islemler icin
+// (yeni site olustur, coklu-site erisimi ver) ekstra bir nav grubu eklenir.
+function getNavGroups() {
+  const base = NAV_GROUPS[state.user?.role] || [];
+  if (!state.user?.isPlatformOwner) return base;
+  return [...base, { group: "Platform", items: [["platform", "Platform Yönetimi"]] }];
+}
 let expandedGroups = null;
 let collapsedSections = new Set();
 let navSearchQuery = "";
@@ -488,7 +498,7 @@ function groupItems(g) {
 }
 
 function tabLabel(tab) {
-  const groups = NAV_GROUPS[state.user?.role] || [];
+  const groups = getNavGroups();
   for (const g of groups) {
     const found = groupItems(g).find(([id]) => id === tab);
     if (found) return found[1];
@@ -812,7 +822,7 @@ async function toggleFavorite(id) {
 function navSearchMatch(label, q) { return label.toLocaleLowerCase("tr").includes(q); }
 
 function renderSidebarNav() {
-  const allGroups = NAV_GROUPS[state.user.role] || [];
+  const allGroups = getNavGroups();
   if (!expandedGroups) {
     const activeGroup = allGroups.find((g) => groupItems(g).some(([id]) => id === state.tab));
     expandedGroups = new Set([(activeGroup || allGroups[0])?.group]);
@@ -1032,6 +1042,7 @@ async function renderTab(tab) {
     else if (tab === "isletmeprojesi") await renderIsletmeProjesi(c);
     else if (tab === "bilgibankasi") await renderBilgiBankasi(c);
     else if (tab === "toplusms") await renderTopluSms(c);
+    else if (tab === "platform") await renderPlatformYonetimi(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
   } catch (err) {
     c.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
@@ -1449,7 +1460,7 @@ async function renderManagerOzet(c) {
 
 // Ozet ekranindaki istatistik kutucuklarindan ilgili sekmeye dogrudan gecis.
 function goToTab(tabId) {
-  const groups = NAV_GROUPS[state.user.role] || [];
+  const groups = getNavGroups();
   const owner = groups.find((g) => groupItems(g).some(([id]) => id === tabId));
   if (owner) { if (!expandedGroups) expandedGroups = new Set(); expandedGroups.add(owner.group); }
   state.tab = tabId;
@@ -4328,6 +4339,123 @@ async function renderAyarlar(c) {
     try { await api("/settings", { method: "PATCH", body: f }); toast("Varsayılan hesap kaydedildi."); }
     catch (err) { toast(err.message); }
   });
+}
+
+/* ================= PLATFORM YÖNETİMİ (sadece isPlatformOwner) ================= */
+// routes/owner.js'in ince bir arayuzu: yeni site olustur, site aktif/pasif,
+// site-asiri ozet, mevcut bir kullaniciya ikinci bir sitenin erisimini ver/kaldir.
+// Bunlar site-bazli role'den (yonetici/sakin/personel) tamamen bagimsiz, global
+// platform-sahibi islemleri - o yuzden kendi "Platform" nav grubunda ayri duruyor.
+
+function inviteLink(code) { return `${location.origin}/#/kayit/${code}`; }
+
+async function renderPlatformYonetimi(c) {
+  const [sites, overview] = await Promise.all([api("/owner/sites"), api("/owner/overview")]);
+  c.innerHTML = `
+    ${sectionTitle("Platform Yönetimi", "Siteler, davet linkleri ve çoklu-site erişimi - platform sahibine özel")}
+    <div class="card form-card mb-16">
+      <div class="ledger-title" style="padding:0 0 10px;">Yeni Site Oluştur</div>
+      <p class="small muted" style="margin-top:-6px;margin-bottom:10px;">Site ve ilk yöneticisi tek seferde oluşturulur; yöneticiye ilettiğiniz geçici şifreyle ilk girişte şifresini değiştirmesi istenecektir.</p>
+      <form id="newSiteForm" class="form-row">
+        <div class="field"><label>Site Adı</label><input name="siteName" required /></div>
+        <div class="field"><label>Adres</label><input name="address" /></div>
+        <div class="field"><label>Yönetici Adı Soyadı</label><input name="adminName" required /></div>
+        <div class="field"><label>Yönetici E-postası</label><input type="email" name="adminEmail" required /></div>
+        <div class="field"><label>Geçici Şifre</label><input name="tempPassword" required minlength="8" /><div class="small muted" style="margin-top:4px;">En az 8 karakter, en az bir harf ve bir rakam içermeli.</div></div>
+        <button class="btn btn-primary" type="submit">Site Oluştur</button>
+      </form>
+      <div id="newSiteResult"></div>
+    </div>
+    <div class="card tight mb-16">
+      <div class="ledger-title">Site-Aşırı Özet</div>
+      ${overview.map((o) => ledgerRow(
+        `${esc(o.siteName)} ${o.active ? "" : pill("Pasif")}`,
+        `${o.unitCount} daire · ${o.userCount} kullanıcı · ${o.openTickets} açık talep`,
+        ""
+      )).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+    </div>
+    <div class="card tight mb-16">
+      <div class="ledger-title">Siteler &amp; Davet Linkleri</div>
+      ${sites.map((s) => `
+        <div class="ledger-row" style="flex-wrap:wrap;gap:8px;">
+          <div><div style="font-size:14px;font-weight:600;">${esc(s.name)} ${s.active ? "" : pill("Pasif")}</div><div class="small muted">${esc(s.address || "-")}</div></div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <code class="small" style="background:var(--bg-soft, #f3f4f6);padding:4px 8px;border-radius:6px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(inviteLink(s.inviteCode))}</code>
+            <button class="btn btn-ghost btn-sm" data-copylink="${esc(inviteLink(s.inviteCode))}">Kopyala</button>
+            <button class="btn btn-ghost btn-sm" data-togglesite="${s.id}" data-active="${s.active}">${s.active ? "Pasife Al" : "Aktif Et"}</button>
+          </div>
+        </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+    </div>
+    <div class="card form-card">
+      <div class="ledger-title" style="padding:0 0 10px;">Çoklu-Site Erişimi</div>
+      <p class="small muted" style="margin-top:-6px;margin-bottom:10px;">Birden fazla siteden sorumlu bir kullanıcıya (örn. bölge yöneticisi) ek bir sitenin erişimini verin.</p>
+      <div class="field"><label>Kullanıcı Ara</label><input type="text" id="platformUserSearch" placeholder="Ad veya e-posta…" /></div>
+      <div id="platformUserList" class="small muted" style="margin-top:10px;">Yazmaya başlayın…</div>
+    </div>
+  `;
+  document.getElementById("newSiteForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    try {
+      const r = await api("/owner/sites", { method: "POST", body: f });
+      document.getElementById("newSiteResult").innerHTML = `<div class="success-box">"${esc(r.site.name)}" oluşturuldu. Davet linki: <code>${esc(inviteLink(r.site.inviteCode))}</code></div>`;
+      toast("Site oluşturuldu.");
+      e.target.reset();
+      renderTab("platform");
+    } catch (err) { toast(err.message); }
+  });
+  c.querySelectorAll("[data-copylink]").forEach((b) => b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copylink); toast("Davet linki kopyalandı."); }
+    catch { toast("Kopyalanamadı, linki elle seçip kopyalayın."); }
+  }));
+  c.querySelectorAll("[data-togglesite]").forEach((b) => b.addEventListener("click", async () => {
+    const nextActive = b.dataset.active !== "true";
+    try { await api("/owner/sites/" + b.dataset.togglesite, { method: "PATCH", body: { active: nextActive } }); toast(nextActive ? "Site aktif edildi." : "Site pasife alındı."); renderTab("platform"); }
+    catch (err) { toast(err.message); }
+  }));
+
+  const searchInput = document.getElementById("platformUserSearch");
+  const userListBox = document.getElementById("platformUserList");
+  let allUsers = null;
+  async function renderUserList(query) {
+    if (!allUsers) allUsers = await api("/owner/users");
+    const q = query.trim().toLocaleLowerCase("tr");
+    if (!q) { userListBox.innerHTML = "Yazmaya başlayın…"; return; }
+    const matches = allUsers.filter((u) => (u.name + " " + u.email).toLocaleLowerCase("tr").includes(q)).slice(0, 15);
+    userListBox.innerHTML = matches.length
+      ? matches.map((u) => `
+        <div class="ledger-row" style="padding:8px 0;flex-wrap:wrap;">
+          <div><div style="font-size:14px;font-weight:600;">${esc(u.name)}</div><div class="small muted">${esc(u.email)} · ${esc(u.role)}</div>
+            <div class="small muted" style="margin-top:4px;">${u.sites.map((s) => `<span class="pill grey" style="margin-right:4px;">${esc(s.name)}${u.sites.length > 1 ? ` <button data-revoke="${u.id}|${s.id}" style="border:none;background:none;cursor:pointer;color:inherit;padding:0 0 0 4px;">✕</button>` : ""}</span>`).join("") || "Hiçbir siteye erişimi yok"}</div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <select data-grantselect="${u.id}">${sites.filter((s) => !u.sites.some((us) => us.id === s.id)).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("") || '<option value="" disabled selected>Tüm sitelere erişimi var</option>'}</select>
+            <button class="btn btn-ghost btn-sm" data-grant="${u.id}">Ekle</button>
+          </div>
+        </div>`).join("")
+      : '<div class="empty-row">Sonuç yok.</div>';
+    userListBox.querySelectorAll("[data-grant]").forEach((b) => b.addEventListener("click", async () => {
+      const select = userListBox.querySelector(`[data-grantselect="${b.dataset.grant}"]`);
+      if (!select || !select.value) return;
+      try {
+        await api("/owner/users/" + b.dataset.grant + "/site-access", { method: "POST", body: { siteId: select.value } });
+        toast("Site erişimi verildi.");
+        allUsers = null;
+        renderUserList(searchInput.value);
+      } catch (err) { toast(err.message); }
+    }));
+    userListBox.querySelectorAll("[data-revoke]").forEach((b) => b.addEventListener("click", async () => {
+      const [userId, siteId] = b.dataset.revoke.split("|");
+      if (!confirm("Bu kullanıcının bu siteye erişimi kaldırılsın mı?")) return;
+      try {
+        await api("/owner/users/" + userId + "/site-access/" + siteId, { method: "DELETE" });
+        toast("Site erişimi kaldırıldı.");
+        allUsers = null;
+        renderUserList(searchInput.value);
+      } catch (err) { toast(err.message); }
+    }));
+  }
+  searchInput.addEventListener("input", () => renderUserList(searchInput.value));
 }
 
 async function renderPersonelOzet(c) {
