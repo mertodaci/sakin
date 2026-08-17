@@ -7,6 +7,37 @@ yardım istediğini anlayabilir.
 
 ---
 
+## 🔧 İş Akışı Bütünlüğü Düzeltmeleri — DEVAM EDİYOR (2026-08-17)
+
+Kullanıcı uygulamayı gerçek sakinlere vermeden önce genel bir "iş akışı
+problemi var mı" incelemesi istedi. 3 paralel derin denetim yapıldı (finans/
+cari hesap, üye/belge/yetkilendirme, operasyon/iletişim/zamanlı görevler) —
+kök sorun: `db.js`'teki eski shim'in `save()` fonksiyonu her çağrıda TÜM
+legacy koleksiyonları o anki bellek görüntüsünden yeniden yazıyordu, bu da
+eşzamanlı isteklerin birbirinin verisini sessizce silmesine yol açıyordu.
+
+Detaylı plan: `C:\Users\mert_\.claude\plans\lazy-popping-hummingbird.md`
+(kullanıcının bu makinesinde — farklı bir makinede/oturumda yoksa, aşağıdaki
+özet ve git log'daki commit mesajları aynı bilgiyi içeriyor).
+
+**Tamamlanan aşamalar (hepsi commit'li ve GitHub'a push'lu):**
+1. ✅ `db.save()` artık sadece dokunulan koleksiyonları yazıyor (genel güvenlik ağı)
+2. ✅ `parties.js`: vendors/partyCharges/partyPayments → gerçek Prisma + atomik ödeme + idempotency
+3. ✅ `ops.js`: ticket yorumları/demirbaş bakım/anahtar zimmet → gerçek Prisma (nested-child race'leri kapandı), Decision.decisionNo artık @unique, reservation/ticket unitId validasyonu eklendi
+4. ✅ `comms.js`: anket oylama race'i düzeltildi (SurveyVote unique constraint + atomik increment), SurveyOption.position eklendi (sıra tutarlılığı için), announcements/classifieds/notifications → Prisma
+
+**Kalan aşamalar (plan dosyasında tam detay var):**
+5. ⏳ Silme guard'ları: `DELETE /units/:id` ve `/users/:id` bağımlı kayıt (borç/rezervasyon/talep) kontrolü olmadan Postgres FK hatasına (500) düşüyor — dostane Türkçe hata eklenecek, `units` gerçek Prisma'ya taşınacak. `mustChangePassword` şu an sadece arayüzde zorlanıyor, backend'de (`middleware/auth.js`) de zorlanacak. Personel kullanıcı silinince yetim kalan `Personnel` kaydı temizlenecek/engellenecek.
+6. ⏳ `workspace.js`: `GET /messages` sakin rolünde sadece `senderId`'ye bakıyor, `recipientId`'yi unutmuş — yönetimden gelen cevaplar sakine hiç görünmüyor (tek satırlık OR düzeltmesi).
+7. ⏳ `jobs.js`: gecikme faizi/otomatik borçlandırma check-then-act mantığı transaction'a alınacak (çakışma riski düşük ama var).
+
+**Devam etmek için:** Yukarıdaki sırayla ilerle, her aşamadan sonra sunucuyu
+başlatıp (`Get-NetTCPConnection -LocalPort 3000` ile önce eski süreç varsa
+temizle) ilgili senaryoyu elle test et, sonra commit'le ve **`git push origin
+master`** (kullanıcı GitHub'a bağladı, her commit sonrası push bekliyor).
+
+---
+
 ## 🎯 Şu An Neredeyiz
 
 Uygulama **çalışır durumda ve production'a yakın** — demo değil, gerçek bir
