@@ -330,6 +330,7 @@ const NAV_GROUPS = {
 };
 const ROLE_LABEL = { sakin: "Sakin Paneli", yonetici: "Yönetim Paneli", personel: "Personel Paneli" };
 let expandedGroups = null;
+let collapsedSections = new Set();
 
 function groupItems(g) {
   return g.items || g.sections.flatMap((s) => s.items);
@@ -569,7 +570,18 @@ function renderSidebarNav() {
   nav.innerHTML = groups.map((g) => {
     const isOpen = expandedGroups.has(g.group);
     const body = g.sections
-      ? g.sections.map((s) => `<div class="sidebar-subheading">${esc(s.label)}</div>${s.items.map(([id, label]) => sidebarItemBtn(id, label)).join("")}`).join("")
+      ? g.sections.map((s) => {
+          const key = `${g.group}::${s.label}`;
+          const secOpen = !collapsedSections.has(key);
+          return `
+            <button class="sidebar-subheading-btn" data-section="${esc(key)}">
+              <span>${esc(s.label)}</span>
+              <span class="chevron sub ${secOpen ? "open" : ""}">›</span>
+            </button>
+            <div class="sidebar-section-items" style="display:${secOpen ? "block" : "none"};">
+              ${s.items.map(([id, label]) => sidebarItemBtn(id, label)).join("")}
+            </div>`;
+        }).join("")
       : g.items.map(([id, label]) => sidebarItemBtn(id, label)).join("");
     return `
       <div class="sidebar-group">
@@ -586,6 +598,11 @@ function renderSidebarNav() {
   nav.querySelectorAll("[data-group]").forEach((btn) => btn.addEventListener("click", () => {
     const g = btn.dataset.group;
     if (expandedGroups.has(g)) expandedGroups.delete(g); else expandedGroups.add(g);
+    renderSidebarNav();
+  }));
+  nav.querySelectorAll("[data-section]").forEach((btn) => btn.addEventListener("click", () => {
+    const key = btn.dataset.section;
+    if (collapsedSections.has(key)) collapsedSections.delete(key); else collapsedSections.add(key);
     renderSidebarNav();
   }));
   nav.querySelectorAll("[data-tab]").forEach((btn) => btn.addEventListener("click", () => {

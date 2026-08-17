@@ -85,11 +85,16 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .sidebar-group-header .chevron { transition: transform .15s; display: inline-flex; color: var(--sb-text-dim); }
 .sidebar-group-header .chevron.open { transform: rotate(90deg); }
 .sidebar-group-items { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 6px; }
-.sidebar-subheading {
-  padding: 10px 12px 4px; font-size: 9.5px; font-weight: 700; letter-spacing: .7px;
-  color: var(--sb-text-dim); opacity: .7; text-transform: uppercase;
+.sidebar-subheading-btn {
+  width: 100%; display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 10px 9px 12px; margin-top: 2px; font-size: 9.5px; font-weight: 700; letter-spacing: .7px;
+  color: var(--sb-text-dim); background: transparent; border: none; cursor: pointer;
+  text-transform: uppercase; border-radius: 6px; transition: background .12s, color .12s;
 }
-.sidebar-subheading:first-child { padding-top: 2px; }
+.sidebar-subheading-btn:hover { background: var(--sb-hover); color: var(--sb-text); }
+.sidebar-subheading-btn .chevron.sub { font-size: 10px; transition: transform .15s; display: inline-flex; }
+.sidebar-subheading-btn .chevron.sub.open { transform: rotate(90deg); }
+.sidebar-section-items { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 4px; }
 .sidebar-item {
   display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; padding: 9px 12px; font-size: 13.5px;
   font-weight: 500; border: none; background: transparent; color: var(--sb-text); cursor: pointer;
