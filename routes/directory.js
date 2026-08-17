@@ -45,7 +45,7 @@ router.post("/units", requireAuth, requireRole("yonetici"), async (req, res) => 
   const unit = { id: db.uid(), block, no, floor: floor ? Number(floor) : 0, ownerName: ownerName || "", ownerPhone: ownerPhone || "", tenantName: tenantName || "", tenantPhone: tenantPhone || "", occupancy: occupancy || "owner", landShare: landShare || null, squareMeters: squareMeters || null, feeGroup: feeGroup || null };
   data.units.push(unit);
   db.logActivity(data, req.user, "unit.create", `${block} - Daire ${no} eklendi.`, unit.id);
-  await db.save(data);
+  await db.save(data, ["units"]);
   res.status(201).json(unit);
 });
 
@@ -54,16 +54,34 @@ router.patch("/units/:id", requireAuth, requireRole("yonetici"), async (req, res
   const unit = data.units.find((u) => u.id === req.params.id);
   if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
   Object.assign(unit, req.body || {});
-  await db.save(data);
+  await db.save(data, ["units"]);
   res.json(unit);
 });
 
+// Postgres'te Charge/Payment/Reservation/Ticket/Meter/Package.unitId hepsi
+// onDelete:Restrict - eskiden (JSON) bu kayitlar kontrol edilmeden silme
+// sessizce basariyordu, artik ilk baglı kayitta Postgres FK hatasi (500,
+// anlamsiz "Sunucu hatasi" mesaji) firlatirdi. Silmeden once hepsini
+// kontrol edip dostane bir Turkce hata donuyoruz.
 router.delete("/units/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();
   const inUse = data.users.some((u) => u.unitId === req.params.id);
   if (inUse) return res.status(400).json({ error: "Bu daireye bağlı kullanıcılar var, önce onları kaldırın." });
+
+  const [chargeCount, paymentCount, reservationCount, ticketCount, meterCount, packageCount] = await Promise.all([
+    prisma.charge.count({ where: { unitId: req.params.id } }),
+    prisma.payment.count({ where: { unitId: req.params.id } }),
+    prisma.reservation.count({ where: { unitId: req.params.id } }),
+    prisma.ticket.count({ where: { unitId: req.params.id } }),
+    prisma.meter.count({ where: { unitId: req.params.id } }),
+    prisma.package.count({ where: { unitId: req.params.id } }),
+  ]);
+  if (chargeCount || paymentCount || reservationCount || ticketCount || meterCount || packageCount) {
+    return res.status(400).json({ error: "Bu daireye bağlı borç/ödeme/rezervasyon/talep/sayaç/kargo kayıtları var, silinemez." });
+  }
+
   data.units = data.units.filter((u) => u.id !== req.params.id);
-  await db.save(data);
+  await db.save(data, ["units"]);
   res.json({ message: "Daire silindi." });
 });
 
@@ -292,11 +310,43 @@ router.post("/users/:id/reset-password", requireAuth, requireRole("yonetici"), a
   res.json({ message: "Geçici şifre oluşturuldu. Bu şifreyi güvenli bir şekilde kullanıcıya iletin.", tempPassword });
 });
 
+// Reservation/Ticket/TicketComment/Classifieds.userId hepsi onDelete:Restrict
+// - bagli kayit varsa once dostane hata donuyoruz (aksi halde Postgres FK
+// hatasi 500 olarak cikardi). "personel" rolundeki bir kullanici siliniyorsa,
+// bagli Personnel kaydi da (Ticket.assignedPersonnelId/Equipment.
+// responsiblePersonnelId uzerinden hala atanmis is yoksa) birlikte silinir -
+// aksi halde Personnel.userId SetNull olur ama kayit yetim kalir, atamalar
+// "hayalet" bir personele bagli gibi gorunmeye devam eder.
 router.delete("/users/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
   if (req.params.id === req.user.id) return res.status(400).json({ error: "Kendi hesabınızı silemezsiniz." });
   const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı." });
-  await prisma.user.delete({ where: { id: req.params.id } });
+
+  const [reservationCount, ticketCount, commentCount, classifiedCount] = await Promise.all([
+    prisma.reservation.count({ where: { userId: req.params.id } }),
+    prisma.ticket.count({ where: { userId: req.params.id } }),
+    prisma.ticketComment.count({ where: { userId: req.params.id } }),
+    prisma.classifieds.count({ where: { userId: req.params.id } }),
+  ]);
+  if (reservationCount || ticketCount || commentCount || classifiedCount) {
+    return res.status(400).json({ error: "Bu kullanıcıya bağlı rezervasyon/talep/yorum/ilan kayıtları var, silinemez. Bunun yerine \"Pasife Al\" kullanın." });
+  }
+
+  const personnel = await prisma.personnel.findUnique({ where: { userId: req.params.id } });
+  if (personnel) {
+    const [assignedTickets, assignedEquipment] = await Promise.all([
+      prisma.ticket.count({ where: { assignedPersonnelId: personnel.id } }),
+      prisma.equipment.count({ where: { responsiblePersonnelId: personnel.id } }),
+    ]);
+    if (assignedTickets || assignedEquipment) {
+      return res.status(400).json({ error: "Bu personele atanmış talep/demirbaş kayıtları var, önce başka bir personele aktarın." });
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (personnel) await tx.personnel.delete({ where: { id: personnel.id } });
+    await tx.user.delete({ where: { id: req.params.id } });
+  });
   res.json({ message: "Kullanıcı silindi." });
 });
 

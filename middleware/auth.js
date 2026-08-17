@@ -7,6 +7,12 @@ function sign(user) {
   return jwt.sign({ id: user.id, role: user.role, unitId: user.unitId || null, name: user.name, tokenVersion: user.tokenVersion || 0 }, SECRET, { expiresIn: "30d" });
 }
 
+// mustChangePassword=true olan bir kullanici (yonetici gecici sifre
+// atadiginda veya sifre sifirlama sonrasi) sifresini degistirmeden diger
+// hicbir ucu kullanamaz - eskiden bu sadece arayuzde (renderForceChangePassword)
+// zorlaniyordu, dogrudan API'ye istek atan biri bunu tamamen atlayabilirdi.
+const ALLOWED_WHILE_MUST_CHANGE_PASSWORD = ["/api/auth/change-password", "/api/auth/me", "/api/auth/logout-all-sessions"];
+
 // JWT dogas geregi statelesstir; "cikis yap" tek basina sunucu tarafinda token'i
 // gecersiz kilamaz. tokenVersion karsilastirmasi ile gercek bir iptal mekanizmasi
 // saglariz: sifre degisince veya "tum oturumlari kapat" tetiklenince kullanicinin
@@ -22,6 +28,12 @@ async function requireAuth(req, res, next) {
     if (user.isActive === false) return res.status(403).json({ error: "Hesabınız pasife alınmış." });
     if ((payload.tokenVersion || 0) !== (user.tokenVersion || 0)) {
       return res.status(401).json({ error: "Oturumunuz sonlandırılmış, lütfen tekrar giriş yapın." });
+    }
+    if (user.mustChangePassword) {
+      const path = req.originalUrl.split("?")[0];
+      if (!ALLOWED_WHILE_MUST_CHANGE_PASSWORD.includes(path)) {
+        return res.status(403).json({ error: "Devam etmeden önce şifrenizi değiştirmeniz gerekiyor.", mustChangePassword: true });
+      }
     }
     req.user = payload;
     next();
