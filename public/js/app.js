@@ -3115,7 +3115,7 @@ async function renderCari(c) {
     box.querySelector("form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(e.target));
-      try { await api("/party-payments/pay", { method: "POST", body: { partyType, partyId, ...f } }); toast("Ödeme kaydedildi."); renderTab("cari"); }
+      try { await api("/party-payments/pay", { method: "POST", body: { partyType, partyId, requestId: crypto.randomUUID(), ...f } }); toast("Ödeme kaydedildi."); renderTab("cari"); }
       catch (err) { toast(err.message); }
     });
   }));
@@ -3217,7 +3217,7 @@ async function renderGiderler(c) {
     box.querySelector("form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(e.target));
-      try { await api("/party-payments/pay", { method: "POST", body: { chargeId, ...f } }); toast("Ödeme kaydedildi."); renderTab("giderler"); }
+      try { await api("/party-payments/pay", { method: "POST", body: { chargeId, requestId: crypto.randomUUID(), ...f } }); toast("Ödeme kaydedildi."); renderTab("giderler"); }
       catch (err) { toast(err.message); }
     });
   }));
@@ -3305,7 +3305,7 @@ async function renderBorcListesi(c) {
       holder.querySelector("form").addEventListener("submit", async (e) => {
         e.preventDefault();
         const f = Object.fromEntries(new FormData(e.target));
-        try { await api("/party-payments/pay", { method: "POST", body: { chargeId, ...f } }); toast("Ödeme kaydedildi."); renderTab("borclistesi"); }
+        try { await api("/party-payments/pay", { method: "POST", body: { chargeId, requestId: crypto.randomUUID(), ...f } }); toast("Ödeme kaydedildi."); renderTab("borclistesi"); }
         catch (err) { toast(err.message); }
       });
     }));

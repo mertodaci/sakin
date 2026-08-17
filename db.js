@@ -139,13 +139,10 @@ const LEGACY_COLLECTIONS = [
   { name: "units", model: "unit", load: loadUnits },
   { name: "accounts", model: "account", load: simple("account") },
   { name: "facilities", model: "facility", load: simple("facility") },
-  { name: "vendors", model: "vendor", load: simple("vendor") },
   { name: "personnel", model: "personnel", load: simple("personnel") },
   { name: "equipment", model: "equipment", load: loadEquipment, children: [{ field: "maintenanceHistory", model: "maintenanceRecord", parentField: "equipmentId" }] },
   { name: "meters", model: "meter", load: simple("meter") },
   { name: "meterReadings", model: "meterReading", load: simple("meterReading") },
-  { name: "partyCharges", model: "partyCharge", load: simple("partyCharge") },
-  { name: "partyPayments", model: "partyPayment", load: loadPartyPayments, children: [{ field: "appliedTo", model: "partyPaymentAllocation", parentField: "partyPaymentId", mapCreate: (a, parentId) => ({ partyPaymentId: parentId, partyChargeId: a.chargeId, amount: a.amount }) }] },
   { name: "transfers", model: "transfer", load: simple("transfer") },
   { name: "reservations", model: "reservation", load: simple("reservation") },
   { name: "tickets", model: "ticket", load: loadTickets, children: [{ field: "comments", model: "ticketComment", parentField: "ticketId" }] },
@@ -185,6 +182,14 @@ const READONLY_PASSTHROUGH = [
   { name: "charges", load: simple("charge") },
   { name: "payments", load: loadPayments },
   { name: "transactions", load: simple("transaction") },
+  // vendors/partyCharges/partyPayments: routes/parties.js ve jobs.js'in
+  // materializeRecurringPartyCharges'i artik dogrudan Prisma kullaniyor.
+  // Burada hala data.vendors/data.partyCharges/data.partyPayments okuyan
+  // rapor uclari (finance.js, accounting.js, documents.js, dashboard.js)
+  // icin salt-okunur olarak sunuluyor.
+  { name: "vendors", load: simple("vendor") },
+  { name: "partyCharges", load: simple("partyCharge") },
+  { name: "partyPayments", load: loadPartyPayments },
 ];
 
 async function load() {

@@ -48,7 +48,11 @@ router.patch("/accounts/:id", requireAuth, requireRole("yonetici"), async (req, 
 router.delete("/accounts/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();
   if (data.accounts.length <= 1) return res.status(400).json({ error: "En az bir hesap bulunmalıdır." });
-  const inUse = data.transactions.some((t) => t.accountId === req.params.id) || data.payments.some((p) => p.accountId === req.params.id) || data.transfers.some((tr) => tr.fromAccountId === req.params.id || tr.toAccountId === req.params.id);
+  const inUse =
+    data.transactions.some((t) => t.accountId === req.params.id) ||
+    data.payments.some((p) => p.accountId === req.params.id) ||
+    data.transfers.some((tr) => tr.fromAccountId === req.params.id || tr.toAccountId === req.params.id) ||
+    data.partyPayments.some((p) => p.accountId === req.params.id);
   if (inUse) return res.status(400).json({ error: "Bu hesaba bağlı işlemler var, silinemez. Önce işlemleri başka bir hesaba taşıyın." });
   if (data.meta.defaultAccountId === req.params.id) return res.status(400).json({ error: "Varsayılan tahsilat hesabı silinemez. Önce Ayarlar'dan başka bir hesabı varsayılan yapın." });
   data.accounts = data.accounts.filter((a) => a.id !== req.params.id);
