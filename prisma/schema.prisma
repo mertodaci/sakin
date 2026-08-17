@@ -51,6 +51,89 @@ enum PartyType {
 
 // ---------------- Ayarlar (eski "meta") ----------------
 
+model Site {
+  id                String   @id @default(uuid())
+  name              String
+  address           String   @default("")
+  inviteCode        String   @unique @default(uuid())
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  monthlyDueDefault Decimal  @default(0) @db.Decimal(12, 2)
+  lateFeeRate       Decimal  @default(0) @db.Decimal(5, 2)
+  lateFeeGraceDays  Int      @default(10)
+  autoDueEnabled    Boolean  @default(false)
+  autoDueDay        Int      @default(1)
+  autoDueAmount     Decimal  @default(0) @db.Decimal(12, 2)
+  lastAutoDuePeriod String?
+  ticketCategories  String[] @default([])
+  defaultAccountId  String?
+
+  userAccess              UserSiteAccess[]
+  units                   Unit[]
+  householdMembers        HouseholdMember[]
+  userNotes               UserNote[]
+  legalCases              LegalCase[]
+  vehicles                Vehicle[]
+  accounts                Account[]
+  transfers               Transfer[]
+  charges                 Charge[]
+  payments                Payment[]
+  creditApplications      CreditApplication[]
+  paymentAllocations      PaymentAllocation[]
+  transactions            Transaction[]
+  budgets                 Budget[]
+  vendors                 Vendor[]
+  expenseCategories       ExpenseCategory[]
+  expenseProjects         ExpenseProject[]
+  recurringPartyCharges   RecurringPartyCharge[]
+  partyCharges            PartyCharge[]
+  partyPayments           PartyPayment[]
+  partyPaymentAllocations PartyPaymentAllocation[]
+  personnels              Personnel[]
+  equipments              Equipment[]
+  maintenanceRecords      MaintenanceRecord[]
+  meters                  Meter[]
+  meterReadings           MeterReading[]
+  packages                Package[]
+  decisions               Decision[]
+  keys                    Key[]
+  keyAssignments          KeyAssignment[]
+  announcements           Announcement[]
+  surveys                 Survey[]
+  surveyOptions           SurveyOption[]
+  surveyVotes             SurveyVote[]
+  facilities              Facility[]
+  reservations            Reservation[]
+  tickets                 Ticket[]
+  ticketComments          TicketComment[]
+  classifieds             Classifieds[]
+  notifications           Notification[]
+  activityLogs            ActivityLog[]
+  contacts                Contact[]
+  officialReports         OfficialReport[]
+  agendaItems             AgendaItem[]
+  internalTasks           InternalTask[]
+  messages                Message[]
+  archiveFolders          ArchiveFolder[]
+  archiveFiles            ArchiveFile[]
+  knowledgeArticles       KnowledgeArticle[]
+}
+
+// Bir kullanicinin bir siteye erisim yetkisi - many-to-many. Ayni kullanici
+// (orn. cok-siteli bir personel/bolge sorumlusu) birden fazla UserSiteAccess
+// satirina sahip olabilir. Sakinler onaylandiginda otomatik bir satir alir
+// (personelle ayni kod yolu uzerinden erisim kontrolu yapilabilsin diye).
+model UserSiteAccess {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, siteId])
+}
+
 model Settings {
   id                String   @id @default("singleton")
   buildingName      String
@@ -71,38 +154,42 @@ model Settings {
 // ---------------- Daire / Kullanici ----------------
 
 model Unit {
-  id          String   @id @default(uuid())
-  block       String
-  no          String
-  floor       Int
-  ownerName   String
-  ownerPhone  String
-  tenantName  String
-  tenantPhone String
-  occupancy   Occupancy
-  landShare   Decimal? @db.Decimal(7, 4)
+  siteId         String?
+  site           Site?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id             String    @id @default(uuid())
+  block          String
+  no             String
+  floor          Int
+  ownerName      String
+  ownerPhone     String
+  tenantName     String
+  tenantPhone    String
+  occupancy      Occupancy
+  landShare      Decimal?  @db.Decimal(7, 4)
   // "Detayli Uye Listesi" rapor olusturucusunda arsa payinin yaninda ayri
   // bir alan olarak goruldu (Yonetimcell karsilastirmasi).
-  squareMeters Decimal? @db.Decimal(8, 2)
-  feeGroup    String?
+  squareMeters   Decimal?  @db.Decimal(8, 2)
+  feeGroup       String?
   accountingCode String?
   // Acik borclarin tamaminin odenmesinden sonra artan tutar buraya birikir
   // (alacakli bakiye). Otomatik hicbir borca uygulanmaz - yonetici "Krediyi
   // Borca Uygula" ile bilincli olarak tetikler (bkz. CreditApplication).
-  creditBalance Decimal @db.Decimal(12, 2) @default(0)
+  creditBalance  Decimal   @default(0) @db.Decimal(12, 2)
 
-  users            User[]
-  charges          Charge[]
-  payments         Payment[]
-  reservations     Reservation[]
-  tickets          Ticket[]
-  meters           Meter[]
-  packages         Package[]
-  activityLogs     ActivityLog[]
-  internalTasks    InternalTask[]
+  users              User[]
+  charges            Charge[]
+  payments           Payment[]
+  reservations       Reservation[]
+  tickets            Ticket[]
+  meters             Meter[]
+  packages           Package[]
+  activityLogs       ActivityLog[]
+  internalTasks      InternalTask[]
   creditApplications CreditApplication[]
-  householdMembers HouseholdMember[]
-  legalCases       LegalCase[]
+  householdMembers   HouseholdMember[]
+  legalCases         LegalCase[]
+
+  @@index([siteId])
 }
 
 // Yonetimcell karsilastirmasindan: "Ikamet Edenler Listesi" - o dairede
@@ -110,6 +197,8 @@ model Unit {
 // es/cocuk/kiracidan misafire kadar). isCurrent=false olanlar "eski sakin"
 // gecmisini tutar, silinmez.
 model HouseholdMember {
+  siteId       String?
+  site         Site?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id           String    @id @default(uuid())
   unitId       String
   unit         Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
@@ -119,23 +208,31 @@ model HouseholdMember {
   isCurrent    Boolean   @default(true)
   movedInAt    DateTime  @default(now())
   movedOutAt   DateTime?
+
+  @@index([siteId])
 }
 
 // Uye bazli serbest not - CRM tarzi, islem kaydi degil (orn. "asansor
 // anahtarini komsuya birakti" gibi yoneticinin hatirlamak istedigi bir sey).
 model UserNote {
+  siteId    String?
+  site      Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String   @id @default(uuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   authorId  String
   text      String
   createdAt DateTime @default(now())
+
+  @@index([siteId])
 }
 
 // ---------------- Hukuki (Icra Takibi) ----------------
 // Yonetimcell karsilastirmasindan: "Icradaki Uyeler Listesi" ve "Icradaki
 // Dosyalar Listesi" ayni verinin iki farkli filtrelemesi - tek model yeterli.
 model LegalCase {
+  siteId      String?
+  site        Site?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id          String    @id @default(uuid())
   unitId      String
   unit        Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
@@ -146,6 +243,8 @@ model LegalCase {
   openedAt    DateTime  @default(now())
   closedAt    DateTime?
   createdBy   String
+
+  @@index([siteId])
 }
 
 model User {
@@ -197,25 +296,32 @@ model User {
   surveyVotes      SurveyVote[]
   vehicles         Vehicle[]
   agendaItems      AgendaItem[]
-  sentMessages     Message[]       @relation("MessageSender")
-  receivedMessages Message[]       @relation("MessageRecipient")
+  sentMessages     Message[]        @relation("MessageSender")
+  receivedMessages Message[]        @relation("MessageRecipient")
   notes            UserNote[]
+  siteAccess       UserSiteAccess[]
 }
 
 // Yonetimcell karsilastirmasindan: guvenlik/kapi gorevlisinin gozle
 // tanimasi icin plaka yaninda marka/renk de tutuluyor.
 model Vehicle {
-  id     String @id @default(uuid())
+  siteId String?
+  site   Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id     String  @id @default(uuid())
   userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   plate  String
   brand  String
   color  String
+
+  @@index([siteId])
 }
 
 // ---------------- Kasa / Banka Hesabi ----------------
 
 model Account {
+  siteId         String?
+  site           Site?       @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id             String      @id @default(uuid())
   name           String
   type           AccountType
@@ -229,15 +335,19 @@ model Account {
   // degil, sadece raporlama/eslestirme etiketi.
   accountingCode String?
 
-  transactions      Transaction[]
-  payments          Payment[]
-  partyPayments     PartyPayment[]
-  transfersFrom     Transfer[]  @relation("TransferFrom")
-  transfersTo       Transfer[]  @relation("TransferTo")
+  transactions       Transaction[]
+  payments           Payment[]
+  partyPayments      PartyPayment[]
+  transfersFrom      Transfer[]     @relation("TransferFrom")
+  transfersTo        Transfer[]     @relation("TransferTo")
   settingsDefaultFor Settings[]
+
+  @@index([siteId])
 }
 
 model Transfer {
+  siteId        String?
+  site          Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id            String   @id @default(uuid())
   fromAccountId String
   fromAccount   Account  @relation("TransferFrom", fields: [fromAccountId], references: [id], onDelete: Restrict)
@@ -247,6 +357,8 @@ model Transfer {
   date          DateTime @default(now())
   description   String
   createdBy     String
+
+  @@index([siteId])
 }
 
 // ---------------- Aidat / Odeme / Muhasebe ----------------
@@ -256,15 +368,17 @@ model Transfer {
 // Tazminati Fonu gibi site'ye ozel kategoriler). Uygulama katmaninda
 // tutarlilik icin mevcut kategoriler bir datalist ile onerilir.
 model Charge {
-  id                    String       @id @default(uuid())
+  siteId                String?
+  site                  Site?            @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id                    String           @id @default(uuid())
   unitId                String
-  unit                  Unit         @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  unit                  Unit             @relation(fields: [unitId], references: [id], onDelete: Restrict)
   type                  String
   period                String
-  amount                Decimal      @db.Decimal(12, 2)
+  amount                Decimal          @db.Decimal(12, 2)
   dueDate               DateTime
-  status                ChargeStatus @default(unpaid)
-  paidAmount            Decimal      @db.Decimal(12, 2) @default(0)
+  status                ChargeStatus     @default(unpaid)
+  paidAmount            Decimal          @default(0) @db.Decimal(12, 2)
   lateFeeAppliedPeriods String[]
   description           String
   // Firma/personel giderleriyle (PartyCharge) AYNI Gider Grubu/Kalemi
@@ -276,54 +390,60 @@ model Charge {
   // eder - categoryId sadece raporlama/kirlim icin ek bir siniflandirma.
   categoryId            String?
   category              ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  createdAt             DateTime     @default(now())
+  createdAt             DateTime         @default(now())
 
-  allocations       PaymentAllocation[]
-  meterReadings     MeterReading[]
+  allocations        PaymentAllocation[]
+  meterReadings      MeterReading[]
   creditApplications CreditApplication[]
 
   @@index([unitId])
   @@index([categoryId])
+  @@index([siteId])
 }
 
 model Payment {
-  id            String       @id @default(uuid())
-  unitId        String
-  unit          Unit         @relation(fields: [unitId], references: [id], onDelete: Restrict)
-  userId        String?
-  user          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
-  amount        Decimal      @db.Decimal(12, 2)
-  method        String
-  accountId     String
-  account       Account      @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  date          DateTime     @default(now())
-  note          String
-  receiptNo     String
-  transactionId String?      @unique
-  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
-  cancelled     Boolean      @default(false)
-  cancelledAt   DateTime?
-  cancelledBy   String?
+  siteId          String?
+  site            Site?        @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id              String       @id @default(uuid())
+  unitId          String
+  unit            Unit         @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  userId          String?
+  user            User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  amount          Decimal      @db.Decimal(12, 2)
+  method          String
+  accountId       String
+  account         Account      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  date            DateTime     @default(now())
+  note            String
+  receiptNo       String
+  transactionId   String?      @unique
+  transaction     Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  cancelled       Boolean      @default(false)
+  cancelledAt     DateTime?
+  cancelledBy     String?
   // Odeme, acik borclarin tamamini kapattiktan sonra artan tutar - metne
   // gomulmek yerine Unit.creditBalance'a eklenir, bu alan ne kadarinin
   // eklendigini kaydeder (iptal edilirse dogru miktari geri dusebilmek icin).
-  creditAmount  Decimal      @db.Decimal(12, 2) @default(0)
+  creditAmount    Decimal      @default(0) @db.Decimal(12, 2)
   // creditAmount'in ne kadari HALA havuzda duruyor (apply-credit ile baska
   // bir borca harcanmamis). Iptal sirasinda SADECE bu kadari geri alinir -
   // boylece bu odemenin katkisi baska bir odemenin katkisiyla karismaz
   // (havuz paylasilan tek bir sayi oldugu icin, hangi odemenin ne kadar
   // "hala orada" oldugunu ayrica izlemek gerekiyor).
-  creditRemaining Decimal    @db.Decimal(12, 2) @default(0)
+  creditRemaining Decimal      @default(0) @db.Decimal(12, 2)
 
   allocations PaymentAllocation[]
 
   @@index([unitId])
+  @@index([siteId])
 }
 
 // Bir dairenin fazla odemesinin bir sonraki/acik borca yonetici tarafindan
 // bilincli, tek tikla uygulanmasinin kaydi (otomatik/sessiz degil - Sakin'in
 // "her sey gorunur ve izlenebilir olsun" ilkesine uygun).
 model CreditApplication {
+  siteId    String?
+  site      Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String   @id @default(uuid())
   unitId    String
   unit      Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
@@ -332,18 +452,26 @@ model CreditApplication {
   amount    Decimal  @db.Decimal(12, 2)
   date      DateTime @default(now())
   createdBy String
+
+  @@index([siteId])
 }
 
 model PaymentAllocation {
+  siteId    String?
+  site      Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String  @id @default(uuid())
   paymentId String
   payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
   chargeId  String
   charge    Charge  @relation(fields: [chargeId], references: [id], onDelete: Restrict)
   amount    Decimal @db.Decimal(12, 2)
+
+  @@index([siteId])
 }
 
 model Transaction {
+  siteId      String?
+  site        Site?           @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id          String          @id @default(uuid())
   type        TransactionType
   category    String
@@ -358,6 +486,7 @@ model Transaction {
   partyPayment PartyPayment?
 
   @@index([accountId])
+  @@index([siteId])
 }
 
 // Odeme isteklerinin mukerrer islenmesini engellemek icin: id = client'in
@@ -368,40 +497,49 @@ model PaymentRequest {
 }
 
 model Budget {
+  siteId        String?
+  site          Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id            String  @id @default(uuid())
   year          Int
   category      String
   plannedAmount Decimal @db.Decimal(12, 2)
   createdBy     String
 
-  @@unique([year, category])
+  @@unique([siteId, year, category])
+  @@index([siteId])
 }
 
 // ---------------- Firma & Personel Cari Hesap ----------------
 
 model Vendor {
-  id          String   @id @default(uuid())
-  name        String
-  category    String
-  contactName String   @default("")
-  phone       String
-  email       String   @default("")
-  taxNumber   String
-  iban        String
-  notes       String
+  siteId         String?
+  site           Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id             String   @id @default(uuid())
+  name           String
+  category       String
+  contactName    String   @default("")
+  phone          String
+  email          String   @default("")
+  taxNumber      String
+  iban           String
+  notes          String
   accountingCode String?
-  createdAt   DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@index([siteId])
 }
 
 // Gider Grubu -> Gider kalemi hiyerarsisi (Yonetimcell karsilastirmasi:
 // "Giderler (Odeme)" modulunun temeli - her borc/fatura bir kategoriye
 // baglanabilir, taraf zorunlu degil).
 model ExpenseCategory {
-  id        String   @id @default(uuid())
+  siteId         String?
+  site           Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id             String   @id @default(uuid())
   accountingCode String?
-  group     String
-  name      String
-  createdAt DateTime @default(now())
+  group          String
+  name           String
+  createdAt      DateTime @default(now())
 
   partyCharges     PartyCharge[]
   recurringCharges RecurringPartyCharge[]
@@ -409,6 +547,7 @@ model ExpenseCategory {
   expenseProjects  ExpenseProject[]
 
   @@index([group])
+  @@index([siteId])
 }
 
 // Yonetimcell karsilastirmasi: "İşletme Projesi" - bir gideri (orn. bakim
@@ -416,18 +555,22 @@ model ExpenseCategory {
 // gore tasinmazlara TOPLU borclandiran arac. "Kaydet" ile her ay+tasinmaz
 // icin ayri bir Charge olusturur (bkz. routes/finance.js apply-project).
 model ExpenseProject {
-  id            String   @id @default(uuid())
+  siteId        String?
+  site          Site?            @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id            String           @id @default(uuid())
   name          String
-  startPeriod   String   // "2026-01" (Charge.period ile ayni format)
-  endPeriod     String   // "2026-12"
+  startPeriod   String // "2026-01" (Charge.period ile ayni format)
+  endPeriod     String // "2026-12"
   categoryId    String?
   category      ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  shareMethod   String   // "metrekare" | "arsapayi" | "esit"
-  monthlyAmount Decimal  @db.Decimal(12, 2)
-  blockFilter   String?  // null = tum bloklar
-  status        String   @default("draft") // "draft" | "applied"
+  shareMethod   String // "metrekare" | "arsapayi" | "esit"
+  monthlyAmount Decimal          @db.Decimal(12, 2)
+  blockFilter   String? // null = tum bloklar
+  status        String           @default("draft") // "draft" | "applied"
   createdBy     String
-  createdAt     DateTime @default(now())
+  createdAt     DateTime         @default(now())
+
+  @@index([siteId])
 }
 
 // "Ileri Tarihli Borc Listesi" / Tekrarlayan Faturalar (Yonetimcell
@@ -437,6 +580,8 @@ model ExpenseProject {
 // ise bir kez calisip pasif olur, "monthly"/"yearly" ise bir sonraki
 // vadeye atlar.
 model RecurringPartyCharge {
+  siteId      String?
+  site        Site?            @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id          String           @id @default(uuid())
   partyType   PartyType?
   partyId     String?
@@ -451,6 +596,7 @@ model RecurringPartyCharge {
   createdAt   DateTime         @default(now())
 
   @@index([active, nextDate])
+  @@index([siteId])
 }
 
 // partyId, partyType'a gore vendors.id VEYA personnel.id'ye referans verir
@@ -459,19 +605,21 @@ model RecurringPartyCharge {
 // partyType/partyId ikisi de null olabilir - "genel gider" (belirli bir
 // firma/personele bagli olmayan, sadece kategoriye baglanan borc) icin.
 model PartyCharge {
-  id          String       @id @default(uuid())
-  partyType   PartyType?
-  partyId     String?
-  categoryId  String?
-  category    ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  amount      Decimal      @db.Decimal(12, 2)
-  paidAmount  Decimal      @db.Decimal(12, 2) @default(0)
-  status      ChargeStatus @default(unpaid)
-  description String
-  invoiceNo   String       @default("")
-  date        DateTime     @default(now())
-  dueDate     DateTime
-  createdBy   String
+  siteId                 String?
+  site                   Site?            @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id                     String           @id @default(uuid())
+  partyType              PartyType?
+  partyId                String?
+  categoryId             String?
+  category               ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  amount                 Decimal          @db.Decimal(12, 2)
+  paidAmount             Decimal          @default(0) @db.Decimal(12, 2)
+  status                 ChargeStatus     @default(unpaid)
+  description            String
+  invoiceNo              String           @default("")
+  date                   DateTime         @default(now())
+  dueDate                DateTime
+  createdBy              String
   // Yonetimcell karsilastirmasi: "Borc Listesi"nde her satira fatura/makbuz
   // dosyasi eklenebiliyordu - diskte UUID adiyla saklanir (bkz. archive.js
   // pattern), orijinal ad sadece indirirken oneri olarak kullanilir.
@@ -482,9 +630,12 @@ model PartyCharge {
 
   @@index([partyType, partyId])
   @@index([categoryId])
+  @@index([siteId])
 }
 
 model PartyPayment {
+  siteId        String?
+  site          Site?        @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id            String       @id @default(uuid())
   partyType     PartyType?
   partyId       String?
@@ -505,39 +656,50 @@ model PartyPayment {
   allocations PartyPaymentAllocation[]
 
   @@index([partyType, partyId])
+  @@index([siteId])
 }
 
 model PartyPaymentAllocation {
+  siteId         String?
+  site           Site?        @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id             String       @id @default(uuid())
   partyPaymentId String
   partyPayment   PartyPayment @relation(fields: [partyPaymentId], references: [id], onDelete: Cascade)
   partyChargeId  String
   partyCharge    PartyCharge  @relation(fields: [partyChargeId], references: [id], onDelete: Restrict)
   amount         Decimal      @db.Decimal(12, 2)
+
+  @@index([siteId])
 }
 
 // ---------------- Personel ----------------
 
 model Personnel {
-  id            String  @id @default(uuid())
-  name          String
-  phone         String
-  department    String
-  active        Boolean @default(true)
-  userId        String?  @unique
-  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  monthlySalary Decimal? @db.Decimal(12, 2)
+  siteId         String?
+  site           Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id             String   @id @default(uuid())
+  name           String
+  phone          String
+  department     String
+  active         Boolean  @default(true)
+  userId         String?  @unique
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  monthlySalary  Decimal? @db.Decimal(12, 2)
   accountingCode String?
 
   equipmentResponsible Equipment[]
   ticketsAssigned      Ticket[]
   internalTasks        InternalTask[]
+
+  @@index([siteId])
 }
 
 // ---------------- Demirbas / Bakim ----------------
 
 model Equipment {
-  id                     String    @id @default(uuid())
+  siteId                 String?
+  site                   Site?      @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id                     String     @id @default(uuid())
   name                   String
   location               String
   purchaseDate           DateTime
@@ -549,30 +711,42 @@ model Equipment {
   notes                  String
 
   maintenanceHistory MaintenanceRecord[]
+
+  @@index([siteId])
 }
 
 model MaintenanceRecord {
+  siteId      String?
+  site        Site?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id          String    @id @default(uuid())
   equipmentId String
   equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
   date        DateTime  @default(now())
   by          String
   notes       String
+
+  @@index([siteId])
 }
 
 // ---------------- Sayac ----------------
 
 model Meter {
-  id       String @id @default(uuid())
+  siteId   String?
+  site     Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id       String  @id @default(uuid())
   unitId   String
-  unit     Unit   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  unit     Unit    @relation(fields: [unitId], references: [id], onDelete: Restrict)
   type     String
   serialNo String
 
   readings MeterReading[]
+
+  @@index([siteId])
 }
 
 model MeterReading {
+  siteId   String?
+  site     Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id       String   @id @default(uuid())
   meterId  String
   meter    Meter    @relation(fields: [meterId], references: [id], onDelete: Restrict)
@@ -583,11 +757,15 @@ model MeterReading {
   date     DateTime @default(now())
   chargeId String?
   charge   Charge?  @relation(fields: [chargeId], references: [id], onDelete: SetNull)
+
+  @@index([siteId])
 }
 
 // ---------------- Kargo ----------------
 
 model Package {
+  siteId        String?
+  site          Site?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id            String    @id @default(uuid())
   unitId        String
   unit          Unit      @relation(fields: [unitId], references: [id], onDelete: Restrict)
@@ -597,21 +775,30 @@ model Package {
   deliveredDate DateTime?
   status        String
   deliveredBy   String
+
+  @@index([siteId])
 }
 
 // ---------------- Karar Defteri / Anahtar ----------------
 
 model Decision {
+  siteId     String?
+  site       Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id         String   @id @default(uuid())
-  decisionNo Int      @unique
+  decisionNo Int
   date       DateTime @default(now())
   title      String
   content    String
   attendees  Int
   createdBy  String
+
+  @@unique([siteId, decisionNo])
+  @@index([siteId])
 }
 
 model Key {
+  siteId       String?
+  site         Site?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id           String    @id @default(uuid())
   keyName      String
   location     String
@@ -621,29 +808,41 @@ model Key {
   returnedDate DateTime?
 
   history KeyAssignment[]
+
+  @@index([siteId])
 }
 
 model KeyAssignment {
+  siteId       String?
+  site         Site?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id           String    @id @default(uuid())
   keyId        String
   key          Key       @relation(fields: [keyId], references: [id], onDelete: Cascade)
   holderName   String
   givenDate    DateTime?
   returnedDate DateTime?
+
+  @@index([siteId])
 }
 
 // ---------------- Duyuru / Anket / Ortak Alan / Ariza ----------------
 
 model Announcement {
+  siteId   String?
+  site     Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id       String   @id @default(uuid())
   title    String
   body     String
   date     DateTime @default(now())
   authorId String
   pinned   Boolean  @default(false)
+
+  @@index([siteId])
 }
 
 model Survey {
+  siteId    String?
+  site      Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String   @id @default(uuid())
   question  String
   active    Boolean  @default(true)
@@ -651,24 +850,32 @@ model Survey {
 
   options SurveyOption[]
   votes   SurveyVote[]
+
+  @@index([siteId])
 }
 
 model SurveyOption {
-  id       String @id @default(uuid())
+  siteId   String?
+  site     Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id       String  @id @default(uuid())
   surveyId String
-  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  survey   Survey  @relation(fields: [surveyId], references: [id], onDelete: Cascade)
   text     String
-  votes    Int    @default(0)
+  votes    Int     @default(0)
   // Anket olustururken girilen sirayi korur - optionIndex (frontend'in
   // gonderdigi, dizideki konumu belirten sayi) her sorguda AYNI sirayla
   // eslessin diye zorunlu. id (UUID) sirasina gore siralamak eklenme
   // sirasiyla ilgisiz oldugu icin kullanilamaz.
-  position Int    @default(0)
+  position Int     @default(0)
+
+  @@index([siteId])
 }
 
 // "bir kullanici bir kere oy verebilir" kisitini DB'ye devreder (eski
 // votedBy[] dizisindeki .includes() kontrolunun yerini alir).
 model SurveyVote {
+  siteId    String?
+  site      Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String   @id @default(uuid())
   surveyId  String
   survey    Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
@@ -677,18 +884,25 @@ model SurveyVote {
   createdAt DateTime @default(now())
 
   @@unique([surveyId, userId])
+  @@index([siteId])
 }
 
 model Facility {
-  id       String @id @default(uuid())
+  siteId   String?
+  site     Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id       String  @id @default(uuid())
   name     String
   capacity Int
   rules    String
 
   reservations Reservation[]
+
+  @@index([siteId])
 }
 
 model Reservation {
+  siteId     String?
+  site       Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id         String   @id @default(uuid())
   facilityId String
   facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Restrict)
@@ -701,9 +915,13 @@ model Reservation {
   endTime    String
   status     String
   createdAt  DateTime @default(now())
+
+  @@index([siteId])
 }
 
 model Ticket {
+  siteId              String?
+  site                Site?      @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id                  String     @id @default(uuid())
   unitId              String
   unit                Unit       @relation(fields: [unitId], references: [id], onDelete: Restrict)
@@ -720,9 +938,13 @@ model Ticket {
   updatedAt           DateTime   @default(now())
 
   comments TicketComment[]
+
+  @@index([siteId])
 }
 
 model TicketComment {
+  siteId   String?
+  site     Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id       String   @id @default(uuid())
   ticketId String
   ticket   Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
@@ -730,9 +952,13 @@ model TicketComment {
   user     User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   text     String
   date     DateTime @default(now())
+
+  @@index([siteId])
 }
 
 model Classifieds {
+  siteId      String?
+  site        Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id          String   @id @default(uuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -741,9 +967,13 @@ model Classifieds {
   description String
   date        DateTime @default(now())
   resolved    Boolean  @default(false)
+
+  @@index([siteId])
 }
 
 model Notification {
+  siteId  String?
+  site    Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id      String   @id @default(uuid())
   userId  String
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -751,11 +981,15 @@ model Notification {
   read    Boolean  @default(false)
   date    DateTime @default(now())
   link    String
+
+  @@index([siteId])
 }
 
 // ---------------- Seffaflik / Rehber ----------------
 
 model ActivityLog {
+  siteId      String?
+  site        Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id          String   @id @default(uuid())
   actorId     String
   actorName   String
@@ -766,13 +1000,18 @@ model ActivityLog {
   scopeUnit   Unit?    @relation(fields: [scopeUnitId], references: [id], onDelete: SetNull)
 
   @@index([date])
+  @@index([siteId])
 }
 
 model Contact {
-  id    String @id @default(uuid())
-  name  String
-  role  String
-  phone String
+  siteId String?
+  site   Site?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  id     String  @id @default(uuid())
+  name   String
+  role   String
+  phone  String
+
+  @@index([siteId])
 }
 
 // ---------------- Ajanda / Is Takibi / Gelen Mesajlar ----------------
@@ -790,8 +1029,10 @@ enum AgendaKind {
 // sonuc) icin resmi rapor sablonu. type alaniyla iki rapor turu ayni
 // tabloda tutulur (Ajanda pattern'iyle tutarli).
 model OfficialReport {
+  siteId     String?
+  site       Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id         String   @id @default(uuid())
-  type       String   // "denetim" | "faaliyet"
+  type       String // "denetim" | "faaliyet"
   title      String
   startDate  DateTime
   endDate    DateTime
@@ -801,12 +1042,15 @@ model OfficialReport {
   createdAt  DateTime @default(now())
 
   @@index([type])
+  @@index([siteId])
 }
 
 // "Ajanda (Notlar)" ve "Ajanda (Faaliyetler)" Yonetimcell'de ayni arayuzu
 // paylasiyor, sadece cerceveleme (serbest not vs. sitede gerceklesen olay)
 // farkli - bu yuzden tek model + kind alani yeterli, iki ayri tablo gerekmiyor.
 model AgendaItem {
+  siteId    String?
+  site      Site?      @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String     @id @default(uuid())
   kind      AgendaKind
   date      DateTime
@@ -817,12 +1061,15 @@ model AgendaItem {
   createdAt DateTime   @default(now())
 
   @@index([date])
+  @@index([siteId])
 }
 
 // Yonetimin kendi dahili is/gorev takibi - sakin taleplerinden (Ticket) farkli,
 // "asansor firmasini ara" gibi disariya kapali islerdir. Durum serbest metin
 // (Ticket.status ile ayni desen): Devam Eden / Tamamlanan / Kapatilan.
 model InternalTask {
+  siteId              String?
+  site                Site?      @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id                  String     @id @default(uuid())
   title               String
   description         String
@@ -837,12 +1084,16 @@ model InternalTask {
   createdBy           String
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @default(now())
+
+  @@index([siteId])
 }
 
 // Sakin-yonetici arasi ozel (iki yonlu) mesajlasma - duyuru/pano tek yonlu
 // oldugu icin ayri. recipientId bos ise "yonetime" (tum yoneticilere) gonderilmis
 // sayilir; yonetici cevaplarken belirli bir sakine (recipientId) yazar.
 model Message {
+  siteId      String?
+  site        Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id          String   @id @default(uuid())
   senderId    String
   sender      User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
@@ -853,6 +1104,7 @@ model Message {
   read        Boolean  @default(false)
 
   @@index([date])
+  @@index([siteId])
 }
 
 // ---------------- Dosya Arsivi ----------------
@@ -862,15 +1114,21 @@ model Message {
 // saklanir - orijinal dosya adi asla disk yolu olarak kullanilmaz (path
 // traversal riskini onlemek icin), sadece indirirken oneri adi olarak gosterilir.
 model ArchiveFolder {
+  siteId    String?
+  site      Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String   @id @default(uuid())
   name      String
   createdAt DateTime @default(now())
   createdBy String
 
   files ArchiveFile[]
+
+  @@index([siteId])
 }
 
 model ArchiveFile {
+  siteId       String?
+  site         Site?         @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id           String        @id @default(uuid())
   folderId     String
   folder       ArchiveFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
@@ -882,6 +1140,7 @@ model ArchiveFile {
   uploadedAt   DateTime      @default(now())
 
   @@index([folderId])
+  @@index([siteId])
 }
 
 // ---------------- Bilgi Bankasi ----------------
@@ -892,6 +1151,8 @@ model ArchiveFile {
 // bagimsiz/orijinal olarak yazildi, yonetici sonradan kendi metinleriyle
 // dolduracak.
 model KnowledgeArticle {
+  siteId    String?
+  site      Site?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
   id        String   @id @default(uuid())
   category  String
   title     String
@@ -899,4 +1160,6 @@ model KnowledgeArticle {
   createdBy String
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
+
+  @@index([siteId])
 }
