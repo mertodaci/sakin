@@ -291,7 +291,7 @@ function navIcon(id) { return svgIcon(NAV_ICON[id] || NAV_ICON.ozet); }
 const NAV_GROUPS = {
   sakin: [
     { group: "Genel", items: [["ozet", "Özet"], ["mesajlar", "Gelen Mesajlar"]] },
-    { group: "Hesabım", items: [["aidat", "Aidatım"], ["sayac", "Sayaçlarım"]] },
+    { group: "Hesabım", items: [["aidat", "Borç ve Ödemelerim"], ["sayac", "Sayaçlarım"]] },
     { group: "İletişim", items: [["duyuru", "Duyurular"], ["anket", "Anketler"], ["pano", "Site Panosu"], ["rehber", "Rehber"]] },
     { group: "Hizmetler", items: [["rezervasyon", "Rezervasyon"], ["talep", "Arıza/Talep"], ["kargo", "Kargolarım"]] },
     { group: "Sistem", items: [["seffaflik", "Şeffaflık"], ["bilgibankasi", "Bilgi Bankası"]] },
@@ -308,7 +308,7 @@ const NAV_GROUPS = {
       { label: "Raporlar", items: [["ikametedenler", "İkamet Edenler Listesi"], ["bosdolu", "Boş/Dolu Taşınmaz Listesi"], ["tckimlik", "Tc Kimlik No Listesi"], ["aracplaka", "Araç Plaka Listesi"], ["detayliuyelistesi", "Detaylı Üye Listesi"]] },
     ] },
     { group: "Finans", sections: [
-      { label: "İşlemler", items: [["tahsilat", "Aidat Takibi"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["isletmeprojesi", "İşletme Projesi"], ["butce", "Bütçe"]] },
+      { label: "İşlemler", items: [["tahsilat", "Borç & Tahsilat"], ["muhasebe", "Muhasebe"], ["kasalar", "Kasalar"], ["cari", "Firma & Personel"], ["giderler", "Giderler"], ["borclistesi", "Borç Listesi"], ["tekrarlayan", "İleri Tarihli / Tekrarlayan"], ["muhasebekod", "Muhasebe Kodları"], ["isletmeprojesi", "İşletme Projesi"], ["butce", "Bütçe"]] },
       { label: "Raporlar", items: [
         ["geneldurum", "Genel Durum Raporu"], ["mizan", "Mizan Raporu"], ["fisler", "Tahakkuk Fişleri"],
         ["tasinmazdonem", "Taşınmaz/Dönem Raporu"], ["donemdetay", "Dönem/Detay Raporu"], ["tasinmazdetay", "Taşınmaz/Detay Raporu"], ["uyedonem", "Üye/Dönem Raporu"], ["uyedetay", "Üye/Detay Raporu"],
@@ -808,7 +808,7 @@ async function renderResidentAidat(c) {
   const [charges, payments, dash] = await Promise.all([api("/charges"), api("/payments"), api("/dashboard")]);
   const debt = dash.debt;
   c.innerHTML = `
-    ${sectionTitle("Aidatım", "Hesap özeti banka ekstresi mantığıyla listelenir")}
+    ${sectionTitle("Borç ve Ödemelerim", "Hesap özeti banka ekstresi mantığıyla listelenir")}
     <div class="card pad mb-16 flex-between">
       <div><div class="stat-label">${debt < 0 ? "ALACAKLI BAKİYE" : "ÖDENECEK TUTAR"}</div><div class="f-num stat-value" style="color:${debtColor(debt)}">${tl(Math.abs(debt))}</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -1728,7 +1728,7 @@ async function renderTahsilat(c) {
   const [units, accounts, payments, categories, expenseCategories] = await Promise.all([api("/units"), api("/accounts"), api("/payments"), api("/charge-categories"), api("/expense-categories")]);
   const expenseCategoryOptions = `<option value="">Yok (sadece serbest metin)</option>` + expenseCategories.map((cat) => `<option value="${cat.id}">${esc(cat.group)} / ${esc(cat.name)}</option>`).join("");
   c.innerHTML = `
-    <div class="flex-between">${sectionTitle("Aidat Takibi")}<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;"><button class="btn btn-ghost btn-sm" id="printListBtn">🖨️ Borç Listesi Yazdır (PDF)</button><button class="btn btn-ghost btn-sm" id="csvListBtn">📊 Excel'e Aktar (CSV)</button><button class="btn btn-ghost btn-sm" id="topluBorcDokumuBtn">📋 Toplu Borç Dökümü</button><button class="btn btn-ghost btn-sm" id="topluTebligatBtn">✉️ Toplu Tebligat</button></div></div>
+    <div class="flex-between">${sectionTitle("Borç & Tahsilat")}<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;"><button class="btn btn-ghost btn-sm" id="printListBtn">🖨️ Borç Listesi Yazdır (PDF)</button><button class="btn btn-ghost btn-sm" id="csvListBtn">📊 Excel'e Aktar (CSV)</button><button class="btn btn-ghost btn-sm" id="topluBorcDokumuBtn">📋 Toplu Borç Dökümü</button><button class="btn btn-ghost btn-sm" id="topluTebligatBtn">✉️ Toplu Tebligat</button></div></div>
     <div id="topluBorcDokumuForm"></div>
     <div id="topluTebligatForm"></div>
     <div class="card form-card">
