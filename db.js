@@ -76,7 +76,7 @@ async function loadPartyPayments() {
 }
 
 async function loadSurveys() {
-  const rows = await prisma.survey.findMany({ include: { options: true, votes: true } });
+  const rows = await prisma.survey.findMany({ include: { options: { orderBy: [{ position: "asc" }, { id: "asc" }] }, votes: true } });
   return rows.map((s) => {
     const plain = toPlain(s);
     plain.options = plain.options.map((o) => ({ text: o.text, votes: o.votes }));
@@ -143,13 +143,6 @@ const LEGACY_COLLECTIONS = [
   // uclari hala data.personnel uzerinden yaziyor - bu yuzden burada kalmali.
   { name: "personnel", model: "personnel", load: simple("personnel") },
   { name: "transfers", model: "transfer", load: simple("transfer") },
-  { name: "announcements", model: "announcement", load: simple("announcement") },
-  { name: "surveys", model: "survey", load: loadSurveys, children: [
-    { field: "options", model: "surveyOption", parentField: "surveyId", mapCreate: (o, parentId) => ({ surveyId: parentId, text: o.text, votes: o.votes }) },
-    { field: "votedBy", model: "surveyVote", parentField: "surveyId", mapCreate: (userId, parentId) => ({ surveyId: parentId, userId }) },
-  ] },
-  { name: "classifieds", model: "classifieds", load: simple("classifieds") },
-  { name: "notifications", model: "notification", load: simple("notification") },
   { name: "activityLog", model: "activityLog", load: loadActivityLog },
   { name: "budgets", model: "budget", load: simple("budget") },
 ];
@@ -200,6 +193,13 @@ const READONLY_PASSTHROUGH = [
   { name: "packages", load: simple("package") },
   { name: "decisions", load: simple("decision") },
   { name: "keys", load: loadKeys },
+  // announcements/surveys/classifieds/notifications: routes/comms.js artik
+  // dogrudan Prisma kullaniyor. Burada dashboard.js (notifications) ve
+  // system.js /export icin salt-okunur olarak sunuluyor.
+  { name: "announcements", load: simple("announcement") },
+  { name: "surveys", load: loadSurveys },
+  { name: "classifieds", load: simple("classifieds") },
+  { name: "notifications", load: simple("notification") },
 ];
 
 async function load() {

@@ -1,139 +1,142 @@
 const express = require("express");
+const { Prisma } = require("@prisma/client");
 const db = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
 const router = express.Router();
+const prisma = db.prisma;
 
 /* ---------------- ANNOUNCEMENTS ---------------- */
 
 router.get("/announcements", requireAuth, async (req, res) => {
-  const data = await db.load();
-  res.json(data.announcements.slice().sort((a, b) => b.pinned - a.pinned || new Date(b.date) - new Date(a.date)));
+  const list = await prisma.announcement.findMany({ orderBy: [{ pinned: "desc" }, { date: "desc" }] });
+  res.json(list);
 });
 
 router.post("/announcements", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   const { title, body, pinned } = req.body || {};
   if (!title || !body) return res.status(400).json({ error: "Başlık ve içerik zorunludur." });
-  const a = { id: db.uid(), title, body, date: new Date().toISOString(), authorId: req.user.id, pinned: !!pinned };
-  data.announcements.unshift(a);
-  db.logActivity(data, req.user, "announcement.create", `Duyuru yayınlandı: ${title}`, null);
-  data.users.filter((u) => u.role === "sakin" && u.isApproved).forEach((u) => {
-    data.notifications.push({ id: db.uid(), userId: u.id, message: `Yeni duyuru: ${title}`, read: false, date: a.date, link: "#/duyurular" });
-  });
-  await db.save(data);
+  const a = await prisma.announcement.create({ data: { title, body, authorId: req.user.id, pinned: !!pinned } });
+  const residents = await prisma.user.findMany({ where: { role: "sakin", isApproved: true } });
+  if (residents.length) {
+    await prisma.notification.createMany({ data: residents.map((u) => ({ userId: u.id, message: `Yeni duyuru: ${title}`, link: "#/duyurular" })) });
+  }
+  await prisma.activityLog.create({ data: { actorId: req.user.id, actorName: req.user.name, action: "announcement.create", detail: `Duyuru yayınlandı: ${title}` } });
   res.status(201).json(a);
 });
 
 router.delete("/announcements/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  data.announcements = data.announcements.filter((a) => a.id !== req.params.id);
-  await db.save(data);
+  await prisma.announcement.delete({ where: { id: req.params.id } }).catch((e) => {
+    if (e.code !== "P2025") throw e;
+  });
   res.json({ message: "Duyuru silindi." });
 });
 
 /* ---------------- SURVEYS ---------------- */
 
 router.get("/surveys", requireAuth, async (req, res) => {
-  const data = await db.load();
-  res.json(data.surveys.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+  const list = await prisma.survey.findMany({
+    orderBy: { createdAt: "desc" },
+    include: { options: { orderBy: [{ position: "asc" }, { id: "asc" }] }, votes: { select: { userId: true } } },
+  });
+  res.json(list.map((s) => ({ ...s, votedBy: s.votes.map((v) => v.userId), votes: undefined })));
 });
 
 router.post("/surveys", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   const { question, options } = req.body || {};
   const cleaned = (options || []).map((o) => String(o).trim()).filter(Boolean);
   if (!question || cleaned.length < 2) return res.status(400).json({ error: "Soru ve en az 2 seçenek girilmelidir." });
-  const s = { id: db.uid(), question, options: cleaned.map((t) => ({ text: t, votes: 0 })), active: true, votedBy: [], createdAt: new Date().toISOString() };
-  data.surveys.unshift(s);
-  await db.save(data);
-  res.status(201).json(s);
+  const s = await prisma.survey.create({
+    data: { question, active: true, options: { create: cleaned.map((t, i) => ({ text: t, votes: 0, position: i })) } },
+    include: { options: { orderBy: [{ position: "asc" }, { id: "asc" }] } },
+  });
+  res.status(201).json({ ...s, votedBy: [] });
 });
 
+// Oy verme + secenegin votes sayacinin artmasi tek $transaction icinde:
+// once SurveyVote.create() denenir - DB'deki @@unique([surveyId,userId])
+// kisiti sayesinde ayni kullanici ikinci kez oy vermeye calisirsa Prisma
+// P2002 (unique-violation) firlatir, bu da 409'a cevrilir. Bu, eski
+// "votedBy dizisini oku, .includes() kontrol et, push et" desenindeki
+// yaris durumunu (iki eszamanli oy birbirini silebiliyordu) tamamen kapatir.
 router.post("/surveys/:id/vote", requireAuth, async (req, res) => {
-  const data = await db.load();
-  const survey = data.surveys.find((s) => s.id === req.params.id);
-  if (!survey) return res.status(404).json({ error: "Anket bulunamadı." });
-  if (survey.votedBy.includes(req.user.id)) return res.status(409).json({ error: "Bu ankete zaten oy verdiniz." });
   const idx = Number(req.body?.optionIndex);
-  if (!survey.options[idx]) return res.status(400).json({ error: "Geçersiz seçenek." });
-  survey.options[idx].votes++;
-  survey.votedBy.push(req.user.id);
-  await db.save(data);
-  res.json(survey);
+  try {
+    const survey = await prisma.$transaction(async (tx) => {
+      const s = await tx.survey.findUnique({ where: { id: req.params.id }, include: { options: { orderBy: [{ position: "asc" }, { id: "asc" }] } } });
+      if (!s) throw Object.assign(new Error("NOT_FOUND"), { httpStatus: 404, msg: "Anket bulunamadı." });
+      const option = s.options[idx];
+      if (!option) throw Object.assign(new Error("BAD_OPTION"), { httpStatus: 400, msg: "Geçersiz seçenek." });
+
+      try {
+        await tx.surveyVote.create({ data: { surveyId: s.id, userId: req.user.id } });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+          throw Object.assign(new Error("ALREADY_VOTED"), { httpStatus: 409, msg: "Bu ankete zaten oy verdiniz." });
+        }
+        throw e;
+      }
+      await tx.surveyOption.update({ where: { id: option.id }, data: { votes: { increment: 1 } } });
+      return tx.survey.findUnique({ where: { id: s.id }, include: { options: { orderBy: [{ position: "asc" }, { id: "asc" }] }, votes: { select: { userId: true } } } });
+    });
+    res.json({ ...survey, votedBy: survey.votes.map((v) => v.userId), votes: undefined });
+  } catch (e) {
+    if (e.httpStatus) return res.status(e.httpStatus).json({ error: e.msg });
+    throw e;
+  }
 });
 
 router.patch("/surveys/:id/close", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const survey = data.surveys.find((s) => s.id === req.params.id);
-  if (!survey) return res.status(404).json({ error: "Anket bulunamadı." });
-  survey.active = false;
-  await db.save(data);
-  res.json(survey);
+  const s = await prisma.survey.update({ where: { id: req.params.id }, data: { active: false }, include: { options: { orderBy: [{ position: "asc" }, { id: "asc" }] }, votes: { select: { userId: true } } } }).catch(() => null);
+  if (!s) return res.status(404).json({ error: "Anket bulunamadı." });
+  res.json({ ...s, votedBy: s.votes.map((v) => v.userId), votes: undefined });
 });
 
 /* ---------------- CLASSIFIEDS (Site Panosu) ---------------- */
 
 router.get("/classifieds", requireAuth, async (req, res) => {
-  const data = await db.load();
-  const list = data.classifieds.map((c) => {
-    const author = data.users.find((u) => u.id === c.userId);
-    return { ...c, authorName: author ? author.name : "Bilinmiyor" };
-  });
-  res.json(list.sort((a, b) => new Date(b.date) - new Date(a.date)));
+  const list = await prisma.classifieds.findMany({ orderBy: { date: "desc" }, include: { user: { select: { name: true } } } });
+  res.json(list.map((c) => ({ ...c, authorName: c.user?.name || "Bilinmiyor", user: undefined })));
 });
 
 router.post("/classifieds", requireAuth, async (req, res) => {
-  const data = await db.load();
   const { type, title, description } = req.body || {};
   if (!title || !description) return res.status(400).json({ error: "Başlık ve açıklama zorunludur." });
-  const c = { id: db.uid(), userId: req.user.id, type: type || "diger", title, description, date: new Date().toISOString(), resolved: false };
-  data.classifieds.unshift(c);
-  await db.save(data);
+  const c = await prisma.classifieds.create({ data: { userId: req.user.id, type: type || "diger", title, description, resolved: false } });
   res.status(201).json(c);
 });
 
 router.patch("/classifieds/:id/resolve", requireAuth, async (req, res) => {
-  const data = await db.load();
-  const c = data.classifieds.find((x) => x.id === req.params.id);
+  const c = await prisma.classifieds.findUnique({ where: { id: req.params.id } });
   if (!c) return res.status(404).json({ error: "İlan bulunamadı." });
   if (c.userId !== req.user.id && req.user.role !== "yonetici") return res.status(403).json({ error: "Bu ilanı düzenleme yetkiniz yok." });
-  c.resolved = true;
-  await db.save(data);
-  res.json(c);
+  const updated = await prisma.classifieds.update({ where: { id: c.id }, data: { resolved: true } });
+  res.json(updated);
 });
 
 router.delete("/classifieds/:id", requireAuth, async (req, res) => {
-  const data = await db.load();
-  const c = data.classifieds.find((x) => x.id === req.params.id);
+  const c = await prisma.classifieds.findUnique({ where: { id: req.params.id } });
   if (!c) return res.status(404).json({ error: "İlan bulunamadı." });
   if (c.userId !== req.user.id && req.user.role !== "yonetici") return res.status(403).json({ error: "Bu ilanı silme yetkiniz yok." });
-  data.classifieds = data.classifieds.filter((x) => x.id !== req.params.id);
-  await db.save(data);
+  await prisma.classifieds.delete({ where: { id: c.id } });
   res.json({ message: "İlan silindi." });
 });
 
 /* ---------------- NOTIFICATIONS ---------------- */
 
 router.get("/notifications", requireAuth, async (req, res) => {
-  const data = await db.load();
-  const list = data.notifications.filter((n) => n.userId === req.user.id).sort((a, b) => new Date(b.date) - new Date(a.date));
+  const list = await prisma.notification.findMany({ where: { userId: req.user.id }, orderBy: { date: "desc" } });
   res.json(list);
 });
 
 router.patch("/notifications/:id/read", requireAuth, async (req, res) => {
-  const data = await db.load();
-  const n = data.notifications.find((x) => x.id === req.params.id && x.userId === req.user.id);
-  if (!n) return res.status(404).json({ error: "Bildirim bulunamadı." });
-  n.read = true;
-  await db.save(data);
-  res.json(n);
+  const n = await prisma.notification.updateMany({ where: { id: req.params.id, userId: req.user.id }, data: { read: true } });
+  if (!n.count) return res.status(404).json({ error: "Bildirim bulunamadı." });
+  res.json({ message: "Okundu olarak işaretlendi." });
 });
 
 router.post("/notifications/read-all", requireAuth, async (req, res) => {
-  const data = await db.load();
-  data.notifications.filter((n) => n.userId === req.user.id).forEach((n) => (n.read = true));
-  await db.save(data);
+  await prisma.notification.updateMany({ where: { userId: req.user.id, read: false }, data: { read: true } });
   res.json({ message: "Tüm bildirimler okundu olarak işaretlendi." });
 });
 
@@ -157,7 +160,9 @@ function sendEmail(email, message) {
 // Kiraci Borcu Bildir" - sadece kiracili dairelerde, ALICI malik olur,
 // metinde hem malik hem kiraci adi gecer - bizde ayri kisi-bazli cari
 // olmadigi icin borc yine Unit'e ait toplam borc, ama hedef kitle ve
-// hitap dogru sekilde kiraci varligina duyarli).
+// hitap dogru sekilde kiraci varligina duyarli). units/data.load() hala
+// legacy shim uzerinden okunuyor - "units" koleksiyonu Asama 5'te Prisma'ya
+// tasinana kadar burasi ayni sekilde calismaya devam eder.
 const MONTH_NAMES_LONG = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 
 router.post("/bulk-messages/preview", requireAuth, requireRole("yonetici"), async (req, res) => {
@@ -199,9 +204,9 @@ router.post("/bulk-messages/send", requireAuth, requireRole("yonetici"), async (
   const { channel, recipients } = req.body || {};
   if (!Array.isArray(recipients) || !recipients.length) return res.status(400).json({ error: "Alıcı listesi boş." });
   recipients.forEach((r) => (channel === "eposta" ? sendEmail(r.contact, r.text) : sendSms(r.contact, r.text)));
-  const data = await db.load();
-  db.logActivity(data, req.user, "bulk-message.send", `${recipients.length} kişiye toplu ${channel === "eposta" ? "e-posta" : "SMS"} gönderim denemesi yapıldı (sağlayıcı entegrasyonu eksik, bkz. sunucu logu).`, null);
-  await db.save(data);
+  await prisma.activityLog.create({
+    data: { actorId: req.user.id, actorName: req.user.name, action: "bulk-message.send", detail: `${recipients.length} kişiye toplu ${channel === "eposta" ? "e-posta" : "SMS"} gönderim denemesi yapıldı (sağlayıcı entegrasyonu eksik, bkz. sunucu logu).` },
+  });
   res.status(202).json({ message: `${recipients.length} alıcı için gönderim denendi. Gerçek sağlayıcı bağlanmadığı için mesajlar konsola loglandı, fiilen iletilmedi (bkz. README "Neler Gerçek, Neler Demo").` });
 });
 
@@ -219,8 +224,9 @@ router.post("/units/:id/borc-sms", requireAuth, requireRole("yonetici"), async (
   const debt = db.netDebt(data, unit.id);
   const text = `Sayın ${unit.ownerName || resident?.name || "-"}, ${unit.block} - Daire ${unit.no} güncel borcunuz ${debt}₺'dir. Bilgilerinize sunulur.`;
   sendSms(contact, text);
-  db.logActivity(data, req.user, "unit.borc-sms", `${unit.block} - Daire ${unit.no} sakinine borç durumu SMS'i gönderim denemesi yapıldı.`, unit.id);
-  await db.save(data);
+  await prisma.activityLog.create({
+    data: { actorId: req.user.id, actorName: req.user.name, action: "unit.borc-sms", detail: `${unit.block} - Daire ${unit.no} sakinine borç durumu SMS'i gönderim denemesi yapıldı.`, scopeUnitId: unit.id },
+  });
   res.status(202).json({ message: `${contact} numarasına gönderim denendi. Gerçek sağlayıcı bağlanmadığı için mesaj konsola loglandı, fiilen iletilmedi.` });
 });
 

@@ -659,6 +659,11 @@ model SurveyOption {
   survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
   text     String
   votes    Int    @default(0)
+  // Anket olustururken girilen sirayi korur - optionIndex (frontend'in
+  // gonderdigi, dizideki konumu belirten sayi) her sorguda AYNI sirayla
+  // eslessin diye zorunlu. id (UUID) sirasina gore siralamak eklenme
+  // sirasiyla ilgisiz oldugu icin kullanilamaz.
+  position Int    @default(0)
 }
 
 // "bir kullanici bir kere oy verebilir" kisitini DB'ye devreder (eski
