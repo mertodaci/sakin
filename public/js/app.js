@@ -36,6 +36,46 @@ function changeFontScale(delta) {
   updateFontScaleButtons();
 }
 
+/* ---------------- Yuksek kontrast ---------------- */
+let highContrast = localStorage.getItem("sakin_high_contrast") === "1";
+document.documentElement.classList.toggle("high-contrast", highContrast);
+function toggleHighContrast() {
+  highContrast = !highContrast;
+  localStorage.setItem("sakin_high_contrast", highContrast ? "1" : "0");
+  document.documentElement.classList.toggle("high-contrast", highContrast);
+  const btn = document.getElementById("highContrastBtn");
+  if (btn) btn.textContent = highContrast ? "Yüksek Kontrastı Kapat" : "Yüksek Kontrastı Aç";
+}
+
+/* ---------------- Sidebar daraltma (sadece ikon) ---------------- */
+let sidebarCollapsed = localStorage.getItem("sakin_sidebar_collapsed") === "1";
+function toggleSidebarCollapse() {
+  sidebarCollapsed = !sidebarCollapsed;
+  localStorage.setItem("sakin_sidebar_collapsed", sidebarCollapsed ? "1" : "0");
+  document.getElementById("sidebar")?.classList.toggle("collapsed", sidebarCollapsed);
+  const btn = document.getElementById("collapseToggleBtn");
+  if (btn) btn.innerHTML = sidebarCollapsed ? ICON.chevRight : ICON.chevLeft;
+  renderSidebarNav();
+}
+
+/* ---------------- Son goruntulenen sayfalar ---------------- */
+let recentTabs = JSON.parse(localStorage.getItem("sakin_recent_tabs") || "[]");
+const RECENT_TABS_MAX = 5;
+function trackRecentTab(tabId) {
+  if (tabId === "ozet") return;
+  recentTabs = [tabId, ...recentTabs.filter((t) => t !== tabId)].slice(0, RECENT_TABS_MAX);
+  localStorage.setItem("sakin_recent_tabs", JSON.stringify(recentTabs));
+}
+
+/* ---------------- "/" kisayolu: menude aramaya odaklan ---------------- */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "/") return;
+  const tag = (e.target.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select" || e.target.isContentEditable) return;
+  const input = document.getElementById("navSearchInput");
+  if (input) { e.preventDefault(); input.focus(); }
+});
+
 /* ---------------- API helper ---------------- */
 async function api(path, opts = {}) {
   const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
@@ -275,6 +315,8 @@ const ICON = {
   search: svgIcon('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),
   sun: svgIcon('<circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.9" y1="4.9" x2="6.3" y2="6.3"/><line x1="17.7" y1="17.7" x2="19.1" y2="19.1"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.9" y1="19.1" x2="6.3" y2="17.7"/><line x1="17.7" y1="6.3" x2="19.1" y2="4.9"/>'),
   moon: svgIcon('<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>'),
+  chevLeft: svgIcon('<polyline points="15 18 9 12 15 6"/>'),
+  chevRight: svgIcon('<polyline points="9 18 15 12 9 6"/>'),
 };
 const NAV_ICON = {
   ozet: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -386,13 +428,14 @@ function renderShell() {
   const app = document.getElementById("app");
   app.innerHTML = `
    <div class="app-shell">
-     <aside class="sidebar" id="sidebar">
+     <aside class="sidebar${sidebarCollapsed ? " collapsed" : ""}" id="sidebar">
        <div class="sidebar-brand">
          <div class="brand-mark">S</div>
          <div class="brand-word">
            <span class="f-display">Sakin</span>
            <span class="badge-role">${esc(ROLE_LABEL[state.user.role] || "")}</span>
          </div>
+         <button class="sidebar-collapse-btn" id="collapseToggleBtn" title="Menüyü daralt/genişlet">${sidebarCollapsed ? ICON.chevRight : ICON.chevLeft}</button>
        </div>
        <div class="sidebar-search">
          ${ICON.search}
@@ -435,6 +478,7 @@ function renderShell() {
   document.getElementById("hamburgerBtn").addEventListener("click", toggleSidebar);
   document.getElementById("sidebarOverlay").addEventListener("click", toggleSidebar);
   document.getElementById("userMenuBtn").addEventListener("click", toggleUserMenu);
+  document.getElementById("collapseToggleBtn").addEventListener("click", toggleSidebarCollapse);
   document.getElementById("navSearchInput").addEventListener("input", (e) => {
     navSearchQuery = e.target.value;
     renderSidebarNav();
@@ -455,11 +499,13 @@ function toggleUserMenu() {
   panel.className = "notif-panel user-menu-panel";
   panel.innerHTML = `
     <button class="btn btn-ghost btn-sm" id="changePwBtn" style="width:100%;margin-bottom:8px;">Şifre Değiştir</button>
+    <button class="btn btn-ghost btn-sm" id="highContrastBtn" style="width:100%;margin-bottom:8px;">${highContrast ? "Yüksek Kontrastı Kapat" : "Yüksek Kontrastı Aç"}</button>
     <button class="btn btn-ghost btn-sm" id="logoutAllBtn" style="width:100%;margin-bottom:8px;">Tüm Oturumları Kapat</button>
     <button class="btn btn-ghost btn-sm" id="logoutBtn" style="width:100%;">Çıkış Yap</button>
   `;
   document.querySelector(".sidebar-user").appendChild(panel);
   document.getElementById("changePwBtn").addEventListener("click", () => { panel.remove(); renderChangePasswordModal(); });
+  document.getElementById("highContrastBtn").addEventListener("click", toggleHighContrast);
   document.getElementById("logoutBtn").addEventListener("click", logout);
   document.getElementById("logoutAllBtn").addEventListener("click", async () => {
     if (!confirm("Tüm oturumlar kapatılsın mı? Diğer cihazlardaki oturumlar sonlandırılacak.")) return;
@@ -665,12 +711,21 @@ function renderSidebarNav() {
         <div class="sidebar-group-items">${favIds.map((id) => sidebarItemBtn(id, tabLabel(id))).join("")}</div>
       </div>`
     : "";
-  nav.innerHTML = favHtml + groups.map((g) => {
-    const isOpen = searching || expandedGroups.has(g.group);
+  // Son goruntulenen sayfalar - zaten favorilerde olanlar tekrar gosterilmez
+  // (gereksiz yineleme). Cihaz bazinda (localStorage), profil bazinda degil.
+  const recentIds = recentTabs.filter((id) => tabLabel(id) && !favIds.includes(id));
+  const recentHtml = !searching && recentIds.length
+    ? `<div class="sidebar-group sidebar-favorites">
+        <div class="sidebar-group-header" style="cursor:default;"><span>Son Görüntülenenler</span></div>
+        <div class="sidebar-group-items">${recentIds.map((id) => sidebarItemBtn(id, tabLabel(id))).join("")}</div>
+      </div>`
+    : "";
+  nav.innerHTML = favHtml + recentHtml + groups.map((g) => {
+    const isOpen = searching || sidebarCollapsed || expandedGroups.has(g.group);
     const body = g.sections
       ? g.sections.map((s) => {
           const key = `${g.group}::${s.label}`;
-          const secOpen = searching || !collapsedSections.has(key);
+          const secOpen = searching || sidebarCollapsed || !collapsedSections.has(key);
           return `
             <div class="sidebar-section">
               <button class="sidebar-subheading-btn" data-section="${esc(key)}">
@@ -723,6 +778,7 @@ function renderSidebarNav() {
   }));
   nav.querySelectorAll("[data-tab]").forEach((btn) => btn.addEventListener("click", () => {
     state.tab = btn.dataset.tab;
+    trackRecentTab(state.tab);
     if (searching) {
       navSearchQuery = "";
       const input = document.getElementById("navSearchInput");
@@ -1234,6 +1290,7 @@ function goToTab(tabId) {
   const owner = groups.find((g) => groupItems(g).some(([id]) => id === tabId));
   if (owner) { if (!expandedGroups) expandedGroups = new Set(); expandedGroups.add(owner.group); }
   state.tab = tabId;
+  trackRecentTab(tabId);
   renderSidebarNav();
   renderTab(tabId);
 }
