@@ -7,6 +7,46 @@ yardım istediğini anlayabilir.
 
 ---
 
+## 💬 Kapıcı AI — Uygulama İçi Kullanım Yardımcısı — TAMAMLANDI (2026-08-18)
+
+Kullanıcı, "nasıl ödeme yaparım", "nasıl daire eklerim" gibi kullanım
+sorularını yanıtlayan, uygulama içi bir chatbot istedi. Dış bir LLM
+servisine (API anahtarı, maliyet, internet bağımlılığı) ihtiyaç duymadan,
+**yerel bir anahtar-kelime eşleştiricisi** olarak kuruldu — sorular kapalı/
+tanımlı bir küme (uygulamanın kendi ekranları) olduğu için bu, tam bir
+LLM'den daha güvenilir: her zaman GERÇEK var olan bir ekrana yönlendirir,
+halüsinasyon riski yok.
+
+- `routes/help.js`: rol-bazlı (`sakin`/`yonetici`/`personel`) ~30 girdilik
+  bir SSS bilgi tabanı (her girdi: anahtar kelime varyasyonları, adım adım
+  cevap, ilgili sekme id'si). `POST /api/help/ask` skorlama ile en iyi
+  eşleşmeyi bulur; eşleşme yoksa rol-bazlı örnek sorularla nazik bir fallback
+  döner. `GET /api/help/suggestions` ilk açılışta gösterilecek örnekleri verir.
+- Sağ altta yüzen **🧑‍💼 Kapıcı AI** balonu (tüm ekranlarda, `renderShell`
+  içinde) — sohbet paneli, öneri "chip"leri, ve her bot cevabında
+  **"İlgili sayfaya git →"** butonu (tıklanınca `goToTab` ile doğrudan o
+  ekrana gider, paneli kapatır).
+- Test edilen tüm örnek sorular (nasıl ödeme yaparım, nasıl daire eklerim,
+  nasıl ödeme/fatura girişi yaparım, nasıl borç hareketi görürüm, nasıl
+  hesap dökümü alırım) doğru ekrana yönlendirdi; aynı ifadeler sakin/
+  yönetici rolünde doğru şekilde FARKLI (role uygun) cevaplar verdi;
+  eşleşmeyen sorularda fallback + öneriler doğru çalıştı.
+
+---
+
+## 🏢 Platform Yönetimi Arayüzü — TAMAMLANDI (2026-08-18)
+
+`routes/owner.js`'in (Aşama 5/6'da eklenen) API-only uçlarına arayüz
+eklendi — sadece `User.isPlatformOwner=true` hesaplarda görünen ayrı bir
+"Platform" nav grubu: yeni site oluşturma (davet linki gösterimi), site
+aktif/pasif, site-aşırı özet tablosu, kullanıcı arayıp ikinci bir sitenin
+erişimini verme/kaldırma. `/auth/me` artık `isPlatformOwner` alanını
+döndürüyor. Tarayıcıda uçtan uca doğrulandı; non-owner bir yöneticinin ne
+sekmeyi gördüğü ne de `/api/owner/*` uçlarına erişebildiği (403) ayrıca
+test edildi.
+
+---
+
 ## 🏠 Çok-Daireli Sakin Desteği — TAMAMLANDI (2026-08-18)
 
 Kullanıcı sordu: "Mert Odacı A sitesinde iki farklı evi var, ikisinin

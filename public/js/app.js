@@ -378,6 +378,8 @@ function logout() {
   expandedGroups = null;
   navSearchQuery = "";
   residentAidatUnit = "all";
+  kapiciMessages = [];
+  kapiciOpen = false;
   renderLogin();
 }
 
@@ -558,6 +560,19 @@ function renderShell() {
      </div>
    </div>
    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+   <button id="kapiciFab" class="kapici-fab" title="Kapıcı AI - Yardım">💬</button>
+   <div id="kapiciPanel" class="kapici-panel" style="display:none;">
+     <div class="kapici-header">
+       <span class="kapici-title">🧑‍💼 Kapıcı AI<span class="kapici-subtitle">Uygulama kullanım yardımcınız</span></span>
+       <button id="kapiciCloseBtn" class="kapici-close" title="Kapat">✕</button>
+     </div>
+     <div id="kapiciMessages" class="kapici-messages"></div>
+     <div id="kapiciSuggestions" class="kapici-suggestions"></div>
+     <form id="kapiciForm" class="kapici-input-row">
+       <input type="text" id="kapiciInput" placeholder="Bir şey sorun…" autocomplete="off" />
+       <button type="submit">Gönder</button>
+     </form>
+   </div>
   `;
   renderSidebarNav();
   document.getElementById("bellBtn").addEventListener("click", toggleNotifPanel);
@@ -575,6 +590,84 @@ function renderShell() {
   updateFontScaleButtons();
   refreshNotifBadge();
   renderTab(state.tab || "ozet");
+  initKapiciAI();
+}
+
+/* ---------------- Kapıcı AI (uygulama-ici kullanim yardimcisi) ----------------
+   Dis bir LLM servisine bagli DEGIL - routes/help.js'teki yerel, anahtar-kelime
+   tabanli bir SSS eslestiricisiyle konusur. "Nasil odeme yaparim", "nasil daire
+   eklerim" gibi kapali/tanimli sorulara, her zaman GERCEK var olan bir ekrana
+   yonlendiren adim adim yanit verir - halusinasyon riski yok, maliyetsiz. */
+let kapiciMessages = [];
+let kapiciOpen = false;
+
+// Backend cevaplarindaki basit **kalin** isaretlemesini <strong>'e cevirir -
+// esc() ONCE uygulanir (XSS'e karsi), sonra sadece bizim urettigimiz ** kaliplari islenir.
+function kapiciFormat(text) {
+  return esc(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
+
+function renderKapiciMessages() {
+  const box = document.getElementById("kapiciMessages");
+  if (!box) return;
+  box.innerHTML = kapiciMessages.map((m) => {
+    if (m.role === "user") return `<div class="kapici-msg kapici-msg-user">${esc(m.text)}</div>`;
+    return `<div class="kapici-msg kapici-msg-bot">${kapiciFormat(m.text)}${m.tab ? `<br/><button class="kapici-goto" data-goto-tab="${esc(m.tab)}">İlgili sayfaya git →</button>` : ""}</div>`;
+  }).join("");
+  box.scrollTop = box.scrollHeight;
+  box.querySelectorAll("[data-goto-tab]").forEach((b) => b.addEventListener("click", () => {
+    goToTab(b.dataset.gotoTab);
+    document.getElementById("kapiciPanel").style.display = "none";
+    kapiciOpen = false;
+  }));
+  renderKapiciSuggestions();
+}
+
+function renderKapiciSuggestions() {
+  const box = document.getElementById("kapiciSuggestions");
+  if (!box) return;
+  const last = kapiciMessages[kapiciMessages.length - 1];
+  const suggestions = (last && last.role === "bot" && last.suggestions) || [];
+  box.innerHTML = suggestions.map((s) => `<button class="kapici-suggestion-chip" data-suggest="${esc(s)}">${esc(s)}</button>`).join("");
+  box.querySelectorAll("[data-suggest]").forEach((b) => b.addEventListener("click", () => askKapici(b.dataset.suggest)));
+}
+
+async function askKapici(question) {
+  kapiciMessages.push({ role: "user", text: question });
+  renderKapiciMessages();
+  const input = document.getElementById("kapiciInput");
+  if (input) input.value = "";
+  try {
+    const r = await api("/help/ask", { method: "POST", body: { question } });
+    kapiciMessages.push({ role: "bot", text: r.answer, tab: r.tab, suggestions: r.suggestions });
+  } catch (err) {
+    kapiciMessages.push({ role: "bot", text: "Bir hata oluştu, lütfen tekrar deneyin.", suggestions: [] });
+  }
+  renderKapiciMessages();
+}
+
+function initKapiciAI() {
+  const fab = document.getElementById("kapiciFab");
+  const panel = document.getElementById("kapiciPanel");
+  if (!fab || !panel) return;
+  fab.addEventListener("click", async () => {
+    kapiciOpen = !kapiciOpen;
+    panel.style.display = kapiciOpen ? "flex" : "none";
+    if (kapiciOpen && !kapiciMessages.length) {
+      let suggestions = [];
+      try { ({ suggestions } = await api("/help/suggestions")); } catch {}
+      kapiciMessages.push({ role: "bot", text: "Merhaba! Ben Kapıcı AI 👋 Uygulamayı kullanmakla ilgili sorularınızı yanıtlayabilirim. Aşağıdan örnek bir soru seçebilir ya da kendi sorunuzu yazabilirsiniz.", suggestions });
+      renderKapiciMessages();
+    }
+  });
+  document.getElementById("kapiciCloseBtn").addEventListener("click", () => { kapiciOpen = false; panel.style.display = "none"; });
+  document.getElementById("kapiciForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = document.getElementById("kapiciInput");
+    const q = input.value.trim();
+    if (q) askKapici(q);
+  });
+  if (kapiciMessages.length) renderKapiciMessages();
 }
 
 function toggleUserMenu() {

@@ -21,6 +21,7 @@ const legalRoutes = require("./routes/legal");
 const archiveRoutes = require("./routes/archive");
 const accountingRoutes = require("./routes/accounting");
 const knowledgeRoutes = require("./routes/knowledge");
+const helpRoutes = require("./routes/help");
 const ownerRoutes = require("./routes/owner");
 const { runMaintenanceTasks } = require("./jobs");
 
@@ -45,6 +46,7 @@ app.use("/api", legalRoutes);
 app.use("/api", archiveRoutes);
 app.use("/api", accountingRoutes);
 app.use("/api", knowledgeRoutes);
+app.use("/api", helpRoutes);
 app.use("/api/owner", ownerRoutes);
 
 app.use(express.static(path.join(__dirname, "public")));
