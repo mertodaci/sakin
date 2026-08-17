@@ -574,12 +574,14 @@ function renderSidebarNav() {
           const key = `${g.group}::${s.label}`;
           const secOpen = !collapsedSections.has(key);
           return `
-            <button class="sidebar-subheading-btn" data-section="${esc(key)}">
-              <span>${esc(s.label)}</span>
-              <span class="chevron sub ${secOpen ? "open" : ""}">›</span>
-            </button>
-            <div class="sidebar-section-items" style="display:${secOpen ? "block" : "none"};">
-              ${s.items.map(([id, label]) => sidebarItemBtn(id, label)).join("")}
+            <div class="sidebar-section">
+              <button class="sidebar-subheading-btn" data-section="${esc(key)}">
+                <span>${esc(s.label)}</span>
+                <span class="chevron sub ${secOpen ? "open" : ""}">›</span>
+              </button>
+              <div class="sidebar-section-items" style="display:${secOpen ? "block" : "none"};">
+                ${s.items.map(([id, label]) => sidebarItemBtn(id, label)).join("")}
+              </div>
             </div>`;
         }).join("")
       : g.items.map(([id, label]) => sidebarItemBtn(id, label)).join("");
@@ -1045,27 +1047,54 @@ async function renderPano(c) {
 
 /* ================= MANAGER-ONLY VIEWS ================= */
 
+function statCard(goto, icon, label, value, color, compact) {
+  return `
+    <div class="card stat-card${compact ? " compact" : ""} clickable" data-goto="${esc(goto)}">
+      <div class="stat-icon">${navIcon(icon)}</div>
+      <div class="stat-label">${esc(label)}</div>
+      <div class="f-num stat-value" style="${color ? `color:${color};` : ""}">${value}</div>
+    </div>`;
+}
+
 async function renderManagerOzet(c) {
   const [dash, units] = await Promise.all([api("/dashboard"), api("/units")]);
+  const debtors = units.filter((u) => u.debt > 0).sort((a, b) => b.debt - a.debt);
+  const shown = debtors.slice(0, 8);
+  const overflow = debtors.length - shown.length;
   c.innerHTML = `
     ${sectionTitle("Genel Özet", "Sitenin genel mali ve operasyonel durumu")}
+    <div class="stat-group-label">Mali Durum</div>
     <div class="grid cols-3 mb-16">
-      <div class="card stat-card clickable" data-goto="kasalar"><div class="stat-label">KASA BAKİYESİ</div><div class="f-num stat-value" style="color:${dash.kasa >= 0 ? "var(--green)" : "var(--red)"};">${tl(dash.kasa)}</div></div>
-      <div class="card stat-card clickable" data-goto="tahsilat"><div class="stat-label">TOPLAM ALACAK</div><div class="f-num stat-value" style="color:var(--red);">${tl(dash.totalDebt)}</div></div>
-      <div class="card stat-card clickable" data-goto="borclistesi"><div class="stat-label">TOPLAM BORÇ (ÖDENECEK)</div><div class="f-num stat-value" style="color:var(--amber);">${tl(dash.totalPayables)}</div></div>
-      <div class="card stat-card clickable" data-goto="tahsilat"><div class="stat-label">AİDATI ÖDENEN</div><div class="stat-value">${dash.paidUnits}/${dash.unitCount}</div></div>
+      ${statCard("kasalar", "kasalar", "KASA BAKİYESİ", tl(dash.kasa), dash.kasa >= 0 ? "var(--green)" : "var(--red)")}
+      ${statCard("tahsilat", "tahsilat", "TOPLAM ALACAK", tl(dash.totalDebt), "var(--red)")}
+      ${statCard("borclistesi", "borclistesi", "TOPLAM BORÇ (ÖDENECEK)", tl(dash.totalPayables), "var(--amber)")}
+      ${statCard("tahsilat", "muhasebe", "AİDATI ÖDENEN", `${dash.paidUnits}/${dash.unitCount}`)}
     </div>
+    <div class="stat-group-label">Operasyonel Durum</div>
     <div class="grid cols-3 mb-16">
-      <div class="card stat-card clickable" data-goto="talep"><div class="stat-label">AÇIK TALEP</div><div class="stat-value">${dash.openTickets}</div></div>
-      <div class="card stat-card clickable" data-goto="kullanicilar"><div class="stat-label">ONAY BEKLEYEN</div><div class="stat-value">${dash.pendingApprovals}</div></div>
-      <div class="card stat-card clickable" data-goto="demirbas"><div class="stat-label">BAKIMI GECİKEN</div><div class="stat-value">${dash.overdueEquipment}</div></div>
+      ${statCard("talep", "talep", "AÇIK TALEP", dash.openTickets, null, true)}
+      ${statCard("kullanicilar", "kullanicilar", "ONAY BEKLEYEN", dash.pendingApprovals, null, true)}
+      ${statCard("demirbas", "demirbas", "BAKIMI GECİKEN", dash.overdueEquipment, null, true)}
     </div>
     <div class="card tight">
-      <div class="ledger-title">Borcu Bulunan Daireler</div>
-      ${units.filter((u) => u.debt > 0).map((u) => ledgerRow(esc(u.block) + " - Daire " + esc(u.no), esc(u.ownerName || ""), tl(u.debt), "var(--red)")).join("") || '<div class="empty-row">Borçlu daire yok.</div>'}
+      <div class="ledger-title">Borcu Bulunan Daireler${debtors.length ? ` <span class="muted" style="font-weight:500;">(${debtors.length})</span>` : ""}</div>
+      ${shown.map((u) => `
+        <div class="debtor-row" data-unit-id="${esc(u.id)}">
+          <div class="debtor-avatar">${esc(initials(u.ownerName || "?"))}</div>
+          <div class="debtor-info">
+            <div class="debtor-name">${esc(u.block)} - Daire ${esc(u.no)}</div>
+            <div class="small muted">${esc(u.ownerName || "")}</div>
+          </div>
+          <div class="f-num debtor-amount">${tl(u.debt)}</div>
+        </div>`).join("") || '<div class="empty-row">Şu anda borçlu daire bulunmuyor.</div>'}
+      ${overflow > 0 ? `<button class="debtor-more" data-goto="borclistesi">+${overflow} daire daha — Borç Listesi'nde gör</button>` : ""}
     </div>
   `;
   c.querySelectorAll("[data-goto]").forEach((el) => el.addEventListener("click", () => goToTab(el.dataset.goto)));
+  c.querySelectorAll("[data-unit-id]").forEach((el) => el.addEventListener("click", () => {
+    const unit = units.find((u) => u.id === el.dataset.unitId);
+    if (unit) renderHesapOzetiModal(unit);
+  }));
 }
 
 // Ozet ekranindaki istatistik kutucuklarindan ilgili sekmeye dogrudan gecis.

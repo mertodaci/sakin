@@ -17,18 +17,17 @@
   --radius: 16px;
   --shadow-sm: 0 1px 2px rgba(20,48,74,.05), 0 2px 8px rgba(20,48,74,.04);
   --shadow-md: 0 4px 16px rgba(20,48,74,.08);
-  /* Sidebar: koyu "slate" zemin + indigo/mor vurgu - içerikten net ayrışan,
-     çağdaş SaaS ürün kimliği (düz lacivert degrade yerine). */
+  /* Sidebar: koyu "slate" zemin. Vurgu rengi mor/indigo degil, uygulamanin
+     her yerinde (raporlar, butonlar) kullanilan tek lacivert/azure marka
+     kimligi - iki ayri renk dili yerine tutarli tek sistem. */
   --sb-bg: #0B1120;
   --sb-bg-2: #0F1729;
   --sb-border: rgba(255,255,255,.06);
   --sb-text: #A9B4CC;
   --sb-text-dim: #5B6884;
   --sb-hover: rgba(255,255,255,.05);
-  --sb-active-bg: linear-gradient(135deg, #6366F1, #8B5CF6);
-  --sb-active-glow: 0 4px 14px rgba(99,102,241,.35);
-  --accent: #6366F1;
-  --accent-2: #8B5CF6;
+  --sb-active-bg: rgba(47,111,237,.16);
+  --sb-active-border: #4C8AFF;
   --content-max: 1360px;
 }
 
@@ -64,10 +63,10 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .sidebar-brand { padding: 22px 20px 18px; display: flex; align-items: center; gap: 11px; }
 .brand-mark {
   width: 34px; height: 34px; border-radius: 10px; flex: 0 0 34px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: linear-gradient(135deg, #4C8AFF, var(--navy));
   display: flex; align-items: center; justify-content: center;
   font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; color: #fff;
-  box-shadow: 0 4px 14px rgba(99,102,241,.4);
+  box-shadow: 0 4px 14px rgba(47,111,237,.35);
 }
 .brand-word { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .brand-word .f-display { color: #fff !important; font-size: 16.5px !important; letter-spacing: .2px; line-height: 1; }
@@ -85,13 +84,19 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .sidebar-group-header .chevron { transition: transform .15s; display: inline-flex; color: var(--sb-text-dim); }
 .sidebar-group-header .chevron.open { transform: rotate(90deg); }
 .sidebar-group-items { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 6px; }
+/* Islemler/Raporlar alt basliklari: ust grup basligindan (buyuk harf,
+   kalin, koseli) bilerek FARKLI bir dil kullanir - kucuk harf, daha ince,
+   sola girintili + dikey kilavuz cizgi - boylece "ic ice ikinci seviye"
+   oldugu tek bakista anlasilir, ust grupla karistirilmaz. */
+.sidebar-section { margin-left: 10px; padding-left: 10px; border-left: 1px solid var(--sb-border); margin-top: 2px; }
+.sidebar-section:first-child { margin-top: 0; }
 .sidebar-subheading-btn {
   width: 100%; display: flex; justify-content: space-between; align-items: center;
-  padding: 9px 10px 9px 12px; margin-top: 2px; font-size: 9.5px; font-weight: 700; letter-spacing: .7px;
-  color: var(--sb-text-dim); background: transparent; border: none; cursor: pointer;
-  text-transform: uppercase; border-radius: 6px; transition: background .12s, color .12s;
+  padding: 7px 10px 7px 6px; font-size: 11.5px; font-weight: 600; letter-spacing: .1px;
+  color: var(--sb-text); opacity: .8; background: transparent; border: none; cursor: pointer;
+  text-transform: none; border-radius: 6px; transition: background .12s, color .12s, opacity .12s;
 }
-.sidebar-subheading-btn:hover { background: var(--sb-hover); color: var(--sb-text); }
+.sidebar-subheading-btn:hover { background: var(--sb-hover); color: #fff; opacity: 1; }
 .sidebar-subheading-btn .chevron.sub { font-size: 10px; transition: transform .15s; display: inline-flex; }
 .sidebar-subheading-btn .chevron.sub.open { transform: rotate(90deg); }
 .sidebar-section-items { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 4px; }
@@ -104,8 +109,11 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .sidebar-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-item:hover:not(.active) { background: var(--sb-hover); color: #fff; }
 .sidebar-item:hover:not(.active) svg { opacity: 1; }
-.sidebar-item.active { background: var(--sb-active-bg); color: #fff; font-weight: 600; box-shadow: var(--sb-active-glow); }
-.sidebar-item.active svg { opacity: 1; }
+.sidebar-item.active {
+  background: var(--sb-active-bg); color: #fff; font-weight: 600;
+  border-left: 3px solid var(--sb-active-border); padding-left: 9px;
+}
+.sidebar-item.active svg { opacity: 1; color: var(--sb-active-border); }
 
 .sidebar-user {
   border-top: 1px solid var(--sb-border); padding: 12px; position: relative; flex: 0 0 auto;
@@ -117,7 +125,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .sidebar-user-btn:hover { background: var(--sb-hover); }
 .sidebar-avatar {
   width: 32px; height: 32px; border-radius: 999px; flex: 0 0 32px; display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; font-size: 12.5px; font-weight: 700;
+  background: linear-gradient(135deg, #4C8AFF, var(--navy)); color: #fff; font-size: 12.5px; font-weight: 700;
 }
 .sidebar-user-info { min-width: 0; flex: 1; }
 .sidebar-user-info .name { font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -179,13 +187,29 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
 @media (max-width: 640px) { .grid.cols-2, .grid.cols-3 { grid-template-columns: 1fr; } }
 
-.stat-card { padding: 22px 24px; position: relative; overflow: hidden; }
-.stat-card::before {
-  content: ""; position: absolute; top: -30px; right: -30px; width: 90px; height: 90px; border-radius: 999px;
-  background: radial-gradient(circle, rgba(99,102,241,.14), transparent 70%);
+.stat-card { padding: 20px 22px; }
+.stat-icon {
+  width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  background: var(--azure-light); color: var(--azure); margin-bottom: 14px;
 }
-.stat-label { font-size: 11.5px; font-weight: 700; color: var(--mist); letter-spacing: .7px; position: relative; }
-.stat-value { font-size: 32px; font-weight: 700; margin-top: 8px; letter-spacing: -.5px; position: relative; }
+.stat-icon svg { width: 18px; height: 18px; }
+.stat-label { font-size: 11.5px; font-weight: 700; color: var(--mist); letter-spacing: .6px; }
+.stat-value { font-size: 28px; font-weight: 700; margin-top: 6px; letter-spacing: -.4px; }
+.stat-card.compact .stat-icon { width: 28px; height: 28px; margin-bottom: 10px; }
+.stat-card.compact .stat-icon svg { width: 14px; height: 14px; }
+.stat-card.compact .stat-value { font-size: 20px; margin-top: 4px; }
+.stat-group-label { font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--steel); margin: 22px 0 10px; }
+.stat-group-label:first-of-type { margin-top: 0; }
+
+.debtor-row { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid var(--line); cursor: pointer; border-radius: 8px; transition: background .12s; }
+.debtor-row:hover { background: var(--ice); }
+.debtor-row:last-of-type { border-bottom: none; }
+.debtor-avatar { width: 34px; height: 34px; border-radius: 999px; flex: 0 0 34px; display: flex; align-items: center; justify-content: center; background: var(--azure-light); color: var(--azure); font-size: 12px; font-weight: 700; }
+.debtor-info { flex: 1; min-width: 0; }
+.debtor-name { font-size: 14px; font-weight: 600; }
+.debtor-amount { font-size: 14px; font-weight: 700; color: var(--red); }
+.debtor-more { width: 100%; text-align: center; padding: 10px; background: transparent; border: none; border-top: 1px solid var(--line); color: var(--azure); font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 4px; border-radius: 0 0 8px 8px; }
+.debtor-more:hover { background: var(--ice); }
 
 /* ---------- Pills / Status ---------- */
 .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
