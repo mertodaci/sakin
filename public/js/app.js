@@ -125,6 +125,18 @@ function debtColor(debt) { return debt > 0 ? "var(--red)" : "var(--green)"; }
 const CHARGE_TYPE_LABELS = { aidat: "Aidat", sayac: "Sayaç", gecikme_faizi: "⚠ Gecikme Faizi", diger: "Diğer" };
 function chargeTypeLabel(ch) { return CHARGE_TYPE_LABELS[ch.type] || ch.type; }
 function pill(status) { const cls = PILL_MAP[status] || "grey"; return `<span class="pill ${cls}"><span class="dot"></span>${esc(status)}</span>`; }
+// Veritabaninda saklanan durum degerleri (orn. Ticket.status="Açık") hep
+// Turkce ve PILL_MAP bu Turkce degerleri ANAHTAR olarak kullanir - cevrilmis
+// metin dogrudan pill()'e verilirse renk PILL_MAP'te bulunamayip griye duser
+// (bkz. debtStatusPill). Bilinen durum degerleri icin renk HEP orijinal
+// Turkce degerden, gorunen metin ise (sadece sakin+TR-disi dilde) cevrilerek uretilir.
+const STATUS_I18N_KEY = { "Onaylandı": "status.approved", "İptal": "status.cancelled", "Açık": "status.open", "İşlemde": "status.inProgress", "Çözüldü": "status.resolved", "Teslim Alındı": "status.received", "Teslim Edildi": "status.delivered" };
+function trPill(rawStatus) {
+  const key = STATUS_I18N_KEY[rawStatus];
+  const text = key ? uiT(key, rawStatus) : rawStatus;
+  const cls = PILL_MAP[rawStatus] || "grey";
+  return `<span class="pill ${cls}"><span class="dot"></span>${esc(text)}</span>`;
+}
 function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2600); }
 
 // Auth header gerektiren dosya indirmeleri (PDF/JSON) icin: fetch + blob + gecici indirme linki
@@ -1297,32 +1309,32 @@ async function renderDuyuru(c) {
   const list = await api("/announcements");
   const canCreate = state.user.role === "yonetici";
   c.innerHTML = `
-    <div class="flex-between">${sectionTitle("Duyurular")}${canCreate ? '<button class="btn btn-ghost btn-sm" id="newAnnBtn" style="margin-bottom:16px;">+ Yeni Duyuru</button>' : ""}</div>
+    <div class="flex-between">${sectionTitle(uiT("duyuru.title", "Duyurular"))}${canCreate ? `<button class="btn btn-ghost btn-sm" id="newAnnBtn" style="margin-bottom:16px;">${esc(uiT("duyuru.newBtn", "+ Yeni Duyuru"))}</button>` : ""}</div>
     <div id="annForm"></div>
     <div class="grid">${list.map((a) => `
       <div class="card pad accent mb-16">
         <div class="flex-between"><div class="f-display" style="font-weight:700;font-size:15px;">${esc(a.title)} ${a.pinned ? "📌" : ""}</div><div class="small muted">${dt(a.date)}</div></div>
         <p style="font-size:14px;color:var(--steel);margin-top:6px;line-height:1.55;">${esc(a.body)}</p>
-        ${canCreate ? `<button class="btn-danger" data-del="${a.id}">Sil</button>` : ""}
-      </div>`).join("") || '<div class="empty-row">Duyuru yok.</div>'}</div>
+        ${canCreate ? `<button class="btn-danger" data-del="${a.id}">${esc(uiT("common.delete", "Sil"))}</button>` : ""}
+      </div>`).join("") || `<div class="empty-row">${esc(uiT("duyuru.none", "Duyuru yok."))}</div>`}</div>
   `;
   if (canCreate) {
     document.getElementById("newAnnBtn").addEventListener("click", () => {
       document.getElementById("annForm").innerHTML = `
         <form id="annCreateForm" class="card form-card">
-          <div class="field"><label>Başlık</label><input name="title" required /></div>
-          <div class="field"><label>İçerik</label><textarea name="body" rows="3" required></textarea></div>
-          <label class="small"><input type="checkbox" name="pinned" /> Sabitle</label>
-          <button class="btn btn-primary btn-sm" style="margin-top:10px;display:block;" type="submit">Yayınla</button>
+          <div class="field"><label>${esc(uiT("common.title", "Başlık"))}</label><input name="title" required /></div>
+          <div class="field"><label>${esc(uiT("duyuru.body", "İçerik"))}</label><textarea name="body" rows="3" required></textarea></div>
+          <label class="small"><input type="checkbox" name="pinned" /> ${esc(uiT("duyuru.pin", "Sabitle"))}</label>
+          <button class="btn btn-primary btn-sm" style="margin-top:10px;display:block;" type="submit">${esc(uiT("duyuru.publish", "Yayınla"))}</button>
         </form>`;
       document.getElementById("annCreateForm").addEventListener("submit", async (e) => {
         e.preventDefault();
         const f = new FormData(e.target);
-        try { await api("/announcements", { method: "POST", body: { title: f.get("title"), body: f.get("body"), pinned: !!f.get("pinned") } }); toast("Duyuru yayınlandı."); renderTab("duyuru"); }
+        try { await api("/announcements", { method: "POST", body: { title: f.get("title"), body: f.get("body"), pinned: !!f.get("pinned") } }); toast(uiT("duyuru.published", "Duyuru yayınlandı.")); renderTab("duyuru"); }
         catch (err) { toast(err.message); }
       });
     });
-    c.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", async () => { if (!confirm("Silinsin mi?")) return; await api("/announcements/" + b.dataset.del, { method: "DELETE" }); renderTab("duyuru"); }));
+    c.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", async () => { if (!confirm(uiT("common.confirmDelete", "Silinsin mi?"))) return; await api("/announcements/" + b.dataset.del, { method: "DELETE" }); renderTab("duyuru"); }));
   }
 }
 
@@ -1336,12 +1348,12 @@ function surveyCard(s) {
       return `<div style="margin-bottom:8px;">
         <div class="flex-between" style="font-size:14px;">
           <button ${voted ? "disabled" : ""} data-sid="${s.id}" data-vote="${i}" style="background:none;border:none;padding:0;font-weight:600;color:${voted ? "var(--ink)" : "var(--navy)"};cursor:${voted ? "default" : "pointer"};text-align:left;">${esc(o.text)}</button>
-          <span class="f-num muted">${pct}% · ${o.votes} oy</span>
+          <span class="f-num muted">${pct}% · ${o.votes} ${esc(uiT("anket.vote", "oy"))}</span>
         </div>
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;"></div></div>
       </div>`;
     }).join("")}
-    ${voted ? '<div class="small" style="color:var(--green);font-weight:600;">Oyunuz kaydedildi</div>' : ""}
+    ${voted ? `<div class="small" style="color:var(--green);font-weight:600;">${esc(uiT("anket.voted", "Oyunuz kaydedildi"))}</div>` : ""}
   </div>`;
 }
 
@@ -1349,25 +1361,25 @@ async function renderAnket(c) {
   const list = await api("/surveys");
   const canCreate = state.user.role === "yonetici";
   c.innerHTML = `
-    <div class="flex-between">${sectionTitle("Anketler")}${canCreate ? '<button class="btn btn-ghost btn-sm" id="newSurBtn" style="margin-bottom:16px;">+ Yeni Anket</button>' : ""}</div>
+    <div class="flex-between">${sectionTitle(uiT("anket.title", "Anketler"))}${canCreate ? `<button class="btn btn-ghost btn-sm" id="newSurBtn" style="margin-bottom:16px;">${esc(uiT("anket.newBtn", "+ Yeni Anket"))}</button>` : ""}</div>
     <div id="surForm"></div>
-    <div class="grid">${list.map(surveyCard).join("") || '<div class="empty-row">Anket yok.</div>'}</div>
+    <div class="grid">${list.map(surveyCard).join("") || `<div class="empty-row">${esc(uiT("anket.none", "Anket yok."))}</div>`}</div>
   `;
   if (canCreate) {
     document.getElementById("newSurBtn").addEventListener("click", () => {
       document.getElementById("surForm").innerHTML = `
         <form id="surCreateForm" class="card form-card">
-          <div class="field"><label>Soru</label><input name="question" required /></div>
-          <div class="field"><label>Seçenek 1</label><input name="opt1" required /></div>
-          <div class="field"><label>Seçenek 2</label><input name="opt2" required /></div>
-          <div class="field"><label>Seçenek 3 (opsiyonel)</label><input name="opt3" /></div>
-          <button class="btn btn-primary btn-sm" type="submit">Anketi Başlat</button>
+          <div class="field"><label>${esc(uiT("anket.question", "Soru"))}</label><input name="question" required /></div>
+          <div class="field"><label>${esc(uiT("anket.option", "Seçenek"))} 1</label><input name="opt1" required /></div>
+          <div class="field"><label>${esc(uiT("anket.option", "Seçenek"))} 2</label><input name="opt2" required /></div>
+          <div class="field"><label>${esc(uiT("anket.option", "Seçenek"))} 3 ${esc(uiT("anket.optional", "(opsiyonel)"))}</label><input name="opt3" /></div>
+          <button class="btn btn-primary btn-sm" type="submit">${esc(uiT("anket.start", "Anketi Başlat"))}</button>
         </form>`;
       document.getElementById("surCreateForm").addEventListener("submit", async (e) => {
         e.preventDefault();
         const f = new FormData(e.target);
         const options = [f.get("opt1"), f.get("opt2"), f.get("opt3")].filter(Boolean);
-        try { await api("/surveys", { method: "POST", body: { question: f.get("question"), options } }); toast("Anket oluşturuldu."); renderTab("anket"); }
+        try { await api("/surveys", { method: "POST", body: { question: f.get("question"), options } }); toast(uiT("anket.created", "Anket oluşturuldu.")); renderTab("anket"); }
         catch (err) { toast(err.message); }
       });
     });
@@ -1382,32 +1394,32 @@ async function renderRezervasyon(c) {
   const [reservations, facilities] = await Promise.all([api("/reservations"), api("/facilities")]);
   const canManage = state.user.role === "yonetici";
   c.innerHTML = `
-    ${sectionTitle("Ortak Alan Rezervasyonu")}
+    ${sectionTitle(uiT("rezervasyon.title", "Ortak Alan Rezervasyonu"))}
     ${!canManage ? `
     <form id="resForm" class="card form-card form-row">
-      ${(state.user.units || []).length > 1 ? `<div class="field"><label>Daire</label><select name="unitId">${state.user.units.map((u) => `<option value="${u.id}">${esc(u.label)}</option>`).join("")}</select></div>` : ""}
-      <div class="field"><label>Tesis</label><select name="facilityId">${facilities.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join("")}</select></div>
-      <div class="field"><label>Tarih</label><input type="date" name="date" required /></div>
-      <div class="field"><label>Başlangıç</label><input type="time" name="startTime" value="18:00" required /></div>
-      <div class="field"><label>Bitiş</label><input type="time" name="endTime" value="19:00" required /></div>
-      <button class="btn btn-primary" type="submit">Rezerve Et</button>
+      ${(state.user.units || []).length > 1 ? `<div class="field"><label>${esc(uiT("common.unit", "Daire"))}</label><select name="unitId">${state.user.units.map((u) => `<option value="${u.id}">${esc(u.label)}</option>`).join("")}</select></div>` : ""}
+      <div class="field"><label>${esc(uiT("rezervasyon.facility", "Tesis"))}</label><select name="facilityId">${facilities.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join("")}</select></div>
+      <div class="field"><label>${esc(uiT("common.date", "Tarih"))}</label><input type="date" name="date" required /></div>
+      <div class="field"><label>${esc(uiT("rezervasyon.start", "Başlangıç"))}</label><input type="time" name="startTime" value="18:00" required /></div>
+      <div class="field"><label>${esc(uiT("rezervasyon.end", "Bitiş"))}</label><input type="time" name="endTime" value="19:00" required /></div>
+      <button class="btn btn-primary" type="submit">${esc(uiT("rezervasyon.submit", "Rezerve Et"))}</button>
     </form>` : ""}
     <div class="card tight">
-      <div class="ledger-title">${canManage ? "Tüm Rezervasyonlar" : "Rezervasyonlarım"}</div>
+      <div class="ledger-title">${canManage ? "Tüm Rezervasyonlar" : esc(uiT("rezervasyon.mineTitle", "Rezervasyonlarım"))}</div>
       ${reservations.map((r) => `
         <div class="ledger-row">
           <div><div style="font-size:14px;font-weight:600;">${esc(r.facilityName)}</div><div class="small muted">${dt(r.date)} · ${r.startTime}-${r.endTime}${canManage ? " · " + esc(r.unitLabel) : ""}</div></div>
-          <div style="display:flex;align-items:center;gap:10px;">${pill(r.status)}<button class="btn-danger" data-cancel="${r.id}">İptal</button></div>
-        </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+          <div style="display:flex;align-items:center;gap:10px;">${trPill(r.status)}<button class="btn-danger" data-cancel="${r.id}">${esc(uiT("common.cancel", "İptal"))}</button></div>
+        </div>`).join("") || `<div class="empty-row">${esc(uiT("rezervasyon.none", "Kayıt yok."))}</div>`}
     </div>
   `;
   document.getElementById("resForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
-    try { await api("/reservations", { method: "POST", body: Object.fromEntries(f) }); toast("Rezervasyon oluşturuldu."); renderTab("rezervasyon"); }
+    try { await api("/reservations", { method: "POST", body: Object.fromEntries(f) }); toast(uiT("rezervasyon.created", "Rezervasyon oluşturuldu.")); renderTab("rezervasyon"); }
     catch (err) { toast(err.message); }
   });
-  c.querySelectorAll("[data-cancel]").forEach((b) => b.addEventListener("click", async () => { if (!confirm("İptal edilsin mi?")) return; try { await api("/reservations/" + b.dataset.cancel, { method: "DELETE" }); renderTab("rezervasyon"); } catch (err) { toast(err.message); } }));
+  c.querySelectorAll("[data-cancel]").forEach((b) => b.addEventListener("click", async () => { if (!confirm(uiT("rezervasyon.cancelConfirm", "İptal edilsin mi?"))) return; try { await api("/reservations/" + b.dataset.cancel, { method: "DELETE" }); renderTab("rezervasyon"); } catch (err) { toast(err.message); } }));
 }
 
 function ticketCard(t, role, personnel) {
@@ -1419,13 +1431,13 @@ function ticketCard(t, role, personnel) {
         <div class="icon-card-title">${esc(t.category)} — ${esc(t.title)}</div>
         <div class="small muted">${role !== "sakin" ? esc(t.residentName) + " · " + esc(t.unitLabel) + " · " : ""}${dt(t.createdAt)}</div>
       </div>
-      ${pill(t.status)}
+      ${trPill(t.status)}
     </div>
     <p class="ticket-desc">${esc(t.description)}</p>
     ${t.assignedName ? `<div class="ticket-assignee"><span class="avatar-chip sm">${esc(initials(t.assignedName))}</span> ${esc(t.assignedName)}</div>` : ""}
     ${t.comments.length ? `<div class="ticket-comments">${t.comments.map((cm) => `<div class="ticket-comment">${esc(cm.text)}</div>`).join("")}</div>` : ""}
     ${role === "yonetici" ? `<div class="field inline" style="margin-top:10px;"><label class="small">Ata</label><select data-assign="${t.id}"><option value="">Atanmadı</option>${personnel.map((p) => `<option value="${p.id}" ${t.assignedPersonnelId === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>` : ""}
-    ${canManage ? `<div class="segmented" style="margin-top:10px;">${["Açık", "İşlemde", "Çözüldü"].map((s) => `<button class="${t.status === s ? "active" : ""}" data-status="${t.id}|${s}">${s}</button>`).join("")}</div>` : ""}
+    ${canManage ? `<div class="segmented" style="margin-top:10px;">${["Açık", "İşlemde", "Çözüldü"].map((s) => `<button class="${t.status === s ? "active" : ""}" data-status="${t.id}|${s}">${esc(uiT(STATUS_I18N_KEY[s], s))}</button>`).join("")}</div>` : ""}
   </div>`;
 }
 
@@ -1435,24 +1447,24 @@ async function renderTalep(c) {
   if (role === "yonetici") promises.push(api("/personnel"));
   const [tickets, categories, personnel = []] = await Promise.all(promises);
   c.innerHTML = `
-    <div class="flex-between">${sectionTitle(role === "sakin" ? "Arıza / Talep" : "Talepler")}${role === "sakin" ? '<button class="btn btn-ghost btn-sm" id="newTicketBtn" style="margin-bottom:16px;">+ Yeni Talep</button>' : ""}</div>
+    <div class="flex-between">${sectionTitle(role === "sakin" ? uiT("talep.title", "Arıza / Talep") : "Talepler")}${role === "sakin" ? `<button class="btn btn-ghost btn-sm" id="newTicketBtn" style="margin-bottom:16px;">${esc(uiT("talep.newBtn", "+ Yeni Talep"))}</button>` : ""}</div>
     <div id="ticketForm"></div>
-    <div class="grid grid-cards">${tickets.map((t) => ticketCard(t, role, personnel)).join("") || '<div class="empty-row">Kayıt yok.</div>'}</div>
+    <div class="grid grid-cards">${tickets.map((t) => ticketCard(t, role, personnel)).join("") || `<div class="empty-row">${esc(uiT("talep.none", "Kayıt yok."))}</div>`}</div>
   `;
   if (role === "sakin") {
     document.getElementById("newTicketBtn").addEventListener("click", () => {
       document.getElementById("ticketForm").innerHTML = `
         <form id="ticketCreateForm" class="card form-card">
-          ${(state.user.units || []).length > 1 ? `<div class="field"><label>Daire</label><select name="unitId">${state.user.units.map((u) => `<option value="${u.id}">${esc(u.label)}</option>`).join("")}</select></div>` : ""}
-          <div class="field"><label>Kategori</label><select name="category">${categories.map((cat) => `<option>${esc(cat)}</option>`).join("")}</select></div>
-          <div class="field"><label>Başlık</label><input name="title" required /></div>
-          <div class="field"><label>Açıklama</label><textarea name="description" rows="3" required></textarea></div>
-          <button class="btn btn-primary btn-sm" type="submit">Gönder</button>
+          ${(state.user.units || []).length > 1 ? `<div class="field"><label>${esc(uiT("common.unit", "Daire"))}</label><select name="unitId">${state.user.units.map((u) => `<option value="${u.id}">${esc(u.label)}</option>`).join("")}</select></div>` : ""}
+          <div class="field"><label>${esc(uiT("talep.category", "Kategori"))}</label><select name="category">${categories.map((cat) => `<option>${esc(cat)}</option>`).join("")}</select></div>
+          <div class="field"><label>${esc(uiT("common.title", "Başlık"))}</label><input name="title" required /></div>
+          <div class="field"><label>${esc(uiT("common.description", "Açıklama"))}</label><textarea name="description" rows="3" required></textarea></div>
+          <button class="btn btn-primary btn-sm" type="submit">${esc(uiT("talep.send", "Gönder"))}</button>
         </form>`;
       document.getElementById("ticketCreateForm").addEventListener("submit", async (e) => {
         e.preventDefault();
         const f = new FormData(e.target);
-        try { await api("/tickets", { method: "POST", body: Object.fromEntries(f) }); toast("Talebiniz iletildi."); renderTab("talep"); }
+        try { await api("/tickets", { method: "POST", body: Object.fromEntries(f) }); toast(uiT("talep.sent", "Talebiniz iletildi.")); renderTab("talep"); }
         catch (err) { toast(err.message); }
       });
     });
@@ -1477,14 +1489,14 @@ async function renderKargo(c) {
   let units = [];
   if (canManage) units = await api("/units");
   c.innerHTML = `
-    <div class="flex-between">${sectionTitle(role === "sakin" ? "Kargolarım" : "Kargo Takibi")}${canManage ? '<button class="btn btn-ghost btn-sm" id="newPkgBtn" style="margin-bottom:16px;">+ Kargo Kaydı</button>' : ""}</div>
+    <div class="flex-between">${sectionTitle(role === "sakin" ? uiT("kargo.title", "Kargolarım") : "Kargo Takibi")}${canManage ? '<button class="btn btn-ghost btn-sm" id="newPkgBtn" style="margin-bottom:16px;">+ Kargo Kaydı</button>' : ""}</div>
     <div id="pkgForm"></div>
     <div class="card tight">
       ${list.map((p) => `
         <div class="ledger-row">
           <div><div style="font-size:14px;font-weight:600;">${esc(p.courier)}${p.trackingNo ? " · " + esc(p.trackingNo) : ""}</div><div class="small muted">${canManage ? esc(p.unitLabel) + " · " : ""}${dt(p.receivedDate)}</div></div>
-          <div style="display:flex;align-items:center;gap:10px;">${pill(p.status)}${canManage && p.status !== "Teslim Edildi" ? `<button class="btn btn-ghost btn-sm" data-deliver="${p.id}">Teslim Et</button>` : ""}</div>
-        </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+          <div style="display:flex;align-items:center;gap:10px;">${trPill(p.status)}${canManage && p.status !== "Teslim Edildi" ? `<button class="btn btn-ghost btn-sm" data-deliver="${p.id}">Teslim Et</button>` : ""}</div>
+        </div>`).join("") || `<div class="empty-row">${esc(uiT("kargo.none", "Kayıt yok."))}</div>`}
     </div>
   `;
   if (canManage) {
@@ -1507,33 +1519,36 @@ async function renderKargo(c) {
   }
 }
 
-function adType(t) { return { yardim: "Yardım", satilik: "Satılık", kayip: "Kayıp", diger: "Diğer" }[t] || t; }
+function adType(t) {
+  const key = { yardim: "pano.type.yardim", satilik: "pano.type.satilik", kayip: "pano.type.kayip", diger: "pano.type.diger" }[t];
+  return key ? uiT(key, { yardim: "Yardım", satilik: "Satılık", kayip: "Kayıp", diger: "Diğer" }[t]) : t;
+}
 
 async function renderPano(c) {
   const list = await api("/classifieds");
   c.innerHTML = `
-    <div class="flex-between">${sectionTitle("Site Panosu", "Yardımlaşma ve ilan alanı")}<button class="btn btn-ghost btn-sm" id="newAdBtn" style="margin-bottom:16px;">+ İlan Ver</button></div>
+    <div class="flex-between">${sectionTitle(uiT("pano.title", "Site Panosu"), uiT("pano.sub", "Yardımlaşma ve ilan alanı"))}<button class="btn btn-ghost btn-sm" id="newAdBtn" style="margin-bottom:16px;">${esc(uiT("pano.newBtn", "+ İlan Ver"))}</button></div>
     <div id="adForm"></div>
     <div class="grid">${list.map((a) => `
       <div class="card pad mb-16">
         <div class="flex-between"><span class="pill grey">${esc(adType(a.type))}</span><div class="small muted">${dt(a.date)} · ${esc(a.authorName)}</div></div>
         <div style="font-weight:700;margin-top:8px;">${esc(a.title)}</div>
         <p style="font-size:14px;color:var(--steel);margin-top:4px;">${esc(a.description)}</p>
-        ${a.resolved ? '<span class="pill green">Tamamlandı</span>' : `<button class="btn btn-ghost btn-sm" data-resolve="${a.id}">Tamamlandı işaretle</button>`}
-      </div>`).join("") || '<div class="empty-row">İlan yok.</div>'}</div>
+        ${a.resolved ? `<span class="pill green">${esc(uiT("pano.done", "Tamamlandı"))}</span>` : `<button class="btn btn-ghost btn-sm" data-resolve="${a.id}">${esc(uiT("pano.markDone", "Tamamlandı işaretle"))}</button>`}
+      </div>`).join("") || `<div class="empty-row">${esc(uiT("pano.none", "İlan yok."))}</div>`}</div>
   `;
   document.getElementById("newAdBtn").addEventListener("click", () => {
     document.getElementById("adForm").innerHTML = `
       <form id="adCreateForm" class="card form-card">
-        <div class="field"><label>Tür</label><select name="type"><option value="yardim">Yardım Talebi</option><option value="satilik">Satılık Ürün</option><option value="kayip">Kayıp Eşya/Hayvan</option><option value="diger">Diğer</option></select></div>
-        <div class="field"><label>Başlık</label><input name="title" required /></div>
-        <div class="field"><label>Açıklama</label><textarea name="description" rows="3" required></textarea></div>
-        <button class="btn btn-primary btn-sm" type="submit">Yayınla</button>
+        <div class="field"><label>${esc(uiT("pano.type", "Tür"))}</label><select name="type"><option value="yardim">Yardım Talebi</option><option value="satilik">Satılık Ürün</option><option value="kayip">Kayıp Eşya/Hayvan</option><option value="diger">Diğer</option></select></div>
+        <div class="field"><label>${esc(uiT("common.title", "Başlık"))}</label><input name="title" required /></div>
+        <div class="field"><label>${esc(uiT("common.description", "Açıklama"))}</label><textarea name="description" rows="3" required></textarea></div>
+        <button class="btn btn-primary btn-sm" type="submit">${esc(uiT("duyuru.publish", "Yayınla"))}</button>
       </form>`;
     document.getElementById("adCreateForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
-      try { await api("/classifieds", { method: "POST", body: Object.fromEntries(f) }); toast("İlan yayınlandı."); renderTab("pano"); }
+      try { await api("/classifieds", { method: "POST", body: Object.fromEntries(f) }); toast(uiT("pano.published", "İlan yayınlandı.")); renderTab("pano"); }
       catch (err) { toast(err.message); }
     });
   });
@@ -3229,12 +3244,12 @@ async function renderBilgiBankasi(c) {
   }
 
   c.innerHTML = `
-    <div class="flex-between">${sectionTitle("Bilgi Bankası", "Kategorize edilmiş yardım makaleleri ve örnek yazışmalar")}${isYonetici ? '<button class="btn btn-ghost btn-sm" id="kbNewBtn" style="margin-bottom:16px;">+ Yeni Makale</button>' : ""}</div>
+    <div class="flex-between">${sectionTitle(uiT("bilgibankasi.title", "Bilgi Bankası"), "Kategorize edilmiş yardım makaleleri ve örnek yazışmalar")}${isYonetici ? '<button class="btn btn-ghost btn-sm" id="kbNewBtn" style="margin-bottom:16px;">+ Yeni Makale</button>' : ""}</div>
     <div class="card tight mb-16" style="padding:14px;">
       <form id="kbFilterForm" class="form-row">
-        <div class="field"><label>Kategori</label><select name="category"><option value="">Tümü</option>${KNOWLEDGE_CATEGORIES.map((cat) => `<option value="${esc(cat)}">${esc(cat)}</option>`).join("")}</select></div>
-        <div class="field" style="flex:1 1 220px;"><label>Ara</label><input name="search" placeholder="Başlık veya içerikte ara…" /></div>
-        <button class="btn btn-ghost btn-sm" type="submit">Ara</button>
+        <div class="field"><label>Kategori</label><select name="category"><option value="">${esc(uiT("aidat.unitAll", "Tümü"))}</option>${KNOWLEDGE_CATEGORIES.map((cat) => `<option value="${esc(cat)}">${esc(cat)}</option>`).join("")}</select></div>
+        <div class="field" style="flex:1 1 220px;"><label>${esc(uiT("bilgibankasi.search", "Ara"))}</label><input name="search" placeholder="Başlık veya içerikte ara…" /></div>
+        <button class="btn btn-ghost btn-sm" type="submit">${esc(uiT("bilgibankasi.search", "Ara"))}</button>
       </form>
     </div>
     <div id="kbForm"></div>
@@ -3921,12 +3936,12 @@ async function renderMesajlar(c) {
   const [list, residents] = await Promise.all([api("/messages"), isYonetici ? api("/users") : Promise.resolve([])]);
   const sakinler = residents.filter((u) => u.role === "sakin" && u.isApproved);
   c.innerHTML = `
-    ${sectionTitle("Gelen Mesajlar", isYonetici ? "Sakinlerden gelen özel mesajlar" : "Yönetime özel mesaj gönderin")}
+    ${sectionTitle(uiT("mesajlar.title", "Gelen Mesajlar"), isYonetici ? "Sakinlerden gelen özel mesajlar" : uiT("mesajlar.toManagement", "Yönetime özel mesaj gönderin"))}
     <div class="card form-card">
       <form id="msgForm" class="form-row">
         ${isYonetici ? `<div class="field" style="flex:1 1 220px;"><label>Kime (boş = genel not)</label><select name="recipientId"><option value="">—</option>${sakinler.map((u) => `<option value="${u.id}">${esc(u.name)}${u.unitLabel ? " · " + esc(u.unitLabel) : ""}</option>`).join("")}</select></div>` : ""}
-        <div class="field" style="flex:1 1 320px;"><label>${isYonetici ? "Mesaj" : "Yönetime Mesajınız"}</label><input name="body" required placeholder="Mesajınızı yazın…" /></div>
-        <button class="btn btn-primary" type="submit">Gönder</button>
+        <div class="field" style="flex:1 1 320px;"><label>${isYonetici ? "Mesaj" : esc(uiT("mesajlar.yourMessage", "Yönetime Mesajınız"))}</label><input name="body" required placeholder="${esc(uiT("mesajlar.placeholder", "Mesajınızı yazın…"))}" /></div>
+        <button class="btn btn-primary" type="submit">${esc(uiT("mesajlar.send", "Gönder"))}</button>
       </form>
     </div>
     <div class="card tight">
@@ -3934,13 +3949,13 @@ async function renderMesajlar(c) {
         <div class="ledger-row" style="${m.read || m.senderId === state.user.id ? "" : "background:var(--azure-light);"}">
           <div><div style="font-size:14px;font-weight:600;">${esc(m.senderName)}${m.senderUnitLabel ? " · " + esc(m.senderUnitLabel) : ""}</div><div class="small muted" style="margin-top:2px;">${esc(m.body)}</div><div class="small muted">${dt(m.date)}</div></div>
           ${isYonetici && !m.read && m.senderId !== state.user.id ? `<button class="btn btn-ghost btn-sm" data-readmsg="${m.id}">Okundu İşaretle</button>` : ""}
-        </div>`).join("") || '<div class="empty-row">Gelen mesaj yok.</div>'}
+        </div>`).join("") || `<div class="empty-row">${esc(uiT("mesajlar.none", "Gelen mesaj yok."))}</div>`}
     </div>
   `;
   document.getElementById("msgForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
-    try { await api("/messages", { method: "POST", body: Object.fromEntries(f) }); toast("Mesaj gönderildi."); renderTab("mesajlar"); }
+    try { await api("/messages", { method: "POST", body: Object.fromEntries(f) }); toast(uiT("mesajlar.sentToast", "Mesaj gönderildi.")); renderTab("mesajlar"); }
     catch (err) { toast(err.message); }
   });
   c.querySelectorAll("[data-readmsg]").forEach((b) => b.addEventListener("click", async () => {
@@ -4302,13 +4317,13 @@ async function renderSeffaflik(c) {
   const list = await api("/activity-log");
   const isManager = state.user.role === "yonetici";
   c.innerHTML = `
-    <div class="flex-between">${sectionTitle("Şeffaflık", isManager ? "Sistemdeki tüm önemli işlemlerin değiştirilemez kaydı" : "Sizinle ilgili işlemlerin kaydı")}${isManager ? '<button class="btn btn-ghost btn-sm" id="exportBtn" style="margin-bottom:16px;">⬇ Tüm Veriyi Dışa Aktar</button>' : ""}</div>
+    <div class="flex-between">${sectionTitle(uiT("seffaflik.title", "Şeffaflık"), isManager ? "Sistemdeki tüm önemli işlemlerin değiştirilemez kaydı" : uiT("seffaflik.subResident", "Sizinle ilgili işlemlerin kaydı"))}${isManager ? '<button class="btn btn-ghost btn-sm" id="exportBtn" style="margin-bottom:16px;">⬇ Tüm Veriyi Dışa Aktar</button>' : ""}</div>
     <div class="card tight">
       ${list.map((l) => `
         <div class="ledger-row">
           <div><div style="font-size:14px;font-weight:600;">${ACTION_LABEL[l.action] || l.action}</div><div class="small muted">${esc(l.detail)}</div></div>
           <div style="text-align:right;"><div class="small muted">${esc(l.actorName)}</div><div class="small muted">${dt(l.date)}</div></div>
-        </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+        </div>`).join("") || `<div class="empty-row">${esc(uiT("seffaflik.none", "Kayıt yok."))}</div>`}
     </div>
     ${isManager ? '<p class="small muted" style="margin-top:10px;">Bu kayıtlar sonradan değiştirilemez veya silinemez — sitenizin mali/idari işlemlerinde tam şeffaflık sağlar.</p>' : ""}
   `;
@@ -4371,15 +4386,15 @@ async function renderRehber(c) {
   ]);
 
   const rows = [
-    ...contacts.map((x) => ({ name: x.name, role: x.role || "Faydalı Numara", phone: x.phone })),
-    ...personnel.map((x) => ({ name: x.name, role: x.department || "Personel", phone: x.phone })),
-    ...units.filter((u) => u.ownerPhone).map((u) => ({ name: u.ownerName || "-", role: `${u.block} - Daire ${u.no} (Malik)`, phone: u.ownerPhone })),
-    ...units.filter((u) => u.tenantPhone).map((u) => ({ name: u.tenantName || "-", role: `${u.block} - Daire ${u.no} (Kiracı)`, phone: u.tenantPhone })),
+    ...contacts.map((x) => ({ name: x.name, role: x.role || uiT("rehber.usefulNumber", "Faydalı Numara"), phone: x.phone })),
+    ...personnel.map((x) => ({ name: x.name, role: x.department || uiT("rehber.staff", "Personel"), phone: x.phone })),
+    ...units.filter((u) => u.ownerPhone).map((u) => ({ name: u.ownerName || "-", role: `${u.block} - Daire ${u.no} (${uiT("rehber.owner", "Malik")})`, phone: u.ownerPhone })),
+    ...units.filter((u) => u.tenantPhone).map((u) => ({ name: u.tenantName || "-", role: `${u.block} - Daire ${u.no} (${uiT("rehber.tenant", "Kiracı")})`, phone: u.tenantPhone })),
   ];
 
   c.innerHTML = `
-    ${sectionTitle("Rehber", "Faydalı numaralar, personel ve site sakinleri")}
-    <div class="field mb-16"><input id="rehberSearch" placeholder="İsim, telefon veya rol ara…" /></div>
+    ${sectionTitle(uiT("rehber.title", "Rehber"), uiT("rehber.sub", "Faydalı numaralar, personel ve site sakinleri"))}
+    <div class="field mb-16"><input id="rehberSearch" placeholder="${esc(uiT("rehber.search", "İsim, telefon veya rol ara…"))}" /></div>
     ${state.user.role === "yonetici" ? `
     <div class="card form-card">
       <div class="ledger-title" style="padding:0 0 10px;">Faydalı Numara Ekle</div>
@@ -4391,13 +4406,13 @@ async function renderRehber(c) {
       </form>
     </div>` : ""}
     <div class="card tight" id="rehberList">
-      ${rows.map((r) => ledgerRow(esc(r.name), esc(r.role), `<a href="tel:${esc(r.phone)}" style="color:var(--navy);text-decoration:none;">${esc(r.phone)}</a>`)).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+      ${rows.map((r) => ledgerRow(esc(r.name), esc(r.role), `<a href="tel:${esc(r.phone)}" style="color:var(--navy);text-decoration:none;">${esc(r.phone)}</a>`)).join("") || `<div class="empty-row">${esc(uiT("rehber.none", "Kayıt yok."))}</div>`}
     </div>
   `;
   document.getElementById("rehberSearch").addEventListener("input", (e) => {
     const q = e.target.value.toLowerCase();
     const filtered = rows.filter((r) => (r.name + r.role + r.phone).toLowerCase().includes(q));
-    document.getElementById("rehberList").innerHTML = filtered.map((r) => ledgerRow(esc(r.name), esc(r.role), `<a href="tel:${esc(r.phone)}" style="color:var(--navy);text-decoration:none;">${esc(r.phone)}</a>`)).join("") || '<div class="empty-row">Sonuç yok.</div>';
+    document.getElementById("rehberList").innerHTML = filtered.map((r) => ledgerRow(esc(r.name), esc(r.role), `<a href="tel:${esc(r.phone)}" style="color:var(--navy);text-decoration:none;">${esc(r.phone)}</a>`)).join("") || `<div class="empty-row">${esc(uiT("rehber.noResult", "Sonuç yok."))}</div>`;
   });
   document.getElementById("contactForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();

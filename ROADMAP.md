@@ -47,13 +47,22 @@ kapsam dışı, Türkçe kalıyor) + **PDF belgeler de dahil**.
   kullanıcı menüsü, Özet + Aidat ekranları, debt-letter/receipt PDF indirme
   (gerçek PDF içerikleri görsel olarak doğrulandı), yönetici girişinde HİÇBİR
   şeyin değişmediği (dil `localStorage`'da kalıcı olsa bile).
-- **Bilinen, kullanıcıya açıkça belirtilen kapsam dışı kalanlar**: paylaşılan
-  sakin ekranları (Duyurular, Anketler, Rezervasyon, Talep, Kargo, Site
-  Panosu, Rehber, Şeffaflık, Bilgi Bankası, Gelen Mesajlar) henüz
-  çevrilmedi — sadece `i18n.js`'e anahtar eklenip aynı `t()` deseniyle bu
-  ekranlara uygulanması yeterli olacağı için altyapı hazır, istenirse ayrı
-  bir oturumda tamamlanabilir. Kapıcı AI'nın SSS cevap İÇERİĞİ de Türkçe
-  kalıyor (arayüz kabuğu çevrildi).
+- **Güncelleme**: kullanıcı "o zaman kime yaptın bunu" diye haklı olarak
+  tepki gösterdi — ilk halde sadece Özet/Aidat/Sayaçlarım çevrilmişti,
+  günlük kullanılan ekranların çoğu hâlâ Türkçe kalmıştı. Aynı oturumda
+  devam edilip paylaşılan sakin ekranlarının TAMAMI (Duyurular, Anketler,
+  Rezervasyon, Talep, Kargo, Site Panosu, Rehber, Şeffaflık, Bilgi Bankası,
+  Gelen Mesajlar) çevrildi. `pill()`/`PILL_MAP` renk-anahtar sorununun
+  (bkz. `debtStatusPill`) rezervasyon/talep/kargo durum etiketlerinde de
+  aynı şekilde çıkacağı öngörülüp `trPill()` ile genel bir çözüm uygulandı.
+  4 dilde tarayıcıda uçtan uca test edildi; yönetici görünümünün (aynı
+  cihazda `localStorage`'da DE/RU/AZ kayıtlı olsa bile) hâlâ tamamen Türkçe
+  kaldığı ayrıca doğrulandı.
+- **Hâlâ kapsam dışı kalanlar** (bilerek): duyuru/talep/anket/kargo gibi
+  ekranlardaki gerçek VERİ içeriği (kullanıcıların yazdığı başlık/açıklama/
+  makale metinleri) çevrilmiyor — bunlar veritabanı içeriği, UI metni değil.
+  Şeffaflık ekranındaki işlem etiketleri (`ACTION_LABEL`, ~30 girdi) ve
+  Kapıcı AI'nın SSS cevap metinleri de Türkçe kalıyor.
 
 ---
 
