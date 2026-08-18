@@ -1,0 +1,1187 @@
+{
+  "aidat": {
+    "label": "Borç ve Ödemelerim",
+    "roles": [
+      "sakin"
+    ],
+    "terms": [
+      "unitıd",
+      "kredi",
+      "kartı"
+    ]
+  },
+  "duyuru": {
+    "label": "Duyurular",
+    "roles": [
+      "sakin",
+      "yonetici"
+    ],
+    "terms": [
+      "duyuru",
+      "yayınlandı"
+    ]
+  },
+  "anket": {
+    "label": "Anketler",
+    "roles": [
+      "sakin",
+      "yonetici"
+    ],
+    "terms": [
+      "anket",
+      "anketi",
+      "başlat",
+      "surveys",
+      "vote"
+    ]
+  },
+  "rezervasyon": {
+    "label": "Rezervasyon",
+    "roles": [
+      "sakin",
+      "yonetici"
+    ],
+    "terms": [
+      "ortak",
+      "alan",
+      "rezervasyonu",
+      "rezerve",
+      "rezervasyonlar",
+      "rezervasyon",
+      "iptal",
+      "edilsin"
+    ]
+  },
+  "talep": {
+    "label": "Arıza/Talep",
+    "roles": [
+      "sakin",
+      "yonetici",
+      "personel"
+    ],
+    "terms": [
+      "arıza",
+      "talebiniz",
+      "iletildi",
+      "atama",
+      "güncellendi",
+      "talep"
+    ]
+  },
+  "kargo": {
+    "label": "Kargolarım",
+    "roles": [
+      "sakin",
+      "yonetici",
+      "personel"
+    ],
+    "terms": [
+      "kargo",
+      "firması",
+      "takip",
+      "kaydı",
+      "teslim",
+      "edildi"
+    ]
+  },
+  "pano": {
+    "label": "Site Panosu",
+    "roles": [
+      "sakin",
+      "yonetici"
+    ],
+    "terms": [
+      "panosu",
+      "yardımlaşma",
+      "ilan",
+      "talebi",
+      "satılık",
+      "ürün",
+      "kayıp",
+      "eşya",
+      "hayvan",
+      "yardım",
+      "diğer",
+      "alanı",
+      "tamamlandı",
+      "işaretle",
+      "yayınlandı",
+      "site"
+    ]
+  },
+  "kullanicilar": {
+    "label": "Kullanıcılar",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "bekleyenler",
+      "gündür",
+      "bekliyor",
+      "onayla",
+      "reddet",
+      "sıfırlama",
+      "talepleri",
+      "sıfırla",
+      "kalıcı",
+      "departman",
+      "onaylandı",
+      "geçmiş",
+      "seçeneğini",
+      "kullanmanız",
+      "önerilir",
+      "alınsın",
+      "kayıtları",
+      "korunur",
+      "yapamaz",
+      "hale"
+    ]
+  },
+  "daireler": {
+    "label": "Daireler",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "oturuyor",
+      "malik",
+      "metrekare",
+      "ikamet",
+      "arsa",
+      "payı",
+      "aidat",
+      "grubu",
+      "kiracı",
+      "düzenle"
+    ]
+  },
+  "ikametedenler": {
+    "label": "İkamet Edenler Listesi",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "edenler",
+      "sıfatı",
+      "yakınlığı",
+      "ikamet",
+      "yazdır",
+      "soyad"
+    ]
+  },
+  "bosdolu": {
+    "label": "Boş/Dolu Taşınmaz Listesi",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "dolu",
+      "adıyla",
+      "taşınmaz",
+      "malik",
+      "bakiye",
+      "kiracı",
+      "yazdır"
+    ]
+  },
+  "tckimlik": {
+    "label": "Tc Kimlik No Listesi",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "kimlik",
+      "numarası",
+      "giriş",
+      "hesabı",
+      "sakinler",
+      "sadece",
+      "yazdır",
+      "soyad"
+    ]
+  },
+  "aracplaka": {
+    "label": "Araç Plaka Listesi",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "araç",
+      "plaka",
+      "marka",
+      "renk",
+      "yazdır",
+      "soyad",
+      "veya"
+    ]
+  },
+  "detayliuyelistesi": {
+    "label": "Detaylı Üye Listesi",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "göstermek",
+      "istediğiniz",
+      "sütunları",
+      "detaylı",
+      "seçin",
+      "dökümü"
+    ]
+  },
+  "tahsilat": {
+    "label": "Borç & Tahsilat",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "serbest",
+      "excel",
+      "yyyy",
+      "uygula",
+      "kullanım",
+      "bedeli",
+      "kalemler",
+      "ekranındaki",
+      "faturalarıyla",
+      "aynı",
+      "paylaşır",
+      "raporlarda",
+      "birlikte",
+      "kırılım",
+      "alabilirsiniz",
+      "seçmeden",
+      "metinle",
+      "borçlandırabilirsiniz",
+      "tahsilatın",
+      "işleneceği"
+    ]
+  },
+  "muhasebe": {
+    "label": "Muhasebe",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "hareket",
+      "dökümü",
+      "gelir"
+    ]
+  },
+  "kasalar": {
+    "label": "Kasalar",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "banka",
+      "nakit",
+      "hesaplarının",
+      "ayrı",
+      "hesaplar",
+      "arası",
+      "transfer",
+      "makbuzu",
+      "borçları",
+      "ıban",
+      "kaynak",
+      "hedef",
+      "kredi",
+      "kartı",
+      "bakiyesi",
+      "ödenecek",
+      "ekstresi",
+      "diğer",
+      "açılış",
+      "hareket"
+    ]
+  },
+  "cari": {
+    "label": "Firma & Personel",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "mutabakat",
+      "cari",
+      "tedarikçi",
+      "yetkili",
+      "action",
+      "opsiyonel",
+      "hareketleri",
+      "firmalar",
+      "posta",
+      "seçin",
+      "borçlandırma",
+      "documents",
+      "borçlandır"
+    ]
+  },
+  "giderler": {
+    "label": "Giderler",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "personele",
+      "olmayan",
+      "borçlandırması",
+      "kategoriler",
+      "ekleyin",
+      "kategoriyi",
+      "yönetimi",
+      "vade",
+      "bağlı",
+      "grubu",
+      "kalemi",
+      "silmek",
+      "istediğinize",
+      "emin",
+      "misiniz",
+      "fatura",
+      "önce",
+      "borçlandır",
+      "silindi"
+    ]
+  },
+  "borclistesi": {
+    "label": "Borç Listesi",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "giderlerin",
+      "tamamındaki",
+      "taraf",
+      "ödenen",
+      "bearer",
+      "yükleme",
+      "başarısız",
+      "oldu",
+      "filtrele",
+      "vade",
+      "açık",
+      "dosya",
+      "borçlar",
+      "türü",
+      "fatura"
+    ]
+  },
+  "tekrarlayan": {
+    "label": "İleri Tarihli / Tekrarlayan",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "kategoriye",
+      "sonraki",
+      "ileri",
+      "tarihli",
+      "tekrarlayan",
+      "faturalar",
+      "zamanlanmış",
+      "vadesi",
+      "gelince",
+      "borca",
+      "dönüşür",
+      "gelenleri",
+      "şimdi",
+      "çalıştır",
+      "sıklık",
+      "seferlik",
+      "yıllık",
+      "şablonlar",
+      "opsiyonel",
+      "şablonları"
+    ]
+  },
+  "personel": {
+    "label": "Personel",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "eklemek",
+      "kullanıcılar",
+      "sekmesini",
+      "kullanın"
+    ]
+  },
+  "demirbas": {
+    "label": "Demirbaş",
+    "roles": [
+      "yonetici",
+      "personel"
+    ],
+    "terms": [
+      "bakım",
+      "onarım",
+      "periyodu",
+      "periyot",
+      "yapıldı",
+      "gecikti",
+      "sorumlu",
+      "demirbaş",
+      "konum",
+      "işaretle"
+    ]
+  },
+  "karar": {
+    "label": "Karar Defteri",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "mülkiyeti",
+      "kanunu",
+      "gereği",
+      "tutulan",
+      "katılımcı",
+      "sayısı",
+      "karar",
+      "defteri",
+      "resmi",
+      "kaydı",
+      "metni",
+      "başlık"
+    ]
+  },
+  "anahtar": {
+    "label": "Anahtarlar",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "zimmetli",
+      "zimmetle",
+      "zimmetleniyor",
+      "anahtar",
+      "kime",
+      "konum",
+      "teslim"
+    ]
+  },
+  "seffaflik": {
+    "label": "Şeffaflık",
+    "roles": [
+      "sakin",
+      "yonetici"
+    ],
+    "terms": [
+      "sistemdeki",
+      "önemli",
+      "işlemlerin",
+      "değiştirilemez",
+      "sizinle",
+      "veriyi",
+      "dışa",
+      "sonradan",
+      "silinemez",
+      "sitenizin",
+      "işlemlerinde",
+      "şeffaflık",
+      "sağlar",
+      "aktar",
+      "kaydı",
+      "kayıtlar",
+      "idari",
+      "ilgili",
+      "veya",
+      "mali"
+    ]
+  },
+  "butce": {
+    "label": "Bütçe",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "budgets",
+      "yılı",
+      "bütçe",
+      "planlaması",
+      "planlanan",
+      "karşılaştırın",
+      "güncelle",
+      "aşıldı",
+      "kullanıldı",
+      "butce",
+      "gerçekleşen",
+      "gideri",
+      "kalemi",
+      "year",
+      "documents"
+    ]
+  },
+  "rehber": {
+    "label": "Rehber",
+    "roles": [
+      "sakin",
+      "yonetici",
+      "personel"
+    ],
+    "terms": [
+      "faydalı",
+      "numara",
+      "numaralar",
+      "sakinleri",
+      "rehbere",
+      "site",
+      "sonuç"
+    ]
+  },
+  "ayarlar": {
+    "label": "Ayarlar",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "gecikme",
+      "faizi",
+      "tarihinden",
+      "belirlenen",
+      "sonra",
+      "ödenmemiş",
+      "aidatlara",
+      "üzerinden",
+      "faiz",
+      "eklenir",
+      "tolerans",
+      "süresi",
+      "etkinleştirilirse",
+      "günde",
+      "tıklamanız",
+      "gerekmez",
+      "etkin",
+      "kaçıncı",
+      "günü",
+      "varsayılan"
+    ]
+  },
+  "ajanda": {
+    "label": "Ajanda",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "notlar",
+      "sitede",
+      "faaliyetler",
+      "bekleyene",
+      "gerçekleşen",
+      "metin",
+      "faaliyet",
+      "tamamlandı"
+    ]
+  },
+  "istakibi": {
+    "label": "İş Takibi",
+    "roles": [
+      "yonetici",
+      "personel"
+    ],
+    "terms": [
+      "eden",
+      "yönetimin",
+      "işin",
+      "devam",
+      "görev",
+      "atanan",
+      "kendi",
+      "alanı",
+      "türü",
+      "teslim",
+      "güncellendi",
+      "ilgili",
+      "başlık"
+    ]
+  },
+  "mesajlar": {
+    "label": "Gelen Mesajlar",
+    "roles": [
+      "sakin",
+      "yonetici"
+    ],
+    "terms": [
+      "gelen",
+      "mesajlar",
+      "sakinlerden",
+      "yönetime",
+      "gönderin",
+      "mesajınız",
+      "okundu",
+      "gönderildi",
+      "mesaj",
+      "kime",
+      "özel",
+      "işaretle"
+    ]
+  },
+  "icra": {
+    "label": "İcra Takibi",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "icra",
+      "yasal",
+      "sürecindeki",
+      "dairesi",
+      "mahkeme",
+      "takip",
+      "dosyalar",
+      "açılış",
+      "dosya",
+      "güncellendi",
+      "daireler"
+    ]
+  },
+  "belgeler": {
+    "label": "Belge Şablonları",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "kurul",
+      "birinci",
+      "toplantı",
+      "saat",
+      "ikinci",
+      "adresi",
+      "vekaletname",
+      "örneği",
+      "hazirun",
+      "cetveli",
+      "imza",
+      "antetli",
+      "markalı",
+      "yazı",
+      "kağıdı",
+      "etiketleri",
+      "zarf",
+      "etiketi",
+      "dairelerin",
+      "tier"
+    ]
+  },
+  "arsiv": {
+    "label": "Dosya Arşivi",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "arşivi",
+      "klasör",
+      "saklama",
+      "içindeki",
+      "silinecek",
+      "archive",
+      "folders",
+      "files",
+      "klasörlere",
+      "yükle",
+      "klasörde",
+      "yüklendi",
+      "dosyayı",
+      "bazlı",
+      "evrak",
+      "dosyalar",
+      "bearer",
+      "yükleme",
+      "başarısız",
+      "oldu"
+    ]
+  },
+  "muhasebekod": {
+    "label": "Muhasebe Kodları",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "bankalar",
+      "kategorileri",
+      "kodları",
+      "tekdüzen",
+      "planı",
+      "müşavirinize",
+      "referans",
+      "atayın",
+      "olmayanlara",
+      "üyeler",
+      "muhasebe",
+      "göre",
+      "kendi",
+      "kodu",
+      "otomatik",
+      "daireler",
+      "kasalar",
+      "mali"
+    ]
+  },
+  "mizan": {
+    "label": "Mizan Raporu",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "tanım",
+      "grup",
+      "mizan",
+      "hesapların",
+      "yevmiye",
+      "kebir",
+      "kapanış",
+      "mizanı",
+      "kapanis",
+      "mizani",
+      "bakiye",
+      "kırılımı",
+      "defteri",
+      "filtrele",
+      "kodu",
+      "documents",
+      "year"
+    ]
+  },
+  "fisler": {
+    "label": "Tahakkuk Fişleri",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "aralıkta",
+      "tahakkuk",
+      "fişleri",
+      "aralığındaki",
+      "muhasebe",
+      "hareketleri",
+      "kodu",
+      "seçilen"
+    ]
+  },
+  "gunlukbilanco": {
+    "label": "Günlük Bilanço",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "günlük",
+      "kasaların",
+      "toplamı",
+      "bilanço",
+      "özeti",
+      "veya",
+      "gelir"
+    ]
+  },
+  "aylikozet": {
+    "label": "Aylık Özet Bilanço",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "ozet",
+      "aylik",
+      "bilanco",
+      "month",
+      "bazlı",
+      "özet",
+      "ayın",
+      "year",
+      "giren",
+      "çıkan",
+      "bilanço",
+      "dökümü",
+      "seçilen",
+      "gelir"
+    ]
+  },
+  "gidergrubu": {
+    "label": "Gider Grubu Raporu",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "bazında",
+      "grubu",
+      "kalemi",
+      "borçlandırma"
+    ]
+  },
+  "genelbilanco": {
+    "label": "Genel Bilanço",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "tarihe",
+      "kümülatif",
+      "kırılımı",
+      "bilanço",
+      "seçilen",
+      "gelir"
+    ]
+  },
+  "geneldurum": {
+    "label": "Genel Durum Raporu",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "aralığında",
+      "personeller",
+      "firmalar",
+      "edilen",
+      "devreden",
+      "alacaklar",
+      "tahsil",
+      "ödemeler",
+      "giren",
+      "çıkan",
+      "özeti",
+      "kasalar",
+      "seçilen"
+    ]
+  },
+  "denetimraporu": {
+    "label": "Denetim Kurulu Raporu",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "yönetim",
+      "denetim",
+      "kurulu",
+      "rapor",
+      "döneminde",
+      "çalışmaları",
+      "faaliyetleri",
+      "aşağıdaki",
+      "şekilde",
+      "gerçekleşmiştir",
+      "yönden",
+      "inceleme",
+      "yapılan",
+      "ajandadaki",
+      "getir",
+      "yayınla",
+      "veriler",
+      "canlı",
+      "hesaplanır",
+      "yayınlamadan"
+    ]
+  },
+  "faaliyetraporu": {
+    "label": "Yönetim Faaliyet Raporu",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "yönetim",
+      "denetim",
+      "kurulu",
+      "rapor",
+      "döneminde",
+      "çalışmaları",
+      "faaliyetleri",
+      "aşağıdaki",
+      "şekilde",
+      "gerçekleşmiştir",
+      "yönden",
+      "inceleme",
+      "yapılan",
+      "ajandadaki",
+      "getir",
+      "yayınla",
+      "veriler",
+      "canlı",
+      "hesaplanır",
+      "yayınlamadan"
+    ]
+  },
+  "tasinmazdonem": {
+    "label": "Taşınmaz/Dönem Raporu",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "malikler",
+      "kiracılar"
+    ]
+  },
+  "donemdetay": {
+    "label": "Dönem/Detay Raporu",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "malikler",
+      "kiracılar"
+    ]
+  },
+  "tasinmazdetay": {
+    "label": "Taşınmaz/Detay Raporu",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "malikler",
+      "kiracılar"
+    ]
+  },
+  "uyedonem": {
+    "label": "Üye/Dönem Raporu",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "malikler",
+      "kiracılar"
+    ]
+  },
+  "uyedetay": {
+    "label": "Üye/Detay Raporu",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "malikler",
+      "kiracılar"
+    ]
+  },
+  "tahsilatraporu": {
+    "label": "Tahsilat Raporu",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "makbuz",
+      "tahsilatları",
+      "harici",
+      "ödemeleri",
+      "detaylı"
+    ]
+  },
+  "giderraporu": {
+    "label": "Detaylı Gider Raporu",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "makbuz",
+      "tahsilatları",
+      "harici",
+      "ödemeleri",
+      "detaylı"
+    ]
+  },
+  "aylikbilanco": {
+    "label": "Aylık Bilanço",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "devir",
+      "aylik",
+      "bilanco",
+      "month",
+      "üyeler",
+      "toplamı",
+      "ayın",
+      "year",
+      "bilanço",
+      "özeti",
+      "soyad",
+      "seçilen"
+    ]
+  },
+  "isletmeprojesi": {
+    "label": "İşletme Projesi",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "proje",
+      "paylaşım",
+      "hesapla",
+      "uygulanmış",
+      "oluşturulmuş",
+      "katılım",
+      "eşleşen",
+      "işletme",
+      "projesi",
+      "eşit",
+      "paylaşıma",
+      "taşınmazlara",
+      "borçlandırın",
+      "dönemi",
+      "şekli",
+      "expense",
+      "projects",
+      "calculate",
+      "hesaplanan",
+      "tutarlar"
+    ]
+  },
+  "bilgibankasi": {
+    "label": "Bilgi Bankası",
+    "roles": [
+      "sakin",
+      "yonetici"
+    ],
+    "terms": [
+      "bulunamadı",
+      "makale",
+      "içerik",
+      "vazgeç",
+      "bankası",
+      "kategorize",
+      "edilmiş",
+      "makaleleri",
+      "örnek",
+      "yazışmalar",
+      "yardım",
+      "düzenle",
+      "sonuç",
+      "silindi",
+      "başlık"
+    ]
+  },
+  "toplusms": {
+    "label": "Toplu SMS/E-posta",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "gönderim",
+      "sağlayıcı",
+      "entegrasyonu",
+      "gerekir",
+      "ekran",
+      "alıcı",
+      "önizler",
+      "kanal",
+      "eşiği",
+      "güncel",
+      "borcunuz",
+      "alıcıları",
+      "önizle",
+      "kullanılabilecek",
+      "parametreler",
+      "adsoyad",
+      "kapino",
+      "donem",
+      "borc",
+      "maliklere"
+    ]
+  },
+  "akillisite": {
+    "label": "Akıllı Site Sistemleri",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "akıllı",
+      "sistemleri",
+      "sitenizdeki",
+      "cihazlarını",
+      "ekrandan",
+      "izleyin",
+      "yönetin",
+      "demo",
+      "ekranda",
+      "sensöre",
+      "cihaza",
+      "değilsiniz",
+      "değerler",
+      "gerçekçi",
+      "aralıklarda",
+      "simüle",
+      "ediliyor",
+      "ileride",
+      "havuz",
+      "sensörü"
+    ]
+  },
+  "kapicisorular": {
+    "label": "Kapıcı AI Soruları",
+    "roles": [
+      "yonetici"
+    ],
+    "terms": [
+      "kapıcı",
+      "soruları",
+      "kullanıcıların",
+      "sorduğu",
+      "cevap",
+      "veremediği",
+      "sorular",
+      "buradan",
+      "kelime",
+      "girdi",
+      "eklemeye",
+      "verebilirsiniz",
+      "tümünü",
+      "temizle",
+      "cevapsız",
+      "soru",
+      "anahtar",
+      "karar",
+      "kayıtlar"
+    ]
+  },
+  "ozet": {
+    "label": "Özet",
+    "roles": [
+      "sakin",
+      "yonetici",
+      "personel"
+    ],
+    "terms": [
+      "size",
+      "bakımı",
+      "geciken",
+      "operasyonel",
+      "aidatı",
+      "bekleyen",
+      "bulunan",
+      "anda",
+      "bulunmuyor",
+      "atanan",
+      "sitenin",
+      "bakiyesi",
+      "ödenecek",
+      "ödenen",
+      "onay",
+      "borçlu",
+      "açık",
+      "demirbaş",
+      "özet",
+      "talep"
+    ]
+  },
+  "sayac": {
+    "label": "Sayaçlarım",
+    "roles": [
+      "sakin",
+      "yonetici"
+    ],
+    "terms": [
+      "sayaç",
+      "okuma",
+      "faturalama",
+      "tanımla",
+      "elektrik",
+      "doğalgaz",
+      "kalorimetre",
+      "seri",
+      "faturala",
+      "tüketim",
+      "birim",
+      "fiyat",
+      "geçmişi",
+      "fatura",
+      "dönem"
+    ]
+  }
+}

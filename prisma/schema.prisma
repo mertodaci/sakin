@@ -119,6 +119,7 @@ model Site {
   knowledgeArticles       KnowledgeArticle[]
   userUnits               UserUnit[]
   iotDevices              IotDevice[]
+  helpMisses              HelpMiss[]
 }
 
 // Bir kullanicinin bir siteye erisim yetkisi - many-to-many. Ayni kullanici
@@ -153,6 +154,21 @@ model IotDevice {
   data          Json      @default("{}")
   lastReadingAt DateTime?
   createdAt     DateTime  @default(now())
+
+  @@index([siteId])
+}
+
+// Kapici AI'nin (routes/help.js) cevap veremedigi sorular - LLM baglamadan,
+// zamanla KB'yi (anahtar kelime tabanli SSS) genisletmek icin: yonetici bu
+// listeyi periyodik inceleyip gercekten sorulan ama eslesmeyen sorulari
+// gorup KB'ye yeni anahtar kelime/girdi ekleyebilir.
+model HelpMiss {
+  id        String   @id @default(uuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  role      String
+  question  String
+  createdAt DateTime @default(now())
 
   @@index([siteId])
 }
