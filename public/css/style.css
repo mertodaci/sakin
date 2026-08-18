@@ -89,7 +89,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .sidebar {
   width: 272px; flex: 0 0 272px;
   background: linear-gradient(175deg, var(--sb-bg-2) 0%, var(--sb-bg) 55%);
-  overflow-y: auto; height: 100vh; position: sticky; top: 0;
+  height: 100vh; position: sticky; top: 0;
   box-shadow: 2px 0 20px rgba(2,6,14,.35);
   display: flex; flex-direction: column;
   border-right: 1px solid var(--sb-border);
@@ -123,7 +123,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .sidebar-search input:focus { outline: none; border-color: var(--sb-active-border); background: rgba(255,255,255,.07); }
 .sidebar-no-results { padding: 16px 10px; font-size: 12.5px; color: var(--sb-text-dim); text-align: center; }
 
-.sidebar-nav-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 12px 12px; }
+.sidebar-nav-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 12px 24px; overscroll-behavior: contain; }
 .sidebar-group { margin-bottom: 2px; }
 .sidebar-group-header {
   width: 100%; display: flex; justify-content: space-between; align-items: center;
@@ -192,23 +192,23 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .sidebar-help-title { font-size: 12.5px; font-weight: 600; color: #fff; }
 .sidebar-help-sub { font-size: 11px; color: var(--sb-text-dim); margin-top: 1px; }
 
-.sidebar-user {
-  border-top: 1px solid var(--sb-border); padding: 12px; position: relative; flex: 0 0 auto;
+.topbar-user { position: relative; flex: 0 0 auto; }
+.topbar-user-btn {
+  display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 5px; border-radius: 999px;
+  background: transparent; border: 1px solid var(--line); cursor: pointer; text-align: left; transition: background .12s, border-color .12s;
 }
-.sidebar-user-btn {
-  width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px;
-  background: transparent; border: none; cursor: pointer; text-align: left; transition: background .12s;
+.topbar-user-btn:hover { background: var(--ice); }
+.topbar-avatar {
+  width: 30px; height: 30px; border-radius: 999px; flex: 0 0 30px; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #4C8AFF, #14304A); color: #fff; font-size: 12px; font-weight: 700;
 }
-.sidebar-user-btn:hover { background: var(--sb-hover); }
-.sidebar-avatar {
-  width: 32px; height: 32px; border-radius: 999px; flex: 0 0 32px; display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #4C8AFF, #14304A); color: #fff; font-size: 12.5px; font-weight: 700;
-}
-.sidebar-user-info { min-width: 0; flex: 1; }
-.sidebar-user-info .name { font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sidebar-user-info .role { font-size: 11px; color: var(--sb-text-dim); }
-.sidebar-user-btn svg.chev { flex: 0 0 14px; width: 14px; height: 14px; color: var(--sb-text-dim); }
-.notif-panel.user-menu-panel { position: absolute; top: auto; bottom: 60px; left: 12px; right: 12px; width: auto; }
+.topbar-user-info { min-width: 0; }
+.topbar-user-info .name { font-size: 12.5px; font-weight: 600; color: var(--navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+.topbar-user-info .role { font-size: 11px; color: var(--steel); }
+.topbar-user-btn svg.chev { flex: 0 0 14px; width: 14px; height: 14px; color: var(--steel); }
+.notif-panel.user-menu-panel { top: calc(100% + 8px); bottom: auto; left: auto; right: 0; width: 230px; }
+@media (max-width: 860px) { .topbar-user-info .role { display: none; } }
+@media (max-width: 480px) { .topbar-user-info { display: none; } .topbar-user-btn { padding: 5px; } }
 
 .main-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .hamburger { display: none; background: none; border: none; font-size: 20px; color: var(--navy); padding: 4px 8px; cursor: pointer; }
@@ -228,16 +228,13 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
   .sidebar.collapsed .sidebar-subheading-btn,
   .sidebar.collapsed .sidebar-item span,
   .sidebar.collapsed .fav-star,
-  .sidebar.collapsed .sidebar-help-text,
-  .sidebar.collapsed .sidebar-user-info,
-  .sidebar.collapsed .sidebar-user-btn svg.chev { display: none; }
+  .sidebar.collapsed .sidebar-help-text { display: none; }
   .sidebar.collapsed .sidebar-brand { justify-content: center; padding: 22px 0 18px; }
   .sidebar.collapsed .sidebar-group-header { justify-content: center; padding: 8px 0; }
   .sidebar.collapsed .sidebar-item { justify-content: center; padding: 10px 0; }
   .sidebar.collapsed .sidebar-item-row .sidebar-item { flex: initial; width: 100%; }
   .sidebar.collapsed .sidebar-section { margin-left: 0; padding-left: 0; border-left: none; }
   .sidebar.collapsed .sidebar-help-card { justify-content: center; padding: 10px 0; }
-  .sidebar.collapsed .sidebar-user-btn { justify-content: center; }
 }
 
 @media (max-width: 860px) {
@@ -413,7 +410,18 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .form-card { padding: 16px; margin-bottom: 16px; }
 
 /* ---------- Login ---------- */
-.login-screen { min-height: 100vh; display: flex; }
+.login-screen { min-height: 100vh; display: flex; position: relative; }
+.login-lang-corner { position: absolute; top: 22px; right: 24px; z-index: 5; }
+.lang-select-wrap { position: relative; display: inline-flex; align-items: center; }
+.lang-select-wrap svg.chev { position: absolute; right: 11px; width: 13px; height: 13px; color: var(--steel); pointer-events: none; }
+select.lang-select {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 999px;
+  padding: 8px 32px 8px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: inherit;
+  transition: border-color .12s, background .12s;
+}
+select.lang-select:hover { border-color: var(--navy); }
+select.lang-select:focus { outline: 2px solid var(--navy); outline-offset: 1px; }
 .login-side {
   flex: 0 0 42%; background: linear-gradient(160deg, var(--navy-deep), var(--navy)); color: #fff;
   padding: 48px 40px; display: flex; flex-direction: column; justify-content: space-between;
@@ -434,6 +442,14 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .success-box { background: #E6F4EC; color: var(--green); font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; }
 [data-theme="dark"] .error-box { background: rgba(228,116,107,.14); }
 [data-theme="dark"] .success-box { background: rgba(70,192,140,.14); }
+
+.demo-credentials { margin-top: 22px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--ice); }
+.demo-credentials-title { font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--steel); margin-bottom: 9px; }
+.demo-credentials-row { display: flex; flex-direction: column; gap: 1px; padding: 5px 0; }
+.demo-credentials-row + .demo-credentials-row { border-top: 1px dashed var(--line); }
+.demo-credentials-label { font-size: 11.5px; color: var(--mist); }
+.demo-credentials-value { font-size: 12.5px; color: var(--navy); font-weight: 600; }
+[data-theme="dark"] .demo-credentials-value { color: var(--sb-active-border, #7fb2ff); }
 
 @media (max-width: 640px) { .login-side { display: none; } }
 
@@ -479,11 +495,12 @@ table.report tfoot td { padding: 10px 12px; font-weight: 700; border-top: 2px so
 /* ---------------- Kapıcı AI (uygulama-ici kullanim yardimcisi) ---------------- */
 .kapici-fab {
   position: fixed; right: 22px; bottom: 22px; z-index: 45;
-  width: 56px; height: 56px; border-radius: 50%; border: none;
+  height: 52px; padding: 0 20px 0 16px; border-radius: 999px; border: none;
   background: linear-gradient(135deg, var(--navy), #1B3F5E); color: #fff;
-  font-size: 24px; display: flex; align-items: center; justify-content: center;
+  font-size: 20px; display: flex; align-items: center; gap: 9px;
   box-shadow: 0 8px 24px rgba(12,32,50,.28); cursor: pointer; transition: transform .15s;
 }
+.kapici-fab span { font-size: 14px; font-weight: 600; font-family: 'Inter', sans-serif; }
 .kapici-fab:hover { transform: scale(1.06); }
 .kapici-panel {
   position: fixed; right: 22px; bottom: 90px; z-index: 46;

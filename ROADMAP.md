@@ -7,6 +7,66 @@ yardım istediğini anlayabilir.
 
 ---
 
+## 💬 Kapıcı AI → "Yardım": Eşleştirme Motoru + İçerik İndeksi + Yeniden Adlandırma (2026-08-18)
+
+Mert canlıda test ederken chatbot'un çok yetersiz kaldığını fark etti ("talepleri
+nerede görürüm" gibi basit sorulara bile cevap veremiyordu). Kök neden: eşleşme
+alt-dize (substring) aramasıydı — kelime sırası değişse, Türkçe ek alsa, ya da
+soru "oluştur" yerine "gör/bul" niyeti taşısa hiç eşleşmiyordu. **LLM bağlamamaya
+kasıtlı karar verildi** ("iş farklı yerlere gidiyor") — tamamı kural/indeks tabanlı.
+
+- **Eşleştirme motoru** (`routes/help.js`): alt-dize yerine kelime-kümesi
+  örtüşmesi. `wordsMatch()`: iki kelime aynıysa, biri diğerinin öneki ise (kök
+  ≥3 harf — ama "kaç"/"çok"/"var" gibi çok kısa+yaygın kelimeler EXACT_ONLY,
+  yoksa "kaç"~"kaçak" gibi yanlış pozitif çıkıyordu), ya da kısa bir Levenshtein
+  mesafesindeyse (yazım hatası) eşleşir. `fold()`: ç/ğ/ı/ö/ş/ü→ASCII (borç/borc
+  gibi klavye farklarını çözer). 197 anahtar kelimeyle regresyon testi geçti.
+- **2. kademe — `NAV_LABELS`**: KB'de detaylı cevap yoksa, soru menüdeki
+  GERÇEK bir sayfa adıyla ("Talepler", "Bütçe") örtüşüyorsa en azından doğru
+  sayfaya yönlendirir.
+- **3. kademe — otomatik içerik indeksi** (`scripts/build-help-index.js` →
+  `routes/helpIndex.json`, **gitignore'da değil, commit edilmeli**): Mert'in
+  fikriydi ("hangi ekranda geçiyorsa oraya yönlendirsek?"). `app.js`'teki HER
+  render fonksiyonunun gerçek Türkçe metnini tarar, bir kelime kaç FARKLI
+  ekranda geçiyorsa o kadar "genel" sayılıp elenir (TF-IDF benzeri) — "Ekle/
+  Sil/Kaydet" gibi heryerde-geçenler otomatik elenir, "fatura" gibi 1-2 ekrana
+  özgü kelimeler öne çıkar. **`app.js`'e yeni ekran/metin eklendiğinde elle
+  yeniden çalıştırılmalı** (`node scripts/build-help-index.js`) — otomatik
+  tetiklenmiyor.
+  - Çıkarım sırasında 3 gerçek hata bulunup düzeltildi: (1) bitişik string'ler
+    boşluksuz birleşiyordu ("title"+"arıza"→"titlearıza"), (2) asıl Türkçe
+    metnin çoğu `${uiT("key","Metin")}` gibi `${...}` İÇİNDE kod-string olarak
+    geçiyor, düz template metni sanıp atlanıyordu, (3) element id/event adı
+    gibi kod-içi string'ler (boşluksuz, tek "kelime") ile gerçek cümleler
+    (boşluklu) arasında filtre yoksa gürültü kalitesizleştiriyordu.
+  - "merhaba nasılsın" gibi sohbet cümleleri, Özet ekranının karşılama
+    metnindeki "merhaba" kelimesiyle yanlışlıkla eşleşiyordu — selamlaşma
+    kelimeleri hem üretim betiğinde hem STOPWORDS'te eklendi.
+- **HelpMiss loglama**: yeni `HelpMiss` modeli (Prisma) — 3 kademe de eşleşmezse
+  soru sessizce loglanır. Yönetici menüsünde **Sistem → Yardım Soruları**
+  ekranı (`kapicisorular` tab) bunları listeler/siler — LLM'siz "öğrenen"
+  tek mekanizma budur, Mert zaman zaman bakıp KB'ye yeni kelime ekleyebilir.
+- **Kapsam sınırı (bilerek, kullanıcıya söylendi)**: chatbot CANLI VERİ
+  sorgulayamıyor ("toplam alacak ne kadar" gibi sorular sadece doğru sayfaya
+  yönlendiriyor, rakamı vermiyor) — bunu eklemek ayrı bir özellik (API'ye
+  bağlı "veri sorgusu" katmanı), şimdilik ertelendi.
+- **Yeniden adlandırma**: "Kapıcı AI" ismi hem "AI değil ki gerçekte" hem de
+  "kapıcı karakteri yönetici için alakasız" gerekçesiyle **"Yardım"** oldu —
+  karakter/kişilik tamamen kaldırıldı, rol bağımsız nötr bir isim. Tüm diller
+  (TR/DE/RU/AZ) güncellendi. **Dikkat**: `uiT(key, fallback)` sadece
+  sakin+TR-dışı dilde `i18n.js`'e bakar, yönetici/personel HER ZAMAN `app.js`
+  içindeki hardcoded fallback'i kullanır — ikisini de güncellemek gerekti,
+  biri unutulup canlıda test edilerek yakalandı.
+- Yüzen buton (FAB) sadece 💬 ikonuyken "ne olduğu tıklamadan anlaşılmıyor"
+  şikayeti üzerine ikon+"Yardım" etiketli hap (pill) şekline çevrildi, her
+  zaman görünür.
+- Senaryo test için: `scripts/seed-multisite-demo.js` ile 2. bir site
+  ("Palmiye Rezidans", gerçek ödenmiş aidat+geliriyle) + çoklu-site yönetici
+  (`yonetici@site.com`, artık `isPlatformOwner`) + çoklu-daire sakini
+  (`ayse@example.com`, A Blok-4 + D Blok-3) test hesapları oluşturuldu.
+
+---
+
 ## 🌐 Çoklu Dil Desteği (TR/DE/RU/AZ) — TAMAMLANDI (2026-08-18, kapsam: sadece sakin tarafı)
 
 Kullanıcıyla netleştirilen kapsam: **sadece sakin tarafı** (yönetici/personel

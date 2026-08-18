@@ -181,6 +181,7 @@ async function boot() {
 function loginTemplate() {
   return `
   <div class="login-screen">
+    <div class="login-lang-corner">${langSelectHtml('id="loginLangSelect"')}</div>
     <div class="login-side">
       <div>
         <div class="eyebrow">SAKİN</div>
@@ -189,10 +190,32 @@ function loginTemplate() {
       <div class="foot">${esc(t("brand.footer"))}</div>
     </div>
     <div class="login-main">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">${langSelectHtml('id="loginLangSelect"')}</div>
       <div class="login-form" id="authArea"></div>
     </div>
   </div>`;
+}
+
+// Gelistirme/demo asamasinda test icin hazir hesaplari giris ekraninda
+// gosterir (coklu-site + coklu-daire ozelliklerini denemek icin - bkz.
+// scripts/seed-multisite-demo.js). Kimlik bilgileri kasitli olarak
+// cevrilmiyor (gercek deger, dile gore degismez), sadece rol etiketleri
+// cevriliyor.
+function demoCredentialsHtml() {
+  const rows = [
+    [t("login.demoMultiSite"), "yonetici@site.com", "Degistir123!"],
+    [t("login.demoSite2"), "yonetici2@site.com", "Site2Demo123!"],
+    [t("login.demoMultiUnit"), "ayse@example.com", "demo1234"],
+  ];
+  return `
+    <div class="demo-credentials">
+      <div class="demo-credentials-title">${esc(t("login.demoTitle"))}</div>
+      ${rows.map(([label, email, pw]) => `
+        <div class="demo-credentials-row">
+          <span class="demo-credentials-label">${esc(label)}</span>
+          <span class="demo-credentials-value f-num">${esc(email)} / ${esc(pw)}</span>
+        </div>
+      `).join("")}
+    </div>`;
 }
 
 function renderLogin() {
@@ -216,7 +239,7 @@ function renderAuthArea() {
       </form>
       <div class="auth-switch">${esc(t("login.noAccount"))} <button id="toRegister">${esc(t("login.register"))}</button></div>
       <div class="auth-switch">${esc(t("login.forgotQ"))} <button id="toForgot">${esc(t("login.forgotLink"))}</button></div>
-      <p class="small muted" style="margin-top:14px;">${esc(t("login.demoNote"))}</p>
+      ${demoCredentialsHtml()}
     `;
     document.getElementById("loginForm").addEventListener("submit", handleLogin);
     document.getElementById("toRegister").addEventListener("click", () => { authMode = "register"; renderAuthArea(); });
@@ -460,6 +483,7 @@ const NAV_ICON = {
   mizan: '<path d="M12 3v18"/><path d="M5 8l-3 5a3 3 0 0 0 6 0z"/><path d="M19 8l-3 5a3 3 0 0 0 6 0z"/><path d="M5 8h14"/><path d="M8 21h8"/>',
   fisler: '<path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="5" y="4" width="14" height="17" rx="2"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/>',
   bilgibankasi: '<circle cx="12" cy="12" r="10"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2 1.8-2 3.5"/><line x1="12" y1="16.5" x2="12" y2="16.5"/>',
+  kapicisorular: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2 1.8-2 3"/><line x1="12" y1="15" x2="12" y2="15"/>',
   ayarlar: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/>',
   platform: '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><line x1="9" y1="11" x2="9.01" y2="11"/><line x1="15" y1="11" x2="15.01" y2="11"/>',
   akillisite: '<rect x="9" y="9" width="6" height="6"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/><rect x="4" y="4" width="16" height="16" rx="2"/>',
@@ -502,7 +526,7 @@ const NAV_GROUPS = {
       { label: "İşlemler", items: [["karar", "Karar Defteri"], ["icra", "İcra Takibi"], ["belgeler", "Belge Şablonları"], ["arsiv", "Dosya Arşivi"], ["bilgibankasi", "Bilgi Bankası"]] },
       { label: "Raporlar", items: [["denetimraporu", "Denetim Kurulu Raporu"], ["faaliyetraporu", "Yönetim Faaliyet Raporu"]] },
     ] },
-    { group: "Sistem", items: [["seffaflik", "Şeffaflık"], ["ayarlar", "Ayarlar"]] },
+    { group: "Sistem", items: [["seffaflik", "Şeffaflık"], ["ayarlar", "Ayarlar"], ["kapicisorular", "Yardım Soruları"]] },
   ],
   personel: [
     { group: "Genel", items: [["ozet", "Özet"], ["istakibi", "İş Takibi"]] },
@@ -563,6 +587,26 @@ function initials(name) {
   return (name || "").trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
 }
 
+// Font-scale (A-/A+) document.documentElement.style.zoom kullaniyor (bkz.
+// applyFontScale). Chromium'da zoom 1'den farkliyken, ic ice overflow-y:auto
+// kutularinda fare tekeri/scrollbar-surukleme ile yapilan native scroll,
+// yuvarlama hatalari yuzunden gercek sona birkac/birkac-on px kisa kaliyor -
+// menunun en altindaki icerik (orn. "Yardim mi lazim?" karti) hep gorunmez
+// kaliyor. Kullanici gercek sona yeterince yaklasinca scrollTop'u sona
+// "yapistirarak" bu Chromium sinirini asiyoruz.
+function initSidebarScrollSnap(nav) {
+  if (!nav) return;
+  let timer = null;
+  nav.addEventListener("scroll", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const max = nav.scrollHeight - nav.clientHeight;
+      const remaining = max - nav.scrollTop;
+      if (max > 0 && remaining > 0 && remaining < 60) nav.scrollTop = max;
+    }, 100);
+  });
+}
+
 function renderShell() {
   const app = document.getElementById("app");
   app.innerHTML = `
@@ -581,16 +625,6 @@ function renderShell() {
          <input type="text" id="navSearchInput" placeholder="${esc(uiT("nav.search", "Menüde ara..."))}" autocomplete="off" />
        </div>
        <div class="sidebar-nav-scroll"><nav id="sidebarNav"></nav></div>
-       <div class="sidebar-user">
-         <button class="sidebar-user-btn" id="userMenuBtn">
-           <span class="sidebar-avatar">${esc(initials(state.user.name))}</span>
-           <span class="sidebar-user-info">
-             <div class="name">${esc(state.user.name)}</div>
-             <div class="role">${esc(roleLabel(state.user.role))}</div>
-           </span>
-           ${ICON.chevUpDown}
-         </button>
-       </div>
      </aside>
      <div class="main-col">
        <div class="topbar">
@@ -605,16 +639,26 @@ function renderShell() {
            </div>
            <button class="icon-btn" id="themeToggleBtn" title="${esc(uiT("topbar.theme", "Koyu/Açık mod"))}">${theme === "dark" ? ICON.sun : ICON.moon}</button>
            <button class="bell" id="bellBtn">${ICON.bell}<span class="dot" id="bellDot" style="display:none;"></span></button>
+           <div class="topbar-user">
+             <button class="topbar-user-btn" id="userMenuBtn">
+               <span class="topbar-avatar">${esc(initials(state.user.name))}</span>
+               <span class="topbar-user-info">
+                 <div class="name">${esc(state.user.name)}</div>
+                 <div class="role">${esc(roleLabel(state.user.role))}</div>
+               </span>
+               ${ICON.chevUpDown}
+             </button>
+           </div>
          </div>
        </div>
        <div class="wrap" id="content"></div>
      </div>
    </div>
    <div class="sidebar-overlay" id="sidebarOverlay"></div>
-   <button id="kapiciFab" class="kapici-fab" title="${esc(uiT("kapici.fabTitle", "Kapıcı AI - Yardım"))}">💬</button>
+   <button id="kapiciFab" class="kapici-fab" title="${esc(uiT("kapici.fabTitle", "Yardım"))}">💬<span>${esc(uiT("kapici.title", "Yardım"))}</span></button>
    <div id="kapiciPanel" class="kapici-panel" style="display:none;">
      <div class="kapici-header">
-       <span class="kapici-title">🧑‍💼 ${esc(uiT("kapici.title", "Kapıcı AI"))}<span class="kapici-subtitle">${esc(uiT("kapici.subtitle", "Uygulama kullanım yardımcınız"))}</span></span>
+       <span class="kapici-title">💬 ${esc(uiT("kapici.title", "Yardım"))}<span class="kapici-subtitle">${esc(uiT("kapici.subtitle", "Uygulama kullanım yardımcınız"))}</span></span>
        <button id="kapiciCloseBtn" class="kapici-close" title="Kapat">✕</button>
      </div>
      <div id="kapiciMessages" class="kapici-messages"></div>
@@ -626,6 +670,7 @@ function renderShell() {
    </div>
   `;
   renderSidebarNav();
+  initSidebarScrollSnap(document.querySelector(".sidebar-nav-scroll"));
   document.getElementById("bellBtn").addEventListener("click", toggleNotifPanel);
   document.getElementById("hamburgerBtn").addEventListener("click", toggleSidebar);
   document.getElementById("sidebarOverlay").addEventListener("click", toggleSidebar);
@@ -665,13 +710,19 @@ function renderKapiciMessages() {
     if (m.role === "user") return `<div class="kapici-msg kapici-msg-user">${esc(m.text)}</div>`;
     return `<div class="kapici-msg kapici-msg-bot">${kapiciFormat(m.text)}${m.tab ? `<br/><button class="kapici-goto" data-goto-tab="${esc(m.tab)}">${esc(uiT("kapici.goto", "İlgili sayfaya git →"))}</button>` : ""}</div>`;
   }).join("");
-  box.scrollTop = box.scrollHeight;
   box.querySelectorAll("[data-goto-tab]").forEach((b) => b.addEventListener("click", () => {
     goToTab(b.dataset.gotoTab);
     document.getElementById("kapiciPanel").style.display = "none";
     kapiciOpen = false;
   }));
+  // Onerilen sorular (renderKapiciSuggestions) mesaj kutusunun flex kardesi -
+  // yuksekligi degisince mesaj kutusunun clientHeight'i degisiyor. scrollTop'u
+  // bu guncellemeden ONCE yazarsak, henuz kucul(mus)meyen eski yukseklige gore
+  // hesaplanip 0'a sabitleniyor (tasma yokmus gibi) ve en alta inmiyor - bu
+  // yuzden once oneriler render edilip yerlesim otur(tul)duktan sonra scroll'u
+  // en alta al.
   renderKapiciSuggestions();
+  box.scrollTop = box.scrollHeight;
 }
 
 function renderKapiciSuggestions() {
@@ -707,7 +758,7 @@ function initKapiciAI() {
     if (kapiciOpen && !kapiciMessages.length) {
       let suggestions = [];
       try { ({ suggestions } = await api("/help/suggestions")); } catch {}
-      kapiciMessages.push({ role: "bot", text: uiT("kapici.welcome", "Merhaba! Ben Kapıcı AI 👋 Uygulamayı kullanmakla ilgili sorularınızı yanıtlayabilirim. Aşağıdan örnek bir soru seçebilir ya da kendi sorunuzu yazabilirsiniz."), suggestions });
+      kapiciMessages.push({ role: "bot", text: uiT("kapici.welcome", "Merhaba! 👋 Uygulamayı kullanmakla ilgili sorularınızı yanıtlayabilirim. Aşağıdan örnek bir soru seçebilir ya da kendi sorunuzu yazabilirsiniz."), suggestions });
       renderKapiciMessages();
     }
   });
@@ -737,7 +788,7 @@ function toggleUserMenu() {
     <button class="btn btn-ghost btn-sm" id="logoutBtn" style="width:100%;">${esc(uiT("userMenu.logout", "Çıkış Yap"))}</button>
   `;
   document.getElementById("userMenuLangSelect")?.addEventListener("change", (e) => setLang(e.target.value));
-  document.querySelector(".sidebar-user").appendChild(panel);
+  document.querySelector(".topbar-user").appendChild(panel);
   document.getElementById("changePwBtn").addEventListener("click", () => { panel.remove(); renderChangePasswordModal(); });
   document.getElementById("highContrastBtn").addEventListener("click", toggleHighContrast);
   document.getElementById("logoutBtn").addEventListener("click", logout);
@@ -1191,6 +1242,7 @@ async function renderTab(tab) {
     else if (tab === "toplusms") await renderTopluSms(c);
     else if (tab === "platform") await renderPlatformYonetimi(c);
     else if (tab === "akillisite") await renderAkilliSite(c);
+    else if (tab === "kapicisorular") await renderKapiciMisses(c);
     else c.innerHTML = '<p class="muted">Bulunamadı.</p>';
   } catch (err) {
     c.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
@@ -4286,6 +4338,41 @@ async function renderAnahtar(c) {
     catch (err) { toast(err.message); }
   }));
   c.querySelectorAll("[data-checkin]").forEach((b) => b.addEventListener("click", async () => { try { await api("/keys/" + b.dataset.checkin + "/checkin", { method: "PATCH" }); renderTab("anahtar"); } catch (err) { toast(err.message); } }));
+}
+
+// Kapici AI'nin cevap veremedigi (KB'de eslesme bulunamayan) sorular -
+// LLM baglamadan, yoneticinin bu listeyi periyodik inceleyip gercekten
+// sorulan ama eslesmeyen sorulari gorup routes/help.js'teki KB'ye yeni
+// anahtar kelime/girdi eklemesi icin (bkz. lib tarafinda findBestMatch).
+async function renderKapiciMisses(c) {
+  const ROLE_LABEL_KM = { sakin: "Sakin", yonetici: "Yönetici", personel: "Personel" };
+  const list = await api("/help/misses");
+  c.innerHTML = `
+    ${sectionTitle("Yardım Soruları", "Kullanıcıların sorduğu ama Yardım'ın cevap veremediği sorular - buradan yeni anahtar kelime/girdi eklemeye karar verebilirsiniz.")}
+    <div class="card tight" id="kmList">
+      <div class="flex-between" style="padding:10px 14px;">
+        <div class="small muted">${list.length} kayıt</div>
+        ${list.length ? '<button class="btn btn-ghost btn-sm" id="kmClearAll">Tümünü Temizle</button>' : ""}
+      </div>
+      ${list.map((m) => `
+        <div class="ledger-row">
+          <div>
+            <div style="font-size:14px;font-weight:600;">${esc(m.question)}</div>
+            <div class="small muted">${esc(ROLE_LABEL_KM[m.role] || m.role)} · ${dt(m.createdAt)}</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" data-km-del="${m.id}">Sil</button>
+        </div>`).join("") || '<div class="empty-row">Henüz cevapsız kalan soru yok.</div>'}
+    </div>
+  `;
+  c.querySelectorAll("[data-km-del]").forEach((b) => b.addEventListener("click", async () => {
+    try { await api("/help/misses/" + b.dataset.kmDel, { method: "DELETE" }); renderTab("kapicisorular"); }
+    catch (err) { toast(err.message); }
+  }));
+  document.getElementById("kmClearAll")?.addEventListener("click", async () => {
+    if (!confirm("Tüm kayıtlar silinsin mi?")) return;
+    try { await api("/help/misses", { method: "DELETE" }); renderTab("kapicisorular"); }
+    catch (err) { toast(err.message); }
+  });
 }
 
 /* ================= PERSONEL VIEW ================= */
