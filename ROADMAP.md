@@ -7,6 +7,56 @@ yardım istediğini anlayabilir.
 
 ---
 
+## 🌐 Çoklu Dil Desteği (TR/DE/RU/AZ) — TAMAMLANDI (2026-08-18, kapsam: sadece sakin tarafı)
+
+Kullanıcıyla netleştirilen kapsam: **sadece sakin tarafı** (yönetici/personel
+ekranları — raporlar, muhasebe, Platform Yönetimi, Akıllı Site Sistemleri —
+kapsam dışı, Türkçe kalıyor) + **PDF belgeler de dahil**.
+
+- `public/js/i18n.js` (yeni): TR/DE/RU/AZ sözlükleri + `t()`/`tf()` + dil
+  tercihi `localStorage`'da kalıcı. Dil değiştirici: login ekranı (herkes
+  görür) + sakin kullanıcı menüsü (sadece sakin görür).
+- Rol-bazlı gating: `uiT()`/`navLabel()`/`groupLabel()`/`roleLabel()`
+  yardımcıları SADECE `state.user.role === "sakin"` VE dil TR değilse
+  çeviriyi kullanır — bir yöneticinin tarayıcısında (aynı cihazda daha önce
+  bir sakin dil değiştirmiş olsa bile) hiçbir ekran değişmez, test edilerek
+  doğrulandı.
+- Çevrilen: login/kayıt/site-seçici/zorunlu-şifre-değiştirme ekranları,
+  sidebar navigasyon (grup/öge etiketleri, arama kutusu placeholder'ı,
+  favoriler/son görüntülenenler), topbar tooltip'leri, kullanıcı menüsü,
+  Kapıcı AI arayüz kabuğu (başlık/placeholder/karşılama mesajı — SSS
+  cevaplarının kendisi Türkçe kalıyor, kapsam dışı), Özet/Borç ve Ödemelerim/
+  Sayaçlarım ekranları.
+- **Bulunan gerçek bir hata**: `debtStatusLabel()`'in çıktısı doğrudan
+  `PILL_MAP`'te renk aramak için ANAHTAR olarak kullanılıyordu
+  (`PILL_MAP["Borçlu"]="red"` vb.) — eğer bu fonksiyon çevrilmiş metin
+  dönseydi (`PILL_MAP["Schuldner"]` gibi) anahtar bulunamaz, pill rengi
+  sessizce griye düşerdi. `debtStatusPill()` ile ayrıştırıldı: renk hep
+  Türkçe anahtarla, görünen metin ayrıca çevrilerek.
+- **PDF belgeler (debt-letter, receipt, borc-dokumu) — teknik bir kısıt
+  bulundu ve çözüldü**: `pdf-lib`'in standart fontu (WinAnsi kodlaması)
+  Kiril alfabesini (Rusça) HİÇ desteklemiyor — doğrudan yazılsa PDF üretimi
+  hata fırlatırdı. Yeni bir font/`fontkit` bağımlılığı eklemeden (uygun
+  lisanslı bir Unicode font dosyasına bu ortamda erişim yoktu) standart bir
+  Kiril→Latin harf çevirisi uygulandı — belge hâlâ Rusça okuyan biri için
+  anlaşılır kalıyor (uluslararası belgelerde yaygın bir pratik), sadece
+  Kiril harfleriyle değil. Azerice'ye özgü "ə" karakteri de aynı şekilde
+  ASCII karşılığına çevrildi. Almanca (ä/ö/ü/ß) WinAnsi'de zaten var,
+  sorunsuz. Tarihler seçilen dile göre yerelleştirildi (`toLocaleDateString`).
+- 4 dilde de tarayıcıda uçtan uca test edildi: login ekranı, sidebar/topbar/
+  kullanıcı menüsü, Özet + Aidat ekranları, debt-letter/receipt PDF indirme
+  (gerçek PDF içerikleri görsel olarak doğrulandı), yönetici girişinde HİÇBİR
+  şeyin değişmediği (dil `localStorage`'da kalıcı olsa bile).
+- **Bilinen, kullanıcıya açıkça belirtilen kapsam dışı kalanlar**: paylaşılan
+  sakin ekranları (Duyurular, Anketler, Rezervasyon, Talep, Kargo, Site
+  Panosu, Rehber, Şeffaflık, Bilgi Bankası, Gelen Mesajlar) henüz
+  çevrilmedi — sadece `i18n.js`'e anahtar eklenip aynı `t()` deseniyle bu
+  ekranlara uygulanması yeterli olacağı için altyapı hazır, istenirse ayrı
+  bir oturumda tamamlanabilir. Kapıcı AI'nın SSS cevap İÇERİĞİ de Türkçe
+  kalıyor (arayüz kabuğu çevrildi).
+
+---
+
 ## 🏠 Akıllı Site Sistemleri (IoT) — TAMAMLANDI (2026-08-18)
 
 Kullanıcı, henüz gerçek bir cihaz entegrasyonu olmasa da (havuz klor sensörü,

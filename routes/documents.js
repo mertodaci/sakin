@@ -6,25 +6,120 @@ const { ownsUnit } = require("../lib/residentUnits");
 
 const router = express.Router();
 
-// pdf-lib'in standart fontlari WinAnsi kodlamasini kullanir ve bazi Turkce
-// karakterleri (ğ, ı, ş, İ) desteklemez. Resmi belgede hata firlatmamak icin
-// bu karakterleri en yakin ASCII karsiligina donusturuyoruz (yalnizca PDF ciktisinda).
+// pdf-lib'in standart fontlari WinAnsi kodlamasini kullanir - Turkce (ğ, ı, ş,
+// İ) VE Azerice'ye ozgu "ə" desteklenmez, PDF uretimi bu karakterlerde hata
+// firlatir. En yakin ASCII karsiligina donusturuyoruz (yalnizca PDF ciktisinda).
 function trSafe(text) {
-  const map = { ğ: "g", Ğ: "G", ı: "i", İ: "I", ş: "s", Ş: "S", ç: "c", Ç: "C", ö: "o", Ö: "O", ü: "u", Ü: "U", "₺": "TL" };
-  return String(text ?? "").replace(/[ğĞışŞçÇöÖüÜİ₺]/g, (m) => map[m] || m);
+  const map = { ğ: "g", Ğ: "G", ı: "i", İ: "I", ş: "s", Ş: "S", ç: "c", Ç: "C", ö: "o", Ö: "O", ü: "u", Ü: "U", ə: "e", Ə: "E", "₺": "TL" };
+  return String(text ?? "").replace(/[ğĞışŞçÇöÖüÜİəƏ₺]/g, (m) => map[m] || m);
 }
 
-function fmtDateTr(d) {
-  return new Date(d).toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" });
+// DIKKAT: WinAnsi Kiril alfabesini HIC desteklemiyor - pdf-lib bu karakterlerde
+// dogrudan hata firlatir (yeni bir font/fontkit bagimliligi eklemeden Rusca'yi
+// PDF'de dogru gostermenin bir yolu yok). Bunun yerine standart bir Kiril->Latin
+// harf cevirisi uygulaniyor - belge Rusca konusan biri icin hala okunabilir
+// kaliyor (uluslararasi belgelerde Rusca isim/adres cevirisinde yaygin bir
+// pratik), sadece Kiril harfleriyle degil.
+const CYRILLIC_TO_LATIN = {
+  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i", й: "y",
+  к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f",
+  х: "h", ц: "ts", ч: "ch", ш: "sh", щ: "sch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu", я: "ya",
+  А: "A", Б: "B", В: "V", Г: "G", Д: "D", Е: "E", Ё: "E", Ж: "Zh", З: "Z", И: "I", Й: "Y",
+  К: "K", Л: "L", М: "M", Н: "N", О: "O", П: "P", Р: "R", С: "S", Т: "T", У: "U", Ф: "F",
+  Х: "H", Ц: "Ts", Ч: "Ch", Ш: "Sh", Щ: "Sch", Ъ: "", Ы: "Y", Ь: "", Э: "E", Ю: "Yu", Я: "Ya",
+};
+function cyrillicToLatin(text) {
+  return String(text ?? "").replace(/[Ѐ-ӿ]/g, (ch) => CYRILLIC_TO_LATIN[ch] ?? ch);
 }
+
+// PDF metnini secilen dile gore fonta guvenli hale getirir.
+function pdfSafe(text, lang) {
+  const s = lang === "ru" ? cyrillicToLatin(String(text ?? "")) : String(text ?? "");
+  return trSafe(s);
+}
+
+const DOC_LOCALE = { tr: "tr-TR", de: "de-DE", ru: "ru-RU", az: "az-Latn-AZ" };
+function fmtDateLoc(d, lang) {
+  try {
+    return new Date(d).toLocaleDateString(DOC_LOCALE[lang] || "tr-TR", { day: "2-digit", month: "long", year: "numeric" });
+  } catch {
+    return new Date(d).toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" });
+  }
+}
+function fmtDateTr(d) { return fmtDateLoc(d, "tr"); }
 function fmtTL(n) {
   return new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 }).format(n) + " TL";
+}
+
+// Sakin taraf PDF belgelerinde (debt-letter, receipt, borc-dokumu) kullanilan
+// sabit etiketler - Kapici AI/arayuz cevirisiyle AYNI kapsam (sadece sakin
+// tarafi, bkz. public/js/i18n.js basindaki not). Yonetici-ozel belgeler
+// (toplu-makbuz, raporlar vb.) bu kapsamin disinda, Turkce kaliyor.
+const DOC_I18N = {
+  tr: {
+    orgSubtitle: "Site / Apartman Yönetimi", footerAuto: "Bu belge Sakin site yönetim sistemi tarafından otomatik oluşturulmuştur.",
+    createdAt: "Oluşturulma", signature: "Yönetici Adı / İmza",
+    debtLetterHeading: "BORCU YOKTUR BELGESİ", site: "Site", unit: "Bağımsız Bölüm", owner: "Malik",
+    debtLetterBody1: (block, no, date) => `İşbu belge ile ${block} - Daire ${no} nolu bağımsız bölümün, ${date} tarihi itibarıyla`,
+    debtLetterBody2: "site yönetimine karşı herhangi bir aidat/ortak gider borcunun bulunmadığı tasdik edilir.",
+    debtLetterBody3: "Bu belge banka, tapu veya resmi kurum işlemlerinde kullanılabilir.",
+    receiptHeading: "ÖDEME MAKBUZU", receiptNo: "Makbuz No", date: "Tarih", payer: "Ödeyen", method: "Ödeme Yöntemi", amount: "Tutar", note: "Not",
+    receiptFooter: "Bu makbuz elektronik ortamda üretilmiştir, ıslak imza gerekmez.",
+    borcDokumuHeading: "BORÇ DÖKÜMÜ", remaining: "Kalan", noOpenDebt: "Açık borç kaydı bulunmamaktadır.",
+    creditBalance: "Alacaklı Bakiye", totalBalance: "TOPLAM NET BAKİYE",
+    borcDokumuFooter: "Bu döküm yalnızca açık borçları listeler, geçmiş ödemeler için Hesap Özeti'ne bakınız.",
+  },
+  de: {
+    orgSubtitle: "Wohnanlagenverwaltung", footerAuto: "Dieses Dokument wurde automatisch vom Sakin-Verwaltungssystem erstellt.",
+    createdAt: "Erstellt am", signature: "Name des Verwalters / Unterschrift",
+    debtLetterHeading: "SCHULDENFREIHEITSBESCHEINIGUNG", site: "Anlage", unit: "Wohneinheit", owner: "Eigentümer",
+    debtLetterBody1: (block, no, date) => `Hiermit wird bestätigt, dass für die Wohneinheit ${block} - Nr. ${no} zum ${date}`,
+    debtLetterBody2: "keine offenen Hausgeld-/Nebenkostenschulden gegenüber der Verwaltung bestehen.",
+    debtLetterBody3: "Dieses Dokument kann bei Banken, Grundbuchämtern oder Behörden verwendet werden.",
+    receiptHeading: "ZAHLUNGSBELEG", receiptNo: "Belegnummer", date: "Datum", payer: "Zahler", method: "Zahlungsmethode", amount: "Betrag", note: "Anmerkung",
+    receiptFooter: "Dieser Beleg wurde elektronisch erstellt und benötigt keine handschriftliche Unterschrift.",
+    borcDokumuHeading: "SCHULDENÜBERSICHT", remaining: "Offen", noOpenDebt: "Es liegen keine offenen Schulden vor.",
+    creditBalance: "Guthaben", totalBalance: "GESAMTSALDO",
+    borcDokumuFooter: "Diese Übersicht listet nur offene Schulden auf; für den Zahlungsverlauf siehe Kontoauszug.",
+  },
+  ru: {
+    orgSubtitle: "Upravlenie zhilym kompleksom", footerAuto: "Dokument avtomaticheski sformirovan sistemoy upravleniya Sakin.",
+    createdAt: "Data formirovaniya", signature: "FIO upravlyayuschego / Podpis",
+    debtLetterHeading: "SPRAVKA OB OTSUTSTVII ZADOLZHENNOSTI", site: "Ob'ekt", unit: "Kvartira", owner: "Sobstvennik",
+    debtLetterBody1: (block, no, date) => `Nastoyaschim podtverzhdaetsya, chto po kvartire ${block} - No. ${no} po sostoyaniyu na ${date}`,
+    debtLetterBody2: "zadolzhennost po vznosam/obschim raskhodam pered upravleniem otsutstvuet.",
+    debtLetterBody3: "Dannyy dokument mozhet byt ispolzovan v banke, Rosreestre ili gosudarstvennykh organakh.",
+    receiptHeading: "KVITANTSIYA OB OPLATE", receiptNo: "No. kvitantsii", date: "Data", payer: "Platelschik", method: "Sposob oplaty", amount: "Summa", note: "Primechanie",
+    receiptFooter: "Kvitantsiya sformirovana v elektronnom vide, mokraya pechat ne trebuetsya.",
+    borcDokumuHeading: "VYPISKA PO ZADOLZHENNOSTI", remaining: "Ostatok", noOpenDebt: "Otkrytoy zadolzhennosti net.",
+    creditBalance: "Pereplata", totalBalance: "ITOGOVYY BALANS",
+    borcDokumuFooter: "V vypiske ukazany tolko otkrytye dolgi; istoriyu platezhey smotrite v vypiske po schetu.",
+  },
+  az: {
+    orgSubtitle: "Sayə İdarəetməsi", footerAuto: "Bu sənəd Sakin sayə idarəetmə sistemi tərəfindən avtomatik yaradılmışdır.",
+    createdAt: "Yaradılma tarixi", signature: "İdarəçinin Adı / İmza",
+    debtLetterHeading: "BORCU YOXDUR SƏNƏDİ", site: "Sayə", unit: "Mənzil", owner: "Mülkiyyətçi",
+    debtLetterBody1: (block, no, date) => `Bu sənədlə ${block} - Mənzil ${no} nömrəli mənzilin ${date} tarixinə`,
+    debtLetterBody2: "idarəetməyə qarşı heç bir aidat/ortaq xərc borcunun olmadığı təsdiq edilir.",
+    debtLetterBody3: "Bu sənəd bank, torpaq kadastrı və ya rəsmi qurum əməliyyatlarında istifadə edilə bilər.",
+    receiptHeading: "ÖDƏNİŞ QƏBZİ", receiptNo: "Qəbz No", date: "Tarix", payer: "Ödəyən", method: "Ödəniş Üsulu", amount: "Məbləğ", note: "Qeyd",
+    receiptFooter: "Bu qəbz elektron mühitdə yaradılmışdır, imza tələb olunmur.",
+    borcDokumuHeading: "BORC DÖKÜMÜ", remaining: "Qalıq", noOpenDebt: "Açıq borc qeydi yoxdur.",
+    creditBalance: "Alacaqlı Balans", totalBalance: "ÜMUMİ XALİS BALANS",
+    borcDokumuFooter: "Bu döküm yalnız açıq borcları siyahılayır, keçmiş ödənişlər üçün Hesab Xülasəsinə baxın.",
+  },
+};
+function docLang(req) {
+  const l = String(req.query.lang || "tr").toLowerCase();
+  return DOC_I18N[l] ? l : "tr";
 }
 
 // Net bakiye hesabi db.js'te paylasilan tek yerde (db.netDebt).
 const netDebt = db.netDebt;
 
-async function buildDocument({ heading, lines, footerNote }) {
+async function buildDocument({ heading, lines, footerNote, lang }) {
+  const L = DOC_I18N[lang || "tr"] || DOC_I18N.tr;
+  const safe = (s) => pdfSafe(s, lang || "tr");
   const doc = await PDFDocument.create();
   const page = doc.addPage([595, 842]); // A4
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -33,25 +128,25 @@ async function buildDocument({ heading, lines, footerNote }) {
   const grey = rgb(0.43, 0.5, 0.56);
 
   let y = 780;
-  page.drawText(trSafe("SAKIN"), { x: 50, y, size: 22, font: bold, color: navy });
-  page.drawText(trSafe("Site / Apartman Yonetimi"), { x: 50, y: y - 18, size: 10, font, color: grey });
+  page.drawText(safe("SAKIN"), { x: 50, y, size: 22, font: bold, color: navy });
+  page.drawText(safe(L.orgSubtitle), { x: 50, y: y - 18, size: 10, font, color: grey });
   page.drawLine({ start: { x: 50, y: y - 32 }, end: { x: 545, y: y - 32 }, thickness: 1, color: rgb(0.87, 0.9, 0.93) });
 
   y -= 70;
-  page.drawText(trSafe(heading), { x: 50, y, size: 15, font: bold, color: navy });
+  page.drawText(safe(heading), { x: 50, y, size: 15, font: bold, color: navy });
   y -= 34;
 
   lines.forEach((line) => {
     if (line === "") { y -= 12; return; }
-    page.drawText(trSafe(line), { x: 50, y, size: 11, font, color: rgb(0.06, 0.11, 0.15) });
+    page.drawText(safe(line), { x: 50, y, size: 11, font, color: rgb(0.06, 0.11, 0.15) });
     y -= 20;
   });
 
   page.drawLine({ start: { x: 50, y: 130 }, end: { x: 545, y: 130 }, thickness: 1, color: rgb(0.87, 0.9, 0.93) });
-  page.drawText(trSafe(footerNote || "Bu belge Sakin site yonetim sistemi tarafindan otomatik olusturulmustur."), { x: 50, y: 110, size: 9, font, color: grey });
-  page.drawText(trSafe("Olusturulma: " + fmtDateTr(new Date())), { x: 50, y: 96, size: 9, font, color: grey });
+  page.drawText(safe(footerNote || L.footerAuto), { x: 50, y: 110, size: 9, font, color: grey });
+  page.drawText(safe(L.createdAt + ": " + fmtDateLoc(new Date(), lang)), { x: 50, y: 96, size: 9, font, color: grey });
 
-  page.drawText(trSafe("Yonetici Adi / Imza"), { x: 380, y: 180, size: 10, font, color: rgb(0.06, 0.11, 0.15) });
+  page.drawText(safe(L.signature), { x: 380, y: 180, size: 10, font, color: rgb(0.06, 0.11, 0.15) });
   page.drawLine({ start: { x: 380, y: 175 }, end: { x: 545, y: 175 }, thickness: 1, color: rgb(0.7, 0.76, 0.82) });
 
   return doc.save();
@@ -74,17 +169,20 @@ router.get("/documents/debt-letter", requireAuth, async (req, res) => {
     return res.status(409).json({ error: `Bu belge yalnızca borcu bulunmayan daireler için üretilebilir. Güncel bakiyeniz: ${fmtTL(debt)}` });
   }
 
+  const lang = docLang(req);
+  const L = DOC_I18N[lang];
   const bytes = await buildDocument({
-    heading: "BORCU YOKTUR BELGESİ",
+    lang,
+    heading: L.debtLetterHeading,
     lines: [
-      `Site: ${data.meta.buildingName}`,
-      `Bağımsız Bölüm: ${unit.block} - Daire ${unit.no}`,
-      `Malik: ${unit.ownerName || "-"}`,
+      `${L.site}: ${data.meta.buildingName}`,
+      `${L.unit}: ${unit.block} - Daire ${unit.no}`,
+      `${L.owner}: ${unit.ownerName || "-"}`,
       "",
-      `İşbu belge ile ${unit.block} - Daire ${unit.no} nolu bağımsız bölümün, ${fmtDateTr(new Date())} tarihi itibarıyla`,
-      "site yönetimine karşı herhangi bir aidat/ortak gider borcunun bulunmadığı tasdik edilir.",
+      L.debtLetterBody1(unit.block, unit.no, fmtDateLoc(new Date(), lang)),
+      L.debtLetterBody2,
       "",
-      "Bu belge banka, tapu veya resmi kurum işlemlerinde kullanılabilir.",
+      L.debtLetterBody3,
     ],
   });
 
@@ -104,19 +202,22 @@ router.get("/documents/receipt/:paymentId", requireAuth, async (req, res) => {
   if (req.user.role === "sakin" && !(await ownsUnit(db.prisma, req.user, payment.unitId))) return res.status(403).json({ error: "Bu makbuza erişim yetkiniz yok." });
   const unit = data.units.find((u) => u.id === payment.unitId);
 
+  const lang = docLang(req);
+  const L = DOC_I18N[lang];
   const bytes = await buildDocument({
-    heading: "ÖDEME MAKBUZU",
+    lang,
+    heading: L.receiptHeading,
     lines: [
-      `Makbuz No: ${payment.receiptNo}`,
-      `Tarih: ${fmtDateTr(payment.date)}`,
-      `Bağımsız Bölüm: ${unit ? unit.block + " - Daire " + unit.no : "-"}`,
-      `Ödeyen: ${unit ? unit.ownerName || "-" : "-"}`,
-      `Ödeme Yöntemi: ${payment.method}`,
+      `${L.receiptNo}: ${payment.receiptNo}`,
+      `${L.date}: ${fmtDateLoc(payment.date, lang)}`,
+      `${L.unit}: ${unit ? unit.block + " - Daire " + unit.no : "-"}`,
+      `${L.payer}: ${unit ? unit.ownerName || "-" : "-"}`,
+      `${L.method}: ${payment.method}`,
       "",
-      `Tutar: ${fmtTL(payment.amount)}`,
-      payment.note ? `Not: ${payment.note}` : "",
+      `${L.amount}: ${fmtTL(payment.amount)}`,
+      payment.note ? `${L.note}: ${payment.note}` : "",
     ].filter((l) => l !== undefined),
-    footerNote: "Bu makbuz elektronik ortamda üretilmiştir, ıslak imza gerekmez.",
+    footerNote: L.receiptFooter,
   });
 
   res.setHeader("Content-Type", "application/pdf");
@@ -195,19 +296,22 @@ router.get("/documents/borc-dokumu/:unitId", requireAuth, async (req, res) => {
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
   const total = openCharges.reduce((s, c) => s + (c.amount - c.paidAmount), 0) - (unit.creditBalance || 0);
 
+  const lang = docLang(req);
+  const L = DOC_I18N[lang];
   const bytes = await buildDocument({
-    heading: "BORÇ DÖKÜMÜ",
+    lang,
+    heading: L.borcDokumuHeading,
     lines: [
-      `Bağımsız Bölüm: ${unit.block} - Daire ${unit.no}`,
-      `Malik: ${unit.ownerName || "-"}`,
+      `${L.unit}: ${unit.block} - Daire ${unit.no}`,
+      `${L.owner}: ${unit.ownerName || "-"}`,
       "",
-      ...openCharges.map((c) => `${fmtDateTr(c.dueDate)}  ${c.type}  ${c.description || ""}  —  Kalan: ${fmtTL(c.amount - c.paidAmount)}`),
-      openCharges.length ? "" : "Açık borç kaydı bulunmamaktadır.",
-      unit.creditBalance > 0 ? `Alacaklı Bakiye: ${fmtTL(unit.creditBalance)}` : "",
+      ...openCharges.map((c) => `${fmtDateLoc(c.dueDate, lang)}  ${c.type}  ${c.description || ""}  —  ${L.remaining}: ${fmtTL(c.amount - c.paidAmount)}`),
+      openCharges.length ? "" : L.noOpenDebt,
+      unit.creditBalance > 0 ? `${L.creditBalance}: ${fmtTL(unit.creditBalance)}` : "",
       "",
-      `TOPLAM NET BAKİYE: ${fmtTL(total)}`,
+      `${L.totalBalance}: ${fmtTL(total)}`,
     ].filter((l) => l !== undefined),
-    footerNote: "Bu döküm yalnızca açık borçları listeler, geçmiş ödemeler için Hesap Özeti'ne bakınız.",
+    footerNote: L.borcDokumuFooter,
   });
 
   db.logActivity(data, req.user, "document.borc-dokumu", `${unit.block} - Daire ${unit.no} için borç dökümü indirildi.`, unit.id);

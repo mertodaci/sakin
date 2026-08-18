@@ -107,6 +107,17 @@ const PILL_MAP = { "Ödendi": "green", "Borçlu": "red", "Alacaklı": "green", "
 // Net bakiye (borc - alacakli bakiye) uc durumlu: pozitif=borclu (kirmizi),
 // negatif=alacakli (yesil), sifir=odendi (yesil).
 function debtStatusLabel(debt) { return debt > 0 ? "Borçlu" : debt < 0 ? "Alacaklı" : "Ödendi"; }
+// pill(debtStatusLabel(debt)) render'a girmeden ONCE debtStatusLabel'in Turkce
+// ciktisi PILL_MAP'te renk aramak icin ANAHTAR olarak kullanilir - eger burada
+// dogrudan cevrilmis metin donseydi PILL_MAP[cevrilmisMetin] bulunamaz, renk
+// sessizce griye duserdi. Bu yuzden renk hep Turkce anahtarla, GORUNEN metin
+// ise ayrica (sadece sakin+TR-disi dilde) cevrilerek uretiliyor.
+function debtStatusPill(debt) {
+  const key = debtStatusLabel(debt);
+  const cls = PILL_MAP[key] || "grey";
+  const textKey = debt > 0 ? "status.debtor" : debt < 0 ? "status.creditor" : "status.paid";
+  return `<span class="pill ${cls}"><span class="dot"></span>${esc(uiT(textKey, key))}</span>`;
+}
 function debtColor(debt) { return debt > 0 ? "var(--red)" : "var(--green)"; }
 // type artik serbest metin (sabit enum degil) - bilinen 4 tip icin daha
 // once kullanilan Turkce etiketler korunur, baska bir kategori girilmisse
@@ -161,17 +172,21 @@ function loginTemplate() {
     <div class="login-side">
       <div>
         <div class="eyebrow">SAKİN</div>
-        <h1>Sitenizin hesabı, deftere değil ekrana işlensin.</h1>
+        <h1>${esc(t("brand.tagline"))}</h1>
       </div>
-      <div class="foot">Aidat takibi, muhasebe, duyurular, anketler, sayaç faturalama, demirbaş-bakım, kargo, karar defteri, anahtar takibi ve daha fazlası — tek panelde.</div>
+      <div class="foot">${esc(t("brand.footer"))}</div>
     </div>
-    <div class="login-main"><div class="login-form" id="authArea"></div></div>
+    <div class="login-main">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">${langSelectHtml('id="loginLangSelect"')}</div>
+      <div class="login-form" id="authArea"></div>
+    </div>
   </div>`;
 }
 
 function renderLogin() {
   authMode = signupInviteCode ? "register" : "login";
   document.getElementById("app").innerHTML = loginTemplate();
+  document.getElementById("loginLangSelect").addEventListener("change", (e) => setLang(e.target.value));
   renderAuthArea();
 }
 
@@ -179,31 +194,31 @@ function renderAuthArea() {
   const area = document.getElementById("authArea");
   if (authMode === "login") {
     area.innerHTML = `
-      <h1>Giriş yap</h1>
-      <p class="sub">Hesabınızla giriş yapın.</p>
+      <h1>${esc(t("login.title"))}</h1>
+      <p class="sub">${esc(t("login.sub"))}</p>
       <div id="authMsg"></div>
       <form id="loginForm">
-        <div class="field"><label>E-posta</label><input type="email" name="email" required /></div>
-        <div class="field"><label>Şifre</label><input type="password" name="password" required /></div>
-        <button class="btn btn-primary" style="width:100%;margin-top:8px;" type="submit">Giriş yap</button>
+        <div class="field"><label>${esc(t("login.email"))}</label><input type="email" name="email" required /></div>
+        <div class="field"><label>${esc(t("login.password"))}</label><input type="password" name="password" required /></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:8px;" type="submit">${esc(t("login.submit"))}</button>
       </form>
-      <div class="auth-switch">Hesabınız yok mu? <button id="toRegister">Kayıt olun</button></div>
-      <div class="auth-switch">Şifrenizi mi unuttunuz? <button id="toForgot">Sıfırlama talep edin</button></div>
-      <p class="small muted" style="margin-top:14px;">Demo yönetici hesabı: yonetici@site.com / Degistir123!</p>
+      <div class="auth-switch">${esc(t("login.noAccount"))} <button id="toRegister">${esc(t("login.register"))}</button></div>
+      <div class="auth-switch">${esc(t("login.forgotQ"))} <button id="toForgot">${esc(t("login.forgotLink"))}</button></div>
+      <p class="small muted" style="margin-top:14px;">${esc(t("login.demoNote"))}</p>
     `;
     document.getElementById("loginForm").addEventListener("submit", handleLogin);
     document.getElementById("toRegister").addEventListener("click", () => { authMode = "register"; renderAuthArea(); });
     document.getElementById("toForgot").addEventListener("click", () => { authMode = "forgot"; renderAuthArea(); });
   } else if (authMode === "forgot") {
     area.innerHTML = `
-      <h1>Şifremi unuttum</h1>
-      <p class="sub">E-posta adresinizi girin; yönetici sizin için geçici bir şifre oluşturup iletecektir.</p>
+      <h1>${esc(t("forgot.title"))}</h1>
+      <p class="sub">${esc(t("forgot.sub"))}</p>
       <div id="authMsg"></div>
       <form id="forgotForm">
-        <div class="field"><label>E-posta</label><input type="email" name="email" required /></div>
-        <button class="btn btn-primary" style="width:100%;margin-top:8px;" type="submit">Talep Gönder</button>
+        <div class="field"><label>${esc(t("login.email"))}</label><input type="email" name="email" required /></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:8px;" type="submit">${esc(t("forgot.submit"))}</button>
       </form>
-      <div class="auth-switch"><button id="toLogin2">Girişe dön</button></div>
+      <div class="auth-switch"><button id="toLogin2">${esc(t("forgot.backToLogin"))}</button></div>
     `;
     document.getElementById("forgotForm").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -217,35 +232,35 @@ function renderAuthArea() {
     // Davet linki olmadan kayit ekranina ulasilmis (orn. login ekranindan
     // "Kayıt olun" - siteye ozel davet linki artik zorunlu, bkz. routes/auth.js).
     area.innerHTML = `
-      <h1>Sakin kaydı oluştur</h1>
-      <div class="error-box">Kayıt olmak için sitenizin yöneticisinden aldığınız davet linkini kullanmanız gerekiyor. Böyle bir linkiniz yoksa yöneticinizle iletişime geçin.</div>
-      <div class="auth-switch">Zaten hesabınız var mı? <button id="toLogin">Giriş yapın</button></div>
+      <h1>${esc(t("register.title"))}</h1>
+      <div class="error-box">${esc(t("register.noInvite"))}</div>
+      <div class="auth-switch">${esc(t("register.hasAccount"))} <button id="toLogin">${esc(t("register.loginLink"))}</button></div>
     `;
     document.getElementById("toLogin").addEventListener("click", () => { authMode = "login"; renderAuthArea(); });
   } else {
-    area.innerHTML = `<p class="sub">Yükleniyor…</p>`;
+    area.innerHTML = `<p class="sub">${esc(t("register.loading"))}</p>`;
     api(`/auth/units-for-signup/${encodeURIComponent(signupInviteCode)}`).then(({ siteName, units }) => {
       area.innerHTML = `
-        <h1>Sakin kaydı oluştur</h1>
-        <p class="sub">${esc(siteName)} sitesine kayıt oluyorsunuz. Kaydınız, yönetici onayından sonra aktif olur.</p>
+        <h1>${esc(t("register.title"))}</h1>
+        <p class="sub">${esc(siteName)} ${esc(t("register.joiningSite"))}</p>
         <div id="authMsg"></div>
         <form id="registerForm">
-          <div class="field"><label>Ad Soyad</label><input name="name" required /></div>
-          <div class="field"><label>E-posta</label><input type="email" name="email" required /></div>
-          <div class="field"><label>Telefon</label><input name="phone" /></div>
-          <div class="field"><label>Daire</label><select name="unitId" required>${units.map((u) => `<option value="${u.id}">${esc(u.label)}</option>`).join("")}</select></div>
-          <div class="field"><label>Şifre</label><input type="password" name="password" required minlength="8" /><div class="small muted" style="margin-top:4px;">En az 8 karakter, en az bir harf ve bir rakam içermeli.</div></div>
-          <button class="btn btn-primary" style="width:100%;margin-top:8px;" type="submit">Kayıt ol</button>
+          <div class="field"><label>${esc(t("register.name"))}</label><input name="name" required /></div>
+          <div class="field"><label>${esc(t("login.email"))}</label><input type="email" name="email" required /></div>
+          <div class="field"><label>${esc(t("register.phone"))}</label><input name="phone" /></div>
+          <div class="field"><label>${esc(t("register.unit"))}</label><select name="unitId" required>${units.map((u) => `<option value="${u.id}">${esc(u.label)}</option>`).join("")}</select></div>
+          <div class="field"><label>${esc(t("login.password"))}</label><input type="password" name="password" required minlength="8" /><div class="small muted" style="margin-top:4px;">${esc(t("register.passwordHint"))}</div></div>
+          <button class="btn btn-primary" style="width:100%;margin-top:8px;" type="submit">${esc(t("register.submit"))}</button>
         </form>
-        <div class="auth-switch">Zaten hesabınız var mı? <button id="toLogin">Giriş yapın</button></div>
+        <div class="auth-switch">${esc(t("register.hasAccount"))} <button id="toLogin">${esc(t("register.loginLink"))}</button></div>
       `;
       document.getElementById("registerForm").addEventListener("submit", handleRegister);
       document.getElementById("toLogin").addEventListener("click", () => { authMode = "login"; renderAuthArea(); });
     }).catch((err) => {
       area.innerHTML = `
-        <h1>Sakin kaydı oluştur</h1>
+        <h1>${esc(t("register.title"))}</h1>
         <div class="error-box">${esc(err.message)}</div>
-        <div class="auth-switch">Zaten hesabınız var mı? <button id="toLogin">Giriş yapın</button></div>
+        <div class="auth-switch">${esc(t("register.hasAccount"))} <button id="toLogin">${esc(t("register.loginLink"))}</button></div>
       `;
       document.getElementById("toLogin").addEventListener("click", () => { authMode = "login"; renderAuthArea(); });
     });
@@ -290,12 +305,12 @@ function renderSitePicker(sites, token, endpoint, onComplete) {
   app.innerHTML = `
   <div class="login-screen">
     <div class="login-side">
-      <div><div class="eyebrow">SAKİN</div><h1>Hangi siteye bakmak istiyorsunuz?</h1></div>
-      <div class="foot">Birden fazla siteye erişiminiz var. Devam etmek için birini seçin.</div>
+      <div><div class="eyebrow">SAKİN</div><h1>${esc(t("sitePicker.title"))}</h1></div>
+      <div class="foot">${esc(t("sitePicker.sub"))}</div>
     </div>
     <div class="login-main">
       <div class="login-form">
-        <h1>Site seçin</h1>
+        <h1>${esc(t("sitePicker.heading"))}</h1>
         <div id="authMsg"></div>
         <div id="sitePickerList" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
           ${sites.map((s) => `<button type="button" class="btn btn-secondary" data-site="${s.id}" style="text-align:left;">${esc(s.name)}</button>`).join("")}
@@ -341,18 +356,18 @@ function renderForceChangePassword() {
   app.innerHTML = `
   <div class="login-screen">
     <div class="login-side">
-      <div><div class="eyebrow">SAKİN</div><h1>Önce şifrenizi güncelleyin.</h1></div>
-      <div class="foot">Geçici şifreyle giriş yaptınız. Devam etmeden önce kendi belirlediğiniz bir şifreye geçmeniz gerekiyor.</div>
+      <div><div class="eyebrow">SAKİN</div><h1>${esc(t("forceChange.title"))}</h1></div>
+      <div class="foot">${esc(t("forceChange.sub"))}</div>
     </div>
     <div class="login-main">
       <div class="login-form">
-        <h1>Yeni şifre belirleyin</h1>
-        <p class="sub">Yöneticinizin size ilettiği geçici şifreyi ve yeni şifrenizi girin.</p>
+        <h1>${esc(t("forceChange.heading"))}</h1>
+        <p class="sub">${esc(t("forceChange.sub2"))}</p>
         <div id="authMsg"></div>
         <form id="forceChangeForm">
-          <div class="field"><label>Geçici Şifre</label><input type="password" name="currentPassword" required /></div>
-          <div class="field"><label>Yeni Şifre</label><input type="password" name="newPassword" required minlength="8" /></div>
-          <button class="btn btn-primary" style="width:100%;margin-top:8px;" type="submit">Şifreyi Güncelle ve Devam Et</button>
+          <div class="field"><label>${esc(t("forceChange.currentPassword"))}</label><input type="password" name="currentPassword" required /></div>
+          <div class="field"><label>${esc(t("forceChange.newPassword"))}</label><input type="password" name="newPassword" required minlength="8" /></div>
+          <button class="btn btn-primary" style="width:100%;margin-top:8px;" type="submit">${esc(t("forceChange.submit"))}</button>
         </form>
       </div>
     </div>
@@ -501,11 +516,33 @@ function groupItems(g) {
   return g.items || g.sections.flatMap((s) => s.items);
 }
 
+// Coklu dil destegi v1 sadece SAKIN tarafini kapsiyor (bkz. i18n.js basindaki
+// not) - yonetici/personel icin (ve dil TR ise) NAV_GROUPS'taki orijinal
+// Turkce metin degismeden dondurulur, hicbir davranis degisikligi yok.
+const NAV_GROUP_KEY_MAP = { "Genel": "nav.group.genel", "Hesabım": "nav.group.hesabim", "İletişim": "nav.group.iletisim", "Hizmetler": "nav.group.hizmetler", "Sistem": "nav.group.sistem" };
+function navLabel(id, fallback) {
+  if (state.user?.role === "sakin" && currentLang !== "tr" && I18N[currentLang]["nav." + id]) return t("nav." + id);
+  return fallback;
+}
+function groupLabel(group) {
+  if (state.user?.role === "sakin" && currentLang !== "tr" && NAV_GROUP_KEY_MAP[group]) return t(NAV_GROUP_KEY_MAP[group]);
+  return group;
+}
+function roleLabel(role) {
+  if (role === "sakin" && currentLang !== "tr") return t("role.sakin");
+  return ROLE_LABEL[role] || "";
+}
+// Sabit (id'siz) arayuz metinleri icin: sadece sakin + TR-disi dilde ceviriyi
+// kullanir, aksi halde orijinal Turkce metni (fallback) aynen dondurur.
+function uiT(key, fallback) {
+  return (state.user?.role === "sakin" && currentLang !== "tr") ? t(key) : fallback;
+}
+
 function tabLabel(tab) {
   const groups = getNavGroups();
   for (const g of groups) {
     const found = groupItems(g).find(([id]) => id === tab);
-    if (found) return found[1];
+    if (found) return navLabel(tab, found[1]);
   }
   return "";
 }
@@ -523,13 +560,13 @@ function renderShell() {
          <div class="brand-mark">S</div>
          <div class="brand-word">
            <span class="f-display">Sakin</span>
-           <span class="badge-role">${esc(ROLE_LABEL[state.user.role] || "")}</span>
+           <span class="badge-role">${esc(roleLabel(state.user.role))}</span>
          </div>
-         <button class="sidebar-collapse-btn" id="collapseToggleBtn" title="Menüyü daralt/genişlet">${sidebarCollapsed ? ICON.chevRight : ICON.chevLeft}</button>
+         <button class="sidebar-collapse-btn" id="collapseToggleBtn" title="${esc(uiT("nav.collapse", "Menüyü daralt/genişlet"))}">${sidebarCollapsed ? ICON.chevRight : ICON.chevLeft}</button>
        </div>
        <div class="sidebar-search">
          ${ICON.search}
-         <input type="text" id="navSearchInput" placeholder="Menüde ara..." autocomplete="off" />
+         <input type="text" id="navSearchInput" placeholder="${esc(uiT("nav.search", "Menüde ara..."))}" autocomplete="off" />
        </div>
        <div class="sidebar-nav-scroll"><nav id="sidebarNav"></nav></div>
        <div class="sidebar-user">
@@ -537,7 +574,7 @@ function renderShell() {
            <span class="sidebar-avatar">${esc(initials(state.user.name))}</span>
            <span class="sidebar-user-info">
              <div class="name">${esc(state.user.name)}</div>
-             <div class="role">${esc(ROLE_LABEL[state.user.role] || "")}</div>
+             <div class="role">${esc(roleLabel(state.user.role))}</div>
            </span>
            ${ICON.chevUpDown}
          </button>
@@ -551,10 +588,10 @@ function renderShell() {
          </div>
          <div class="right">
            <div class="font-scale-controls">
-             <button class="icon-btn font-scale-btn" id="fontDecBtn" title="Yazı boyutunu küçült">A−</button>
-             <button class="icon-btn font-scale-btn" id="fontIncBtn" title="Yazı boyutunu büyüt">A+</button>
+             <button class="icon-btn font-scale-btn" id="fontDecBtn" title="${esc(uiT("topbar.fontDec", "Yazı boyutunu küçült"))}">A−</button>
+             <button class="icon-btn font-scale-btn" id="fontIncBtn" title="${esc(uiT("topbar.fontInc", "Yazı boyutunu büyüt"))}">A+</button>
            </div>
-           <button class="icon-btn" id="themeToggleBtn" title="Koyu/Açık mod">${theme === "dark" ? ICON.sun : ICON.moon}</button>
+           <button class="icon-btn" id="themeToggleBtn" title="${esc(uiT("topbar.theme", "Koyu/Açık mod"))}">${theme === "dark" ? ICON.sun : ICON.moon}</button>
            <button class="bell" id="bellBtn">${ICON.bell}<span class="dot" id="bellDot" style="display:none;"></span></button>
          </div>
        </div>
@@ -562,17 +599,17 @@ function renderShell() {
      </div>
    </div>
    <div class="sidebar-overlay" id="sidebarOverlay"></div>
-   <button id="kapiciFab" class="kapici-fab" title="Kapıcı AI - Yardım">💬</button>
+   <button id="kapiciFab" class="kapici-fab" title="${esc(uiT("kapici.fabTitle", "Kapıcı AI - Yardım"))}">💬</button>
    <div id="kapiciPanel" class="kapici-panel" style="display:none;">
      <div class="kapici-header">
-       <span class="kapici-title">🧑‍💼 Kapıcı AI<span class="kapici-subtitle">Uygulama kullanım yardımcınız</span></span>
+       <span class="kapici-title">🧑‍💼 ${esc(uiT("kapici.title", "Kapıcı AI"))}<span class="kapici-subtitle">${esc(uiT("kapici.subtitle", "Uygulama kullanım yardımcınız"))}</span></span>
        <button id="kapiciCloseBtn" class="kapici-close" title="Kapat">✕</button>
      </div>
      <div id="kapiciMessages" class="kapici-messages"></div>
      <div id="kapiciSuggestions" class="kapici-suggestions"></div>
      <form id="kapiciForm" class="kapici-input-row">
-       <input type="text" id="kapiciInput" placeholder="Bir şey sorun…" autocomplete="off" />
-       <button type="submit">Gönder</button>
+       <input type="text" id="kapiciInput" placeholder="${esc(uiT("kapici.placeholder", "Bir şey sorun…"))}" autocomplete="off" />
+       <button type="submit">${esc(uiT("kapici.send", "Gönder"))}</button>
      </form>
    </div>
   `;
@@ -614,7 +651,7 @@ function renderKapiciMessages() {
   if (!box) return;
   box.innerHTML = kapiciMessages.map((m) => {
     if (m.role === "user") return `<div class="kapici-msg kapici-msg-user">${esc(m.text)}</div>`;
-    return `<div class="kapici-msg kapici-msg-bot">${kapiciFormat(m.text)}${m.tab ? `<br/><button class="kapici-goto" data-goto-tab="${esc(m.tab)}">İlgili sayfaya git →</button>` : ""}</div>`;
+    return `<div class="kapici-msg kapici-msg-bot">${kapiciFormat(m.text)}${m.tab ? `<br/><button class="kapici-goto" data-goto-tab="${esc(m.tab)}">${esc(uiT("kapici.goto", "İlgili sayfaya git →"))}</button>` : ""}</div>`;
   }).join("");
   box.scrollTop = box.scrollHeight;
   box.querySelectorAll("[data-goto-tab]").forEach((b) => b.addEventListener("click", () => {
@@ -643,7 +680,7 @@ async function askKapici(question) {
     const r = await api("/help/ask", { method: "POST", body: { question } });
     kapiciMessages.push({ role: "bot", text: r.answer, tab: r.tab, suggestions: r.suggestions });
   } catch (err) {
-    kapiciMessages.push({ role: "bot", text: "Bir hata oluştu, lütfen tekrar deneyin.", suggestions: [] });
+    kapiciMessages.push({ role: "bot", text: uiT("kapici.error", "Bir hata oluştu, lütfen tekrar deneyin."), suggestions: [] });
   }
   renderKapiciMessages();
 }
@@ -658,7 +695,7 @@ function initKapiciAI() {
     if (kapiciOpen && !kapiciMessages.length) {
       let suggestions = [];
       try { ({ suggestions } = await api("/help/suggestions")); } catch {}
-      kapiciMessages.push({ role: "bot", text: "Merhaba! Ben Kapıcı AI 👋 Uygulamayı kullanmakla ilgili sorularınızı yanıtlayabilirim. Aşağıdan örnek bir soru seçebilir ya da kendi sorunuzu yazabilirsiniz.", suggestions });
+      kapiciMessages.push({ role: "bot", text: uiT("kapici.welcome", "Merhaba! Ben Kapıcı AI 👋 Uygulamayı kullanmakla ilgili sorularınızı yanıtlayabilirim. Aşağıdan örnek bir soru seçebilir ya da kendi sorunuzu yazabilirsiniz."), suggestions });
       renderKapiciMessages();
     }
   });
@@ -680,12 +717,14 @@ function toggleUserMenu() {
   panel.className = "notif-panel user-menu-panel";
   const hasMultipleSites = Array.isArray(state.user.sites) && state.user.sites.length > 1;
   panel.innerHTML = `
-    ${hasMultipleSites ? `<div class="small muted" style="padding:2px 4px 6px;">Site: <strong>${esc(state.user.siteName || "-")}</strong></div><button class="btn btn-ghost btn-sm" id="switchSiteBtn" style="width:100%;margin-bottom:8px;">Site Değiştir</button>` : ""}
-    <button class="btn btn-ghost btn-sm" id="changePwBtn" style="width:100%;margin-bottom:8px;">Şifre Değiştir</button>
-    <button class="btn btn-ghost btn-sm" id="highContrastBtn" style="width:100%;margin-bottom:8px;">${highContrast ? "Yüksek Kontrastı Kapat" : "Yüksek Kontrastı Aç"}</button>
-    <button class="btn btn-ghost btn-sm" id="logoutAllBtn" style="width:100%;margin-bottom:8px;">Tüm Oturumları Kapat</button>
-    <button class="btn btn-ghost btn-sm" id="logoutBtn" style="width:100%;">Çıkış Yap</button>
+    ${state.user.role === "sakin" ? `<div style="padding:2px 4px 8px;">${langSelectHtml('id="userMenuLangSelect" style="width:100%;"')}</div>` : ""}
+    ${hasMultipleSites ? `<div class="small muted" style="padding:2px 4px 6px;">${esc(uiT("userMenu.site", "Site"))}: <strong>${esc(state.user.siteName || "-")}</strong></div><button class="btn btn-ghost btn-sm" id="switchSiteBtn" style="width:100%;margin-bottom:8px;">${esc(uiT("userMenu.switchSite", "Site Değiştir"))}</button>` : ""}
+    <button class="btn btn-ghost btn-sm" id="changePwBtn" style="width:100%;margin-bottom:8px;">${esc(uiT("userMenu.changePassword", "Şifre Değiştir"))}</button>
+    <button class="btn btn-ghost btn-sm" id="highContrastBtn" style="width:100%;margin-bottom:8px;">${highContrast ? esc(uiT("userMenu.highContrastOff", "Yüksek Kontrastı Kapat")) : esc(uiT("userMenu.highContrastOn", "Yüksek Kontrastı Aç"))}</button>
+    <button class="btn btn-ghost btn-sm" id="logoutAllBtn" style="width:100%;margin-bottom:8px;">${esc(uiT("userMenu.logoutAll", "Tüm Oturumları Kapat"))}</button>
+    <button class="btn btn-ghost btn-sm" id="logoutBtn" style="width:100%;">${esc(uiT("userMenu.logout", "Çıkış Yap"))}</button>
   `;
+  document.getElementById("userMenuLangSelect")?.addEventListener("change", (e) => setLang(e.target.value));
   document.querySelector(".sidebar-user").appendChild(panel);
   document.getElementById("changePwBtn").addEventListener("click", () => { panel.remove(); renderChangePasswordModal(); });
   document.getElementById("highContrastBtn").addEventListener("click", toggleHighContrast);
@@ -897,8 +936,8 @@ function sidebarItemBtn(id, label) {
   const isFav = (state.user.favoriteTabs || []).includes(id);
   return `
     <div class="sidebar-item-row">
-      <button class="sidebar-item ${state.tab === id ? "active" : ""}" data-tab="${id}">${navIcon(id)}<span>${esc(label)}</span></button>
-      <button class="fav-star ${isFav ? "active" : ""}" data-fav="${id}" title="${isFav ? "Favorilerden çıkar" : "Favorilere ekle"}">${isFav ? "★" : "☆"}</button>
+      <button class="sidebar-item ${state.tab === id ? "active" : ""}" data-tab="${id}">${navIcon(id)}<span>${esc(navLabel(id, label))}</span></button>
+      <button class="fav-star ${isFav ? "active" : ""}" data-fav="${id}" title="${isFav ? esc(uiT("nav.removeFavorite", "Favorilerden çıkar")) : esc(uiT("nav.addFavorite", "Favorilere ekle"))}">${isFav ? "★" : "☆"}</button>
     </div>`;
 }
 
@@ -939,7 +978,8 @@ function renderSidebarNav() {
 
   const nav = document.getElementById("sidebarNav");
   if (searching && !groups.length) {
-    nav.innerHTML = `<div class="sidebar-no-results">"${esc(navSearchQuery)}" için sonuç bulunamadı.</div>`;
+    const noResultsText = (state.user?.role === "sakin" && currentLang !== "tr") ? tf("nav.noResultsFor", { q: navSearchQuery }) : `"${navSearchQuery}" için sonuç bulunamadı.`;
+    nav.innerHTML = `<div class="sidebar-no-results">${esc(noResultsText)}</div>`;
     return;
   }
   // Yildizlanan sayfalar (profil ozelinde) sidebar'in en ustunde ayri bir
@@ -948,7 +988,7 @@ function renderSidebarNav() {
   const favIds = (state.user.favoriteTabs || []).filter((id) => tabLabel(id));
   const favHtml = !searching && favIds.length
     ? `<div class="sidebar-group sidebar-favorites">
-        <div class="sidebar-group-header" style="cursor:default;"><span>Favoriler</span></div>
+        <div class="sidebar-group-header" style="cursor:default;"><span>${esc(uiT("nav.favorites", "Favoriler"))}</span></div>
         <div class="sidebar-group-items">${favIds.map((id) => sidebarItemBtn(id, tabLabel(id))).join("")}</div>
       </div>`
     : "";
@@ -957,7 +997,7 @@ function renderSidebarNav() {
   const recentIds = recentTabs.filter((id) => tabLabel(id) && !favIds.includes(id));
   const recentHtml = !searching && recentIds.length
     ? `<div class="sidebar-group sidebar-favorites">
-        <div class="sidebar-group-header" style="cursor:default;"><span>Son Görüntülenenler</span></div>
+        <div class="sidebar-group-header" style="cursor:default;"><span>${esc(uiT("nav.recentlyViewed", "Son Görüntülenenler"))}</span></div>
         <div class="sidebar-group-items">${recentIds.map((id) => sidebarItemBtn(id, tabLabel(id))).join("")}</div>
       </div>`
     : "";
@@ -982,7 +1022,7 @@ function renderSidebarNav() {
     return `
       <div class="sidebar-group">
         <button class="sidebar-group-header" data-group="${esc(g.group)}">
-          <span>${esc(g.group)}</span>
+          <span>${esc(groupLabel(g.group))}</span>
           <span class="chevron ${isOpen ? "open" : ""}">›</span>
         </button>
         <div class="sidebar-group-items" style="display:${isOpen ? "block" : "none"};">
@@ -1001,8 +1041,8 @@ function renderSidebarNav() {
       <button class="sidebar-help-card" data-tab="bilgibankasi">
         <div class="sidebar-help-icon">${navIcon("bilgibankasi")}</div>
         <div class="sidebar-help-text">
-          <div class="sidebar-help-title">Yardım mı lazım?</div>
-          <div class="sidebar-help-sub">Bilgi Bankası'na göz atın</div>
+          <div class="sidebar-help-title">${esc(uiT("nav.needHelp", "Yardım mı lazım?"))}</div>
+          <div class="sidebar-help-sub">${esc(uiT("nav.checkKnowledgeBase", "Bilgi Bankası'na göz atın"))}</div>
         </div>
       </button>`;
   }
@@ -1150,21 +1190,21 @@ async function renderTab(tab) {
 async function renderResidentOzet(c) {
   const [dash, announcements] = await Promise.all([api("/dashboard"), api("/announcements")]);
   c.innerHTML = `
-    ${sectionTitle("Merhaba, " + state.user.name.split(" ")[0], state.user.unitLabel || "")}
+    ${sectionTitle(t("ozet.greeting") + ", " + state.user.name.split(" ")[0], state.user.unitLabel || "")}
     <div class="card pad mb-16 clickable" data-goto="aidat">
       <div class="flex-between">
-        <div><div class="stat-label">GÜNCEL BAKİYE</div><div class="f-num stat-value" style="color:${debtColor(dash.debt)}">${tl(Math.abs(dash.debt))}</div></div>
-        ${pill(debtStatusLabel(dash.debt))}
+        <div><div class="stat-label">${esc(t("ozet.balance"))}</div><div class="f-num stat-value" style="color:${debtColor(dash.debt)}">${tl(Math.abs(dash.debt))}</div></div>
+        ${debtStatusPill(dash.debt)}
       </div>
     </div>
     <div class="grid cols-3 mb-16">
-      ${statCard("talep", "talep", "AÇIK TALEP", dash.openTickets)}
-      ${statCard("rezervasyon", "rezervasyon", "YAKLAŞAN REZERVASYON", dash.upcomingReservations)}
-      ${statCard("kargo", "kargo", "BEKLEYEN KARGO", dash.pendingPackages)}
+      ${statCard("talep", "talep", t("ozet.openTicket"), dash.openTickets)}
+      ${statCard("rezervasyon", "rezervasyon", t("ozet.upcomingReservation"), dash.upcomingReservations)}
+      ${statCard("kargo", "kargo", t("ozet.pendingPackage"), dash.pendingPackages)}
     </div>
     <div class="card tight">
-      <div class="ledger-title">Güncel Duyurular</div>
-      ${announcements.slice(0, 3).map((a) => ledgerRow(esc(a.title), dt(a.date), "")).join("") || '<div class="empty-row">Duyuru yok.</div>'}
+      <div class="ledger-title">${esc(t("ozet.recentAnnouncements"))}</div>
+      ${announcements.slice(0, 3).map((a) => ledgerRow(esc(a.title), dt(a.date), "")).join("") || `<div class="empty-row">${esc(t("duyuru.none"))}</div>`}
     </div>
   `;
   c.querySelectorAll("[data-goto]").forEach((el) => el.addEventListener("click", () => goToTab(el.dataset.goto)));
@@ -1185,35 +1225,35 @@ async function renderResidentAidat(c) {
   // yoktur belgesi) anlamsiz - kullanicinin once bir daire secmesi gerekir.
   const needsUnitPick = multiUnit && residentAidatUnit === "all";
   c.innerHTML = `
-    ${sectionTitle("Borç ve Ödemelerim", "Hesap özeti banka ekstresi mantığıyla listelenir")}
+    ${sectionTitle(t("aidat.title"), t("aidat.sub"))}
     ${multiUnit ? `
     <div class="card pad mb-16">
-      <label class="small muted" style="display:block;margin-bottom:6px;">Daire</label>
+      <label class="small muted" style="display:block;margin-bottom:6px;">${esc(t("aidat.unitLabel"))}</label>
       <select id="aidatUnitSelect">
-        <option value="all" ${residentAidatUnit === "all" ? "selected" : ""}>Tümü (${units.length} daire, birleşik)</option>
+        <option value="all" ${residentAidatUnit === "all" ? "selected" : ""}>${esc(t("aidat.unitAll"))} (${units.length} ${esc(t("aidat.unitAllCombined"))})</option>
         ${units.map((u) => `<option value="${u.id}" ${residentAidatUnit === u.id ? "selected" : ""}>${esc(u.label)}</option>`).join("")}
       </select>
     </div>` : ""}
     <div class="card pad mb-16 flex-between">
-      <div><div class="stat-label">${debt < 0 ? "ALACAKLI BAKİYE" : "ÖDENECEK TUTAR"}</div><div class="f-num stat-value" style="color:${debtColor(debt)}">${tl(Math.abs(debt))}</div></div>
+      <div><div class="stat-label">${debt < 0 ? esc(t("aidat.creditBalance")) : esc(t("aidat.dueAmount"))}</div><div class="f-num stat-value" style="color:${debtColor(debt)}">${tl(Math.abs(debt))}</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        ${needsUnitPick ? '<span class="small muted">Ödeme yapmak/belge almak için önce bir daire seçin.</span>' : `
-          ${debt <= 0 ? '<button class="btn btn-ghost" id="debtLetterBtn">📄 Borcu Yoktur Belgesi</button>' : ""}
-          <button class="btn btn-primary" id="payBtn" ${debt <= 0 ? "disabled" : ""}>${debt > 0 ? "Ödeme Yap" : "Borç Yok"}</button>
+        ${needsUnitPick ? `<span class="small muted">${esc(t("aidat.pickUnitHint"))}</span>` : `
+          ${debt <= 0 ? `<button class="btn btn-ghost" id="debtLetterBtn">📄 ${esc(t("aidat.debtLetterBtn"))}</button>` : ""}
+          <button class="btn btn-primary" id="payBtn" ${debt <= 0 ? "disabled" : ""}>${debt > 0 ? esc(t("aidat.payBtn")) : esc(t("aidat.noDebt"))}</button>
         `}
       </div>
     </div>
     <div class="card tight mb-16">
-      <div class="ledger-title">Borç Kalemleri</div>
-      ${charges.map((ch) => ledgerRow(`${chargeTypeLabel(ch)} — ${esc(ch.description)}`, dt(ch.dueDate) + " · " + pill(ch.status === "paid" ? "Ödendi" : "Borçlu"), tl(ch.amount - ch.paidAmount), ch.status !== "paid" ? "var(--red)" : "var(--green)")).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+      <div class="ledger-title">${esc(t("aidat.chargesTitle"))}</div>
+      ${charges.map((ch) => ledgerRow(`${chargeTypeLabel(ch)} — ${esc(ch.description)}`, dt(ch.dueDate) + " · " + `<span class="pill ${ch.status === "paid" ? "green" : "red"}"><span class="dot"></span>${esc(ch.status === "paid" ? t("status.paid") : t("status.debtor"))}</span>`, tl(ch.amount - ch.paidAmount), ch.status !== "paid" ? "var(--red)" : "var(--green)")).join("") || `<div class="empty-row">${esc(t("aidat.noRecord"))}</div>`}
     </div>
     <div class="card tight">
-      <div class="ledger-title">Ödeme Geçmişi</div>
+      <div class="ledger-title">${esc(t("aidat.paymentsTitle"))}</div>
       ${payments.map((p) => `
         <div class="ledger-row">
-          <div><div style="font-size:14px;font-weight:600;">Ödeme — ${esc(p.method)}</div><div class="small muted">${dt(p.date)} · ${p.receiptNo}</div></div>
-          <div style="display:flex;align-items:center;gap:10px;"><span class="f-num" style="font-weight:600;color:var(--green);">+${tl(p.amount)}</span><button class="btn btn-ghost btn-sm" data-receipt="${p.id}">📄 Makbuz</button></div>
-        </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+          <div><div style="font-size:14px;font-weight:600;">${esc(t("aidat.payment"))} — ${esc(p.method)}</div><div class="small muted">${dt(p.date)} · ${p.receiptNo}</div></div>
+          <div style="display:flex;align-items:center;gap:10px;"><span class="f-num" style="font-weight:600;color:var(--green);">+${tl(p.amount)}</span><button class="btn btn-ghost btn-sm" data-receipt="${p.id}">📄 ${esc(t("aidat.receipt"))}</button></div>
+        </div>`).join("") || `<div class="empty-row">${esc(t("aidat.noRecord"))}</div>`}
     </div>
   `;
   document.getElementById("aidatUnitSelect")?.addEventListener("change", (e) => {
@@ -1221,32 +1261,32 @@ async function renderResidentAidat(c) {
     renderTab("aidat");
   });
   document.getElementById("payBtn")?.addEventListener("click", async (e) => {
-    if (!confirm(`${tl(debt)} tutarında ödeme yapılsın mı? (Demo ortamı — gerçek kart bilgisi istenmez)`)) return;
-    e.target.disabled = true; e.target.textContent = "İşleniyor…";
+    if (!confirm(`${tl(debt)} ${t("aidat.confirmPay")}`)) return;
+    e.target.disabled = true; e.target.textContent = t("aidat.processing");
     // Cift tiklama / ag tekrarindan kaynaklanan cift odeme sikayetini onlemek icin
     // her deneme benzersiz bir requestId ile gonderilir (backend bunu tekrar isleme almaz).
     const requestId = crypto.randomUUID();
     try {
       await api("/payments/pay", { method: "POST", body: { amount: debt, method: "Kredi Kartı", requestId, unitId: residentAidatUnit !== "all" ? residentAidatUnit : undefined } });
-      toast("Ödemeniz alındı, teşekkürler.");
+      toast(t("aidat.paySuccess"));
       renderTab("aidat");
-    } catch (err) { toast(err.message); e.target.disabled = false; e.target.textContent = "Ödeme Yap"; }
+    } catch (err) { toast(err.message); e.target.disabled = false; e.target.textContent = t("aidat.payBtn"); }
   });
-  document.getElementById("debtLetterBtn")?.addEventListener("click", () => downloadFile("/documents/debt-letter" + qs, "borcu-yoktur.pdf"));
-  c.querySelectorAll("[data-receipt]").forEach((b) => b.addEventListener("click", () => downloadFile("/documents/receipt/" + b.dataset.receipt, "makbuz.pdf")));
+  document.getElementById("debtLetterBtn")?.addEventListener("click", () => downloadFile("/documents/debt-letter" + qs + (qs ? "&" : "?") + "lang=" + currentLang, "borcu-yoktur.pdf"));
+  c.querySelectorAll("[data-receipt]").forEach((b) => b.addEventListener("click", () => downloadFile("/documents/receipt/" + b.dataset.receipt + "?lang=" + currentLang, "makbuz.pdf")));
 }
 
 async function renderResidentSayac(c) {
   const [meters, readings] = await Promise.all([api("/meters"), api("/meter-readings")]);
   c.innerHTML = `
-    ${sectionTitle("Sayaçlarım")}
+    ${sectionTitle(t("sayac.title"))}
     <div class="card tight mb-16">
-      <div class="ledger-title">Kayıtlı Sayaçlarım</div>
-      ${meters.map((m) => ledgerRow(m.type.toUpperCase() + " Sayacı", "Seri No: " + esc(m.serialNo || "-"), "")).join("") || '<div class="empty-row">Kayıtlı sayaç yok.</div>'}
+      <div class="ledger-title">${esc(t("sayac.mineTitle"))}</div>
+      ${meters.map((m) => ledgerRow(m.type.toUpperCase() + " " + t("sayac.meterSuffix"), t("sayac.serialNo") + ": " + esc(m.serialNo || "-"), "")).join("") || `<div class="empty-row">${esc(t("sayac.noMeter"))}</div>`}
     </div>
     <div class="card tight">
-      <div class="ledger-title">Okuma / Fatura Geçmişi</div>
-      ${readings.map((r) => ledgerRow(r.period + " dönemi", r.value + " birim × " + tl(r.unitCost), tl(r.amount))).join("") || '<div class="empty-row">Kayıt yok.</div>'}
+      <div class="ledger-title">${esc(t("sayac.historyTitle"))}</div>
+      ${readings.map((r) => ledgerRow(r.period + " " + t("sayac.period"), r.value + " " + t("sayac.unit") + " × " + tl(r.unitCost), tl(r.amount))).join("") || `<div class="empty-row">${esc(t("aidat.noRecord"))}</div>`}
     </div>
   `;
 }
