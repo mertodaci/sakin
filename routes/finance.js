@@ -496,17 +496,14 @@ router.get("/budgets", requireAuth, requireRole("yonetici"), async (req, res) =>
 });
 
 router.post("/budgets", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   const { year, category, plannedAmount } = req.body || {};
   if (!category || !plannedAmount) return res.status(400).json({ error: "Kategori ve planlanan tutar zorunludur." });
   const y = Number(year) || new Date().getFullYear();
-  const existing = data.budgets.find((b) => b.year === y && b.category === category);
-  if (existing) {
-    existing.plannedAmount = Number(plannedAmount);
-  } else {
-    data.budgets.push({ id: db.uid(), year: y, category, plannedAmount: Number(plannedAmount), createdBy: req.user.id });
-  }
-  await db.save(data, ["budgets"]);
+  await prisma.budget.upsert({
+    where: { siteId_year_category: { siteId: req.user.siteId, year: y, category } },
+    create: { year: y, category, plannedAmount: Number(plannedAmount), createdBy: req.user.id },
+    update: { plannedAmount: Number(plannedAmount) },
+  });
   await db.logActivity(req.user, "budget.set", `${y} bütçesi güncellendi: ${category} — ${plannedAmount}₺ planlandı.`, null);
   res.status(201).json({ message: "Bütçe kalemi kaydedildi." });
 });

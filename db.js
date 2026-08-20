@@ -142,22 +142,33 @@ async function loadUnits() {
 // koleksiyon icin { load, save, order } tanimlar. `order` upsert sirasini
 // belirler (parent'lar once); save() sirasinda silinmesi gereken satirlar
 // TERS sirada silinir (child'lar once) - boylece FK kisitlari ihlal edilmez.
-const LEGACY_COLLECTIONS = [
-  { name: "units", model: "unit", load: loadUnits },
-  { name: "accounts", model: "account", load: simple("account") },
-  // personnel: routes/ops.js'in PATCH /personnel/:id ucu artik dogrudan Prisma
-  // kullaniyor, ama routes/accounting.js'nin auto-assign/accountingCode
-  // uclari hala data.personnel uzerinden yaziyor - bu yuzden burada kalmali.
-  { name: "personnel", model: "personnel", load: simple("personnel") },
-  { name: "transfers", model: "transfer", load: simple("transfer") },
-  { name: "budgets", model: "budget", load: simple("budget") },
-];
+// BOS: son kalan 5 koleksiyon da (units/accounts/personnel/transfers/
+// budgets - directory.js/accounts.js/accounting.js/finance.js) dogrudan
+// Prisma'ya tasindi (2026-08-20). Asagida READONLY_PASSTHROUGH'a tasindilar
+// - load() ile OKUNMAYA devam ediyorlar (dashboard/documents/comms/system
+// export gibi hala data.xxx bekleyen legacy route'lar icin), sadece
+// buradan (yazma tarafi) kaldirildilar. Dizi bilerek bos birakildi (silinmedi)
+// - save()'in "touchedCollections verilmezse geriye donuk uyumluluk icin
+// TUM koleksiyonlari yaz" guvenlik agi hala calisir (bos dizide no-op).
+const LEGACY_COLLECTIONS = [];
 
 // Salt-okunur passthrough: bir koleksiyon kendi route'unda Prisma'ya
 // tasindiktan sonra buraya eklenir - artik burada YAZILMAZ (kendi route'u
 // yazar), ama hala eski data.xxx seklini bekleyen baska legacy route'lar
 // (orn. dashboard.js, system.js /export) icin load()'da sunulmaya devam eder.
 const READONLY_PASSTHROUGH = [
+  // units/accounts/personnel/transfers/budgets: yazma taraflari (directory.js,
+  // accounts.js, accounting.js, finance.js) artik dogrudan Prisma kullaniyor
+  // (2026-08-20). Burada hala data.units/data.accounts/vb. okuyan cok sayida
+  // rapor/legacy route (accounting.js'nin mizan/fisler/kod-atama-goruntuleme
+  // uclari, comms.js, dashboard.js, directory.js'nin GET uclari, documents.js,
+  // finance.js'nin budget/report uclari, system.js /export) icin salt-okunur
+  // olarak sunuluyor.
+  { name: "units", load: loadUnits },
+  { name: "accounts", load: simple("account") },
+  { name: "personnel", load: simple("personnel") },
+  { name: "transfers", load: simple("transfer") },
+  { name: "budgets", load: simple("budget") },
   // users: routes/auth.js ve routes/directory.js'nin kullanici mutasyonu
   // yapan uclari artik dogrudan Prisma kullaniyor (bkz. db.prisma.user).
   // Burada sadece hala data.users okuyan diger legacy route'lar (dashboard,

@@ -51,23 +51,37 @@ router.get("/units/:id/related", requireAuth, requireRole("yonetici"), async (re
 });
 
 router.post("/units", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   const { block, no, floor, ownerName, ownerPhone, tenantName, tenantPhone, occupancy, landShare, squareMeters, feeGroup } = req.body || {};
   if (!block || !no) return res.status(400).json({ error: "Blok ve daire no zorunludur." });
   // floor semada zorunlu (Int, nullable degil) - deger verilmezse 0 varsayilir.
-  const unit = { id: db.uid(), block, no, floor: floor ? Number(floor) : 0, ownerName: ownerName || "", ownerPhone: ownerPhone || "", tenantName: tenantName || "", tenantPhone: tenantPhone || "", occupancy: occupancy || "owner", landShare: landShare || null, squareMeters: squareMeters || null, feeGroup: feeGroup || null };
-  data.units.push(unit);
-  await db.save(data, ["units"]);
+  const unit = await prisma.unit.create({
+    data: { block, no, floor: floor ? Number(floor) : 0, ownerName: ownerName || "", ownerPhone: ownerPhone || "", tenantName: tenantName || "", tenantPhone: tenantPhone || "", occupancy: occupancy || "owner", landShare: landShare || null, squareMeters: squareMeters || null, feeGroup: feeGroup || null },
+  });
   await db.logActivity(req.user, "unit.create", `${block} - Daire ${no} eklendi.`, unit.id);
   res.status(201).json(unit);
 });
 
 router.patch("/units/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const unit = data.units.find((u) => u.id === req.params.id);
+  // Legacy shim doneminde Object.assign(unit, req.body) ile GELEN HER ALANI
+  // koru koşulsuz kabul ediyordu - direkt Prisma'da bu, bilinmeyen alanlarda
+  // (orn. yanlislikla id/siteId gonderilirse) hataya ya da istenmeyen
+  // yazmaya yol acabilirdi. Frontend'in gercekten gonderdigi alanlarla
+  // (renderUnitEditModal, public/js/app.js) sinirli, acik bir liste.
+  const { block, no, floor, ownerName, ownerPhone, tenantName, tenantPhone, occupancy, landShare, squareMeters, feeGroup } = req.body || {};
+  const data = {};
+  if (block !== undefined) data.block = block;
+  if (no !== undefined) data.no = no;
+  if (floor !== undefined) data.floor = Number(floor);
+  if (ownerName !== undefined) data.ownerName = ownerName;
+  if (ownerPhone !== undefined) data.ownerPhone = ownerPhone;
+  if (tenantName !== undefined) data.tenantName = tenantName;
+  if (tenantPhone !== undefined) data.tenantPhone = tenantPhone;
+  if (occupancy !== undefined) data.occupancy = occupancy;
+  if (landShare !== undefined) data.landShare = landShare || null;
+  if (squareMeters !== undefined) data.squareMeters = squareMeters || null;
+  if (feeGroup !== undefined) data.feeGroup = feeGroup || null;
+  const unit = await prisma.unit.update({ where: { id: req.params.id }, data }).catch(() => null);
   if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
-  Object.assign(unit, req.body || {});
-  await db.save(data, ["units"]);
   res.json(unit);
 });
 
@@ -93,8 +107,7 @@ router.delete("/units/:id", requireAuth, requireRole("yonetici"), async (req, re
     return res.status(400).json({ error: "Bu daireye bağlı borç/ödeme/rezervasyon/talep/sayaç/kargo kayıtları var, silinemez." });
   }
 
-  data.units = data.units.filter((u) => u.id !== req.params.id);
-  await db.save(data, ["units"]);
+  await prisma.unit.delete({ where: { id: req.params.id } });
   res.json({ message: "Daire silindi." });
 });
 

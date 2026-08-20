@@ -3,6 +3,7 @@ const db = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
 const router = express.Router();
+const prisma = db.prisma;
 
 // Yonetimcell karsilastirmasi: "Muhasebe Raporlari" modulu. Canlı hesapta
 // incelendiginde ortaya cikti ki bu GERCEK cift-tarafli bir muhasebe defteri
@@ -33,26 +34,18 @@ router.patch("/accounting/codes", requireAuth, requireRole("yonetici"), async (r
   const model = TYPE_TO_MODEL[type];
   if (!model || !id) return res.status(400).json({ error: "Geçersiz tür veya kayıt." });
 
-  if (model === "expenseCategory") {
-    const updated = await db.prisma.expenseCategory.update({ where: { id }, data: { accountingCode: code || null } }).catch(() => null);
-    if (!updated) return res.status(404).json({ error: "Kayıt bulunamadı." });
-    return res.json({ id: updated.id, code: updated.accountingCode });
-  }
-
-  // account/unit/vendor/personnel hala legacy shim uzerinden (db.load/db.save)
-  // yaziliyor - digerleriyle ayni collection'lari paylastiklari icin.
-  const collectionName = { account: "accounts", unit: "units", vendor: "vendors", personnel: "personnel" }[type];
-  const data = await db.load();
-  const row = data[collectionName].find((x) => x.id === id);
-  if (!row) return res.status(404).json({ error: "Kayıt bulunamadı." });
-  row.accountingCode = code || null;
-  await db.save(data, [collectionName]);
-  res.json({ id: row.id, code: row.accountingCode });
+  // DIKKAT: eskiden account/unit/vendor/personnel legacy shim (db.load/
+  // db.save) uzerinden yaziliyordu - vendor artik LEGACY_COLLECTIONS'ta
+  // olmadigi icin bu save() sessizce hicbir sey yazmiyordu (firma muhasebe
+  // kodu ATAMA UCU FIILEN CALISMIYORDU, kimse fark etmedi cunku hata
+  // donmuyordu). Tum turler artik tek, dogrudan Prisma cagrisi.
+  const updated = await prisma[model].update({ where: { id }, data: { accountingCode: code || null } }).catch(() => null);
+  if (!updated) return res.status(404).json({ error: "Kayıt bulunamadı." });
+  res.json({ id: updated.id, code: updated.accountingCode });
 });
 
 router.post("/accounting/codes/auto-assign", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const categories = await db.prisma.expenseCategory.findMany();
+  const categories = await prisma.expenseCategory.findMany();
   let assigned = 0;
 
   function nextCode(prefix, existingCodes) {
@@ -63,22 +56,28 @@ router.post("/accounting/codes/auto-assign", requireAuth, requireRole("yonetici"
     return code;
   }
 
+  // DIKKAT: eskiden butun 4 koleksiyon bellekte guncellenip TEK bir
+  // db.save(data, ["accounts","units","vendors","personnel"]) ile
+  // yaziliyordu - vendors artik legacy shim'de olmadigi icin bu, firma
+  // otomatik kod atamasinin FIILEN HICBIR SEY YAZMAMASI demekti (sessiz
+  // hata). Artik her tur kendi dogrudan Prisma update()'iyle yaziyor.
   const plans = [
-    { prefix: "100", rows: data.accounts },
-    { prefix: "120", rows: data.units },
-    { prefix: "320", rows: data.vendors },
-    { prefix: "335", rows: data.personnel },
+    { prefix: "100", model: "account" },
+    { prefix: "120", model: "unit" },
+    { prefix: "320", model: "vendor" },
+    { prefix: "335", model: "personnel" },
   ];
   for (const plan of plans) {
-    const existing = new Set(plan.rows.filter((r) => r.accountingCode).map((r) => r.accountingCode));
-    plan.rows.forEach((r) => {
+    const rows = await prisma[plan.model].findMany();
+    const existing = new Set(rows.filter((r) => r.accountingCode).map((r) => r.accountingCode));
+    for (const r of rows) {
       if (!r.accountingCode) {
-        r.accountingCode = nextCode(plan.prefix, existing);
+        const code = nextCode(plan.prefix, existing);
+        await prisma[plan.model].update({ where: { id: r.id }, data: { accountingCode: code } });
         assigned++;
       }
-    });
+    }
   }
-  await db.save(data, ["accounts", "units", "vendors", "personnel"]);
 
   const existingCat = new Set(categories.filter((c) => c.accountingCode).map((c) => c.accountingCode));
   for (const cat of categories) {

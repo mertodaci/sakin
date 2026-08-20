@@ -3,6 +3,7 @@ const db = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
 const router = express.Router();
+const prisma = db.prisma;
 
 // Bir hesabin guncel bakiyesi: acilis bakiyesi + gelirler - giderler + gelen transferler - giden transferler
 function accountBalance(data, accountId) {
@@ -22,26 +23,24 @@ router.get("/accounts", requireAuth, requireRole("yonetici"), async (req, res) =
 });
 
 router.post("/accounts", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
   const { name, type, bankName, iban, openingBalance } = req.body || {};
   if (!name) return res.status(400).json({ error: "Hesap adı zorunludur." });
-  const acc = { id: db.uid(), name, type: type || "banka", bankName: bankName || "", iban: iban || "", openingBalance: Number(openingBalance) || 0, createdAt: new Date().toISOString() };
-  data.accounts.push(acc);
-  await db.save(data, ["accounts"]);
+  const acc = await prisma.account.create({
+    data: { name, type: type || "banka", bankName: bankName || "", iban: iban || "", openingBalance: Number(openingBalance) || 0 },
+  });
   await db.logActivity(req.user, "account.create", `Yeni kasa/hesap eklendi: ${name}`, null);
   res.status(201).json(acc);
 });
 
 router.patch("/accounts/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const acc = data.accounts.find((a) => a.id === req.params.id);
-  if (!acc) return res.status(404).json({ error: "Hesap bulunamadı." });
   const { name, type, bankName, iban } = req.body || {};
-  if (name !== undefined) acc.name = name;
-  if (type !== undefined) acc.type = type;
-  if (bankName !== undefined) acc.bankName = bankName;
-  if (iban !== undefined) acc.iban = iban;
-  await db.save(data, ["accounts"]);
+  const data = {};
+  if (name !== undefined) data.name = name;
+  if (type !== undefined) data.type = type;
+  if (bankName !== undefined) data.bankName = bankName;
+  if (iban !== undefined) data.iban = iban;
+  const acc = await prisma.account.update({ where: { id: req.params.id }, data }).catch(() => null);
+  if (!acc) return res.status(404).json({ error: "Hesap bulunamadı." });
   res.json(acc);
 });
 
@@ -55,8 +54,7 @@ router.delete("/accounts/:id", requireAuth, requireRole("yonetici"), async (req,
     data.partyPayments.some((p) => p.accountId === req.params.id);
   if (inUse) return res.status(400).json({ error: "Bu hesaba bağlı işlemler var, silinemez. Önce işlemleri başka bir hesaba taşıyın." });
   if (data.meta.defaultAccountId === req.params.id) return res.status(400).json({ error: "Varsayılan tahsilat hesabı silinemez. Önce Ayarlar'dan başka bir hesabı varsayılan yapın." });
-  data.accounts = data.accounts.filter((a) => a.id !== req.params.id);
-  await db.save(data, ["accounts"]);
+  await prisma.account.delete({ where: { id: req.params.id } });
   res.json({ message: "Hesap silindi." });
 });
 
@@ -85,14 +83,14 @@ router.post("/accounts/transfer", requireAuth, requireRole("yonetici"), async (r
   const { fromAccountId, toAccountId, amount, description } = req.body || {};
   if (!fromAccountId || !toAccountId || !amount || Number(amount) <= 0) return res.status(400).json({ error: "Kaynak, hedef hesap ve tutar zorunludur." });
   if (fromAccountId === toAccountId) return res.status(400).json({ error: "Kaynak ve hedef hesap aynı olamaz." });
-  if (!data.accounts.find((a) => a.id === fromAccountId) || !data.accounts.find((a) => a.id === toAccountId)) return res.status(404).json({ error: "Hesap bulunamadı." });
+  const fromAcc = data.accounts.find((a) => a.id === fromAccountId);
+  const toAcc = data.accounts.find((a) => a.id === toAccountId);
+  if (!fromAcc || !toAcc) return res.status(404).json({ error: "Hesap bulunamadı." });
 
-  const transfer = { id: db.uid(), fromAccountId, toAccountId, amount: Number(amount), date: new Date().toISOString(), description: description || "", createdBy: req.user.id };
-  data.transfers.unshift(transfer);
-  const fromName = data.accounts.find((a) => a.id === fromAccountId).name;
-  const toName = data.accounts.find((a) => a.id === toAccountId).name;
-  await db.save(data, ["transfers"]);
-  await db.logActivity(req.user, "account.transfer", `${amount}₺ ${fromName} hesabından ${toName} hesabına transfer edildi.`, null);
+  const transfer = await prisma.transfer.create({
+    data: { fromAccountId, toAccountId, amount: Number(amount), description: description || "", createdBy: req.user.id },
+  });
+  await db.logActivity(req.user, "account.transfer", `${amount}₺ ${fromAcc.name} hesabından ${toAcc.name} hesabına transfer edildi.`, null);
   res.status(201).json(transfer);
 });
 
