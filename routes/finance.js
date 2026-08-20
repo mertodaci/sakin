@@ -211,9 +211,20 @@ async function applyPayment(tx, { unitId, amount, method, userId, userName, note
   const unit = creditAmount.gt(0)
     ? await tx.unit.update({ where: { id: unitId }, data: { creditBalance: { increment: creditAmount } } })
     : await tx.unit.findUnique({ where: { id: unitId } });
-  await tx.notification.create({
-    data: { userId: "admin1", message: `${unit ? unit.block + " D:" + unit.no : "Bir daire"} ödeme yaptı: ${amount}₺`, read: false, link: "#/tahsilat" },
-  });
+  // DIKKAT: userId sabit "admin1" idi - bu sadece prisma/seed.js'in demo
+  // hesabinda var. Kayit/onay akisiyla (rastgele UUID id'li) olusturulmus
+  // GERCEK bir sitede bu id'ye sahip hicbir kullanici olmadigi icin
+  // Notification_userId_fkey ihlali olusuyordu - bu da AYNI $transaction
+  // icinde oldugu icin butun odemeyi geri aliyordu (odeme tamamen kirikti).
+  // ops.js'teki ayni sinif hatanin duzeltmesiyle (UserSiteAccess uzerinden
+  // sitenin GERCEK yoneticilerini bulma) ayni desen.
+  const siteAdmins = await tx.userSiteAccess.findMany({ where: { siteId }, include: { user: true } });
+  const adminIds = siteAdmins.map((a) => a.user).filter((u) => u.role === "yonetici").map((u) => u.id);
+  if (adminIds.length) {
+    await tx.notification.createMany({
+      data: adminIds.map((adminId) => ({ userId: adminId, message: `${unit ? unit.block + " D:" + unit.no : "Bir daire"} ödeme yaptı: ${amount}₺`, read: false, link: "#/tahsilat" })),
+    });
+  }
   await tx.activityLog.create({
     data: { actorId: userId || "sistem", actorName: userName || "Sistem", action: "payment.create", detail: `${unit ? `${unit.block} - Daire ${unit.no}` : "Bir daire"} için ${amount}₺ ödeme kaydedildi (${payment.method}, makbuz ${payment.receiptNo})${creditAmount.gt(0) ? `, ${creditAmount}₺ alacak bakiyesine eklendi` : ""}.`, scopeUnitId: unitId },
   });

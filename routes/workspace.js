@@ -131,7 +131,16 @@ router.post("/messages", requireAuth, requireRole("yonetici", "sakin"), async (r
     data: { senderId: req.user.id, recipientId: finalRecipientId, body },
   });
   if (req.user.role === "sakin") {
-    await prisma.notification.create({ data: { userId: "admin1", message: `${req.user.name} size bir mesaj gönderdi.`, link: "#/mesajlar" } });
+    // DIKKAT: eskiden userId sabit "admin1" idi - bkz. finance.js'teki ayni
+    // sinif hatanin duzeltmesi (sadece prisma/seed.js'in demo hesabinda var,
+    // gercek/UUID id'li bir sitede FK ihlali firlatirdi).
+    const siteAccess = await prisma.userSiteAccess.findMany({ where: { siteId: req.user.siteId }, include: { user: true } });
+    const adminIds = siteAccess.map((a) => a.user).filter((u) => u.role === "yonetici").map((u) => u.id);
+    if (adminIds.length) {
+      await prisma.notification.createMany({
+        data: adminIds.map((adminId) => ({ userId: adminId, message: `${req.user.name} size bir mesaj gönderdi.`, link: "#/mesajlar" })),
+      });
+    }
   } else if (finalRecipientId) {
     await prisma.notification.create({ data: { userId: finalRecipientId, message: "Yönetimden yeni bir mesajınız var.", link: "#/mesajlar" } });
   }
