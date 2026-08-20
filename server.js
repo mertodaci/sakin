@@ -3,6 +3,9 @@ const express = require("express");
 require("./middleware/asyncErrors");
 const cors = require("cors");
 const path = require("path");
+const helmet = require("helmet");
+const compression = require("compression");
+const rateLimit = require("express-rate-limit");
 
 const authRoutes = require("./routes/auth");
 const directoryRoutes = require("./routes/directory");
@@ -27,8 +30,30 @@ const ownerRoutes = require("./routes/owner");
 const { runMaintenanceTasks } = require("./jobs");
 
 const app = express();
+// contentSecurityPolicy kapali: uygulama build adimi olmadan public/js/app.js
+// icinde birkac yerde inline onclick/onchange kullaniyor, CSP'nin varsayilan
+// script-src'i bunlari sessizce engellerdi - CSP'yi acmak ayri, dikkatli bir
+// denetim (tum inline handler'lari event-listener'a tasima) gerektirir.
+// Diger helmet korumalari (X-Content-Type-Options, X-Frame-Options, HSTS vb.)
+// aktif kaliyor.
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(compression());
 app.use(cors());
 app.use(express.json());
+
+// Genel API rate limiti: auth uclarinin (login/register/forgot) kendi daha
+// siki limitleri zaten var (routes/auth.js) - bu, geri kalan tum /api
+// uclarini (daha once hic korumasi olmayan) kaba kuvvet/otomatik istek
+// selinden koruyan genis bir tavan. Normal kullanimda (birden fazla acik
+// sekme, dashboard'un periyodik yenilemesi) asilmayacak kadar cömert.
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Çok fazla istek gönderildi. Lütfen daha sonra tekrar deneyin." },
+});
+app.use("/api", apiLimiter);
 
 app.use("/api/auth", authRoutes);
 app.use("/api", directoryRoutes);
