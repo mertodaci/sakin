@@ -495,8 +495,8 @@ router.post("/budgets", requireAuth, requireRole("yonetici"), async (req, res) =
   } else {
     data.budgets.push({ id: db.uid(), year: y, category, plannedAmount: Number(plannedAmount), createdBy: req.user.id });
   }
-  db.logActivity(data, req.user, "budget.set", `${y} bütçesi güncellendi: ${category} — ${plannedAmount}₺ planlandı.`, null);
   await db.save(data, ["budgets"]);
+  await db.logActivity(req.user, "budget.set", `${y} bütçesi güncellendi: ${category} — ${plannedAmount}₺ planlandı.`, null);
   res.status(201).json({ message: "Bütçe kalemi kaydedildi." });
 });
 

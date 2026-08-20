@@ -57,8 +57,8 @@ router.post("/units", requireAuth, requireRole("yonetici"), async (req, res) => 
   // floor semada zorunlu (Int, nullable degil) - deger verilmezse 0 varsayilir.
   const unit = { id: db.uid(), block, no, floor: floor ? Number(floor) : 0, ownerName: ownerName || "", ownerPhone: ownerPhone || "", tenantName: tenantName || "", tenantPhone: tenantPhone || "", occupancy: occupancy || "owner", landShare: landShare || null, squareMeters: squareMeters || null, feeGroup: feeGroup || null };
   data.units.push(unit);
-  db.logActivity(data, req.user, "unit.create", `${block} - Daire ${no} eklendi.`, unit.id);
   await db.save(data, ["units"]);
+  await db.logActivity(req.user, "unit.create", `${block} - Daire ${no} eklendi.`, unit.id);
   res.status(201).json(unit);
 });
 

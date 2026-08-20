@@ -27,8 +27,8 @@ router.post("/accounts", requireAuth, requireRole("yonetici"), async (req, res) 
   if (!name) return res.status(400).json({ error: "Hesap adı zorunludur." });
   const acc = { id: db.uid(), name, type: type || "banka", bankName: bankName || "", iban: iban || "", openingBalance: Number(openingBalance) || 0, createdAt: new Date().toISOString() };
   data.accounts.push(acc);
-  db.logActivity(data, req.user, "account.create", `Yeni kasa/hesap eklendi: ${name}`, null);
   await db.save(data, ["accounts"]);
+  await db.logActivity(req.user, "account.create", `Yeni kasa/hesap eklendi: ${name}`, null);
   res.status(201).json(acc);
 });
 
@@ -91,8 +91,8 @@ router.post("/accounts/transfer", requireAuth, requireRole("yonetici"), async (r
   data.transfers.unshift(transfer);
   const fromName = data.accounts.find((a) => a.id === fromAccountId).name;
   const toName = data.accounts.find((a) => a.id === toAccountId).name;
-  db.logActivity(data, req.user, "account.transfer", `${amount}₺ ${fromName} hesabından ${toName} hesabına transfer edildi.`, null);
   await db.save(data, ["transfers"]);
+  await db.logActivity(req.user, "account.transfer", `${amount}₺ ${fromName} hesabından ${toName} hesabına transfer edildi.`, null);
   res.status(201).json(transfer);
 });
 

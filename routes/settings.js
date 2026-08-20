@@ -31,8 +31,8 @@ router.patch("/settings", requireAuth, requireRole("yonetici"), async (req, res)
     if (!account) return res.status(400).json({ error: "Geçersiz hesap." });
     data.meta.defaultAccountId = defaultAccountId;
   }
-  db.logActivity(data, req.user, "settings.update", "Site ayarları güncellendi (gecikme faizi / otomatik borçlandırma / varsayılan hesap).", null);
   await db.save(data, ["meta"]);
+  await db.logActivity(req.user, "settings.update", "Site ayarları güncellendi (gecikme faizi / otomatik borçlandırma / varsayılan hesap).", null);
   res.json({ message: "Ayarlar kaydedildi.", meta: data.meta });
 });
 

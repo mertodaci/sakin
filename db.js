@@ -150,7 +150,6 @@ const LEGACY_COLLECTIONS = [
   // uclari hala data.personnel uzerinden yaziyor - bu yuzden burada kalmali.
   { name: "personnel", model: "personnel", load: simple("personnel") },
   { name: "transfers", model: "transfer", load: simple("transfer") },
-  { name: "activityLog", model: "activityLog", load: loadActivityLog },
   { name: "budgets", model: "budget", load: simple("budget") },
 ];
 
@@ -207,6 +206,15 @@ const READONLY_PASSTHROUGH = [
   { name: "surveys", load: loadSurveys },
   { name: "classifieds", load: simple("classifieds") },
   { name: "notifications", load: simple("notification") },
+  // activityLog: logActivity() artik dogrudan prisma.activityLog.create()
+  // ile yazar (asagida) - eskiden HER db.save() cagrisi (touchedCollections
+  // ne olursa olsun) butun activityLog gecmisini satir satir yeniden
+  // upsert ediyordu, bu da yillar icinde buyuyen tabloyu her mutasyonda
+  // (ozellikle documents.js'teki 10 PDF/CSV indirme ucunda) O(N) maliyetli
+  // yapiyordu - 10 bin kullanicida en buyuk performans riski buydu. Burada
+  // sadece system.js /activity-log ve /export gibi hala data.activityLog
+  // okuyan legacy route'lar icin salt-okunur olarak sunuluyor.
+  { name: "activityLog", load: loadActivityLog },
 ];
 
 async function load() {
@@ -254,16 +262,15 @@ async function saveCollection(tx, def, rows) {
 const LEGACY_COLLECTION_NAMES = LEGACY_COLLECTIONS.map((c) => c.name);
 
 // touchedCollections: cagiran route'un GERCEKTEN mutasyona ugrattigi
-// koleksiyon adlarinin listesi. save() SADECE bunlari (+ her zaman
-// activityLog, cunku logActivity() hemen her route'ta kullanilir) Postgres'e
-// yeniden yazar - eskiden butun 20+ legacy koleksiyon her save()'de yeniden
+// koleksiyon adlarinin listesi. save() SADECE bunlari Postgres'e yeniden
+// yazar - eskiden butun 20+ legacy koleksiyon her save()'de yeniden
 // yazilirdi, bu da alakasiz eszamanli isteklerin birbirinin verisini sessizce
 // silmesine/geri almasina yol aciyordu (bkz. ROADMAP.md "Iş Akışı Bütünlüğü").
 // touchedCollections verilmezse (eski cagri tarzi) geriye donuk uyumluluk icin
 // TUM koleksiyonlar yazilir - ama tum call site'lar bu fonksiyonun yaninda
 // guncellendigi icin bu sadece bir guvenlik agi, kullanilmamasi beklenir.
 async function save(data, touchedCollections) {
-  const names = touchedCollections === undefined ? LEGACY_COLLECTION_NAMES : Array.from(new Set(["activityLog", ...touchedCollections]));
+  const names = touchedCollections === undefined ? LEGACY_COLLECTION_NAMES : touchedCollections;
   const defs = LEGACY_COLLECTIONS.filter((c) => names.includes(c.name));
 
   await prisma.$transaction(
@@ -307,19 +314,20 @@ function netDebt(data, unitId) {
   return openSum - (unit?.creditBalance || 0);
 }
 
-// Legacy route'larda kullanilan senkron desen: data.activityLog dizisine
-// mutasyon yapar, gercek yazma save() cagrisinda gerceklesir. Prisma'ya
-// tasinmis route'lar bunun yerine dogrudan prisma.activityLog.create(...)
-// kullanir (bkz. routes/auth.js, routes/contacts.js, routes/finance.js).
-function logActivity(data, actor, action, detail, scopeUnitId = null) {
-  data.activityLog.unshift({
-    id: uid(),
-    actorId: actor?.id || "sistem",
-    actorName: actor?.name || "Sistem",
-    action,
-    detail,
-    date: new Date().toISOString(),
-    scopeUnitId,
+// Dogrudan Postgres'e yazar (tek satirlik create) - eskiden data.activityLog
+// dizisine mutasyon yapip gercek yazmayi save()'e birakiyordu, bu da save()'in
+// HER cagrisinda butun activityLog gecmisini yeniden upsert etmesine yol
+// aciyordu (bkz. LEGACY_COLLECTIONS yorumu). Artik Prisma'ya tasinmis
+// route'larla (auth.js, finance.js vb.) ayni desen: tek satir, tek create.
+async function logActivity(actor, action, detail, scopeUnitId = null) {
+  await prisma.activityLog.create({
+    data: {
+      actorId: actor?.id || "sistem",
+      actorName: actor?.name || "Sistem",
+      action,
+      detail,
+      scopeUnitId,
+    },
   });
 }
 
