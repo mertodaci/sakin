@@ -65,7 +65,13 @@ router.delete("/reservations/:id", requireAuth, async (req, res) => {
 
 /* ---------------- TICKETS (Ariza / Is Emri) ---------------- */
 
-router.get("/ticket-categories", requireAuth, async (req, res) => res.json((await db.load()).ticketCategories));
+// Eskiden db.load() (27 koleksiyonun TAMAMI) ile sadece Site.ticketCategories
+// alanini okumak icin cagriliyordu - bu ucun kendisi sik cagirilir (talep
+// formu her acilista) oldugu icin gereksiz maliyeti buyuktu.
+router.get("/ticket-categories", requireAuth, async (req, res) => {
+  const site = await prisma.site.findUniqueOrThrow({ where: { id: req.user.siteId }, select: { ticketCategories: true } });
+  res.json(site.ticketCategories);
+});
 
 router.get("/tickets", requireAuth, async (req, res) => {
   const where = {};

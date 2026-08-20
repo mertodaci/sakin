@@ -342,4 +342,4 @@ async function logActivity(actor, action, detail, scopeUnitId = null) {
   });
 }
 
-module.exports = { load, save, uid, logActivity, netDebt, prisma };
+module.exports = { load, loadMeta, save, uid, logActivity, netDebt, prisma };

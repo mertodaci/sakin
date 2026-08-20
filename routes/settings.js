@@ -10,13 +10,18 @@ const prisma = db.prisma;
 // satirlik bir Settings singleton'iydi, siteler-arasi sizinti + baska bir
 // sitenin ayarlarini sessizce ezme riski vardi - o model artik semadan
 // tamamen kaldirildi).
+// Eskiden db.load() (27 koleksiyonun TAMAMI) ile sadece Site.meta'yi okumak
+// icin cagriliyordu - db.loadMeta() ayni bilgiyi tek bir sorguyla verir.
 router.get("/settings", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  res.json(data.meta);
+  const { meta } = await db.loadMeta();
+  res.json(meta);
 });
 
 router.patch("/settings", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
+  // db.save(data, ["meta"]) sadece data.meta/data.ticketCategories okur
+  // (LEGACY_COLLECTIONS artik bos, digger 25 koleksiyona hic dokunulmuyor) -
+  // bu yuzden db.load() yerine sadece loadMeta() yeterli.
+  const data = await db.loadMeta();
   const { buildingName, lateFeeRate, lateFeeGraceDays, autoDueEnabled, autoDueDay, autoDueAmount, defaultAccountId } = req.body || {};
   if (buildingName !== undefined) data.meta.buildingName = buildingName;
   if (lateFeeRate !== undefined) data.meta.lateFeeRate = Number(lateFeeRate);
