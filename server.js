@@ -119,11 +119,23 @@ const PORT = process.env.PORT || 3000;
 // bu da "sahibim" sayilir - boylece normal gelistirme akisi degismez.
 const isSchedulerOwner = process.env.NODE_APP_INSTANCE === undefined || process.env.NODE_APP_INSTANCE === "0";
 
-app.listen(PORT, () => {
-  console.log(`Sakin sunucu ${PORT} portunda çalışıyor: http://localhost:${PORT}`);
-  if (!isSchedulerOwner) return;
-  // Gecikme faizi ve otomatik aylik borclandirma icin: acilista bir kez, sonra
-  // her 6 saatte bir kontrol edilir (gun degisiminde islemlerin gecikmeden yapilmasi icin).
-  runMaintenanceTasks().catch((err) => console.error("Bakim gorevi hatasi:", err));
-  setInterval(() => runMaintenanceTasks().catch((err) => console.error("Bakim gorevi hatasi:", err)), 6 * 60 * 60 * 1000);
-});
+function start() {
+  return app.listen(PORT, () => {
+    console.log(`Sakin sunucu ${PORT} portunda çalışıyor: http://localhost:${PORT}`);
+    if (!isSchedulerOwner) return;
+    // Gecikme faizi ve otomatik aylik borclandirma icin: acilista bir kez, sonra
+    // her 6 saatte bir kontrol edilir (gun degisiminde islemlerin gecikmeden yapilmasi icin).
+    runMaintenanceTasks().catch((err) => console.error("Bakim gorevi hatasi:", err));
+    setInterval(() => runMaintenanceTasks().catch((err) => console.error("Bakim gorevi hatasi:", err)), 6 * 60 * 60 * 1000);
+  });
+}
+
+// `node server.js` ile dogrudan calistirilinca dinlemeye basla; baska bir
+// modulden require edilince (orn. test/helpers/testServer.js) SADECE app'i
+// disa aktar - port dinleme/bakim gorevi yan etkisi olmadan, test kendi
+// gecici portunu ve zamanlamasini kontrol edebilsin diye.
+if (require.main === module) {
+  start();
+}
+
+module.exports = app;
