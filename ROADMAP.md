@@ -7,6 +7,50 @@ yardım istediğini anlayabilir.
 
 ---
 
+## 🎨 Tasarım Tutarlılığı + Legacy Shim Temizliği + Yardım Canlı Veri — TAMAMLANDI (2026-08-20)
+
+Aynı gün, üretim sertleştirme oturumunun ardından 3 madde daha tamamlandı:
+
+1. **Tasarım tutarlılığı**: ~15 eski ekranın tamamı (Kullanıcılar, Daireler,
+   Kasalar, Firma & Personel/Cari, Giderler, Muhasebe) artık Raporlar
+   grubuyla AYNI koyu-lacivert `table.report`/`report-wrap` tasarımını
+   kullanıyor — Mert'in "arayüz amatör görünüyor" geri bildiriminin
+   doğrudan hedefiydi. **Kullanıcılar ilk yapılıp ekran görüntüsüyle
+   onaylatıldı**, sonra Mert'in isteği üzerine tek genel arama kutusu
+   yerine **sütun-bazlı filtre satırı** (`columnFilterRow`/
+   `wireColumnFilters`, metin sütunları için kutu, sabit-değerli sütunlar
+   için Tümü/... seçici, birden fazlası VE mantığıyla) genel bir bileşen
+   olarak kuruldu, sonra kalan 5 ekrana da aynı desen uygulandı. Kart-grid
+   ekranlardaki (Kasalar/Cari) satır-içi genişleyen panel (Hesap Ekstresi,
+   Borçlandır/Öde formu), Borç Listesi'nde zaten kurulu olan gizli-`<tr>`
+   deseniyle tabloya taşındı. Sadece frontend/render değişti, hiçbir API
+   çağrısı değişmedi.
+2. **Legacy `db.js` shim tamamen temizlendi**: `LEGACY_COLLECTIONS` artık
+   boş — son 5 koleksiyon (units/accounts/personnel/transfers/budgets)
+   `directory.js`/`accounts.js`/`accounting.js`/`finance.js`'te dogrudan
+   Prisma'ya taşındı. Yol boyunca **gerçek bir hata** bulundu: firma
+   (vendor) muhasebe kodu atama uçları (tekil + toplu otomatik atama)
+   sessizce çalışmıyordu (vendors zaten legacy shim'den çıkmıştı ama
+   accounting.js hâlâ eski `db.save()` çağrısını yapıyordu, no-op).
+3. **"Yardım" chatbot artık canlı veri sorularına rakamla cevap veriyor**
+   (0. kademe): "toplam alacak ne kadar", "kasa bakiyesi", "kaç açık
+   talep var", "onay bekleyen kaç kayıt var" (yönetici/personel) ve
+   "borcum ne kadar" (sakin) — önceden sadece doğru ekrana yönlendiriyordu.
+
+**Bu turda bulunan/düzeltilen 2 gerçek hata**: firma muhasebe kodu atama
+(yukarıda) ve `dashboard.js`'in `pendingApprovals` hesabının (Yardım'ın
+yeni canlı sorgusunda düzeltildi, dashboard.js'in kendisi dokunulmadı)
+`User` global modeli üzerinden TÜM PLATFORMU sayması (çok-siteli bir
+sahip için yanlış sonuç verebilirdi).
+
+**Hâlâ kalan** (bilerek ertelendi, ROADMAP'in "Yönetimcell Paritesi"
+bölümünde önceden not edilmişti): gerçek üçüncü taraf entegrasyonları
+(ödeme/SMS/banka), gerçek APM/hata izleme (Sentry vb.), kullanılmayan
+`Settings` modelinin şemadan kaldırılması, dosya depolamanın (uploads/)
+bulut/yedeklemeli bir çözüme taşınması.
+
+---
+
 ## 🚀 10 Bin Kullanıcı Ölçeği — Üretim Sertleştirme — TAMAMLANDI (2026-08-20)
 
 2026-08-20'de yapılan bir değerlendirmede ("10 bin kullanıcı ölçeğine hazır
