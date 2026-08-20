@@ -2,6 +2,8 @@ const express = require("express");
 const { Prisma } = require("@prisma/client");
 const db = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { loadSiteUsers } = require("../lib/siteUsers");
+const { loadUnitsAndOpenCharges } = require("../lib/unitsAndCharges");
 
 const router = express.Router();
 const prisma = db.prisma;
@@ -17,7 +19,12 @@ router.post("/announcements", requireAuth, requireRole("yonetici"), async (req, 
   const { title, body, pinned } = req.body || {};
   if (!title || !body) return res.status(400).json({ error: "Başlık ve içerik zorunludur." });
   const a = await prisma.announcement.create({ data: { title, body, authorId: req.user.id, pinned: !!pinned } });
-  const residents = await prisma.user.findMany({ where: { role: "sakin", isApproved: true } });
+  // DIKKAT (2026-08-20'de bulunan gercek hata): eskiden prisma.user.findMany
+  // ({role:"sakin"}) HICBIR SITE FILTRESI OLMADAN cagriliyordu (User bilerek
+  // global bir model) - bir sitede yayinlanan duyuru, TUM PLATFORMDAKI diger
+  // sitelerin sakinlerine de "Yeni duyuru: ..." bildirimi olarak dusuyordu.
+  // loadSiteUsers artik SADECE bu sitenin (UserSiteAccess uzerinden) sakinlerini donuyor.
+  const residents = (await loadSiteUsers(prisma, req.user.siteId)).filter((u) => u.role === "sakin" && u.isApproved);
   if (residents.length) {
     await prisma.notification.createMany({ data: residents.map((u) => ({ userId: u.id, message: `Yeni duyuru: ${title}`, link: "#/duyurular" })) });
   }
@@ -170,7 +177,7 @@ function sendEmail(email, message) {
 const MONTH_NAMES_LONG = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 
 router.post("/bulk-messages/preview", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
+  const [data, siteUsers] = await Promise.all([loadUnitsAndOpenCharges(prisma), loadSiteUsers(prisma, req.user.siteId)]);
   const { channel, template, block, minDebt, mode } = req.body || {};
   if (!template) return res.status(400).json({ error: "Mesaj şablonu zorunludur." });
 
@@ -181,7 +188,7 @@ router.post("/bulk-messages/preview", requireAuth, requireRole("yonetici"), asyn
 
   const donem = MONTH_NAMES_LONG[new Date().getMonth()] + " " + new Date().getFullYear();
   const recipients = units.map((u) => {
-    const resident = data.users.find((usr) => usr.unitId === u.id && usr.role === "sakin");
+    const resident = siteUsers.find((usr) => usr.unitId === u.id && usr.role === "sakin");
     let text = template
       .split("<adsoyad>").join(u.ownerName || resident?.name || "-")
       .split("<borc>").join(String(u.debt))
@@ -219,10 +226,10 @@ router.post("/bulk-messages/send", requireAuth, requireRole("yonetici"), async (
 // (sendSms) kullanir, sadece TEK bir daireye, otomatik olusturulan borc
 // metniyle.
 router.post("/units/:id/borc-sms", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
+  const [data, siteUsers] = await Promise.all([loadUnitsAndOpenCharges(prisma), loadSiteUsers(prisma, req.user.siteId)]);
   const unit = data.units.find((u) => u.id === req.params.id);
   if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
-  const resident = data.users.find((u) => u.unitId === unit.id && u.role === "sakin");
+  const resident = siteUsers.find((u) => u.unitId === unit.id && u.role === "sakin");
   const contact = resident?.phone || unit.ownerPhone || "";
   if (!contact) return res.status(400).json({ error: "Bu daire için kayıtlı telefon numarası yok." });
   const debt = db.netDebt(data, unit.id);
