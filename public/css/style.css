@@ -492,6 +492,19 @@ table.report tfoot td { padding: 10px 12px; font-weight: 700; border-top: 2px so
 .report-wrap { border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; background: var(--paper); margin-bottom: 16px; }
 .badge-b { color: var(--red); font-weight: 600; }
 
+/* Sutun-bazli filtre satiri: table.report basliginin hemen altinda, her
+   sutunun kendi arama kutusu/secici - "ad soyad: mert" + "durum: aktif"
+   gibi birden fazla filtreyi ayni anda (VE mantigiyla) uygulamak icin
+   (bkz. columnFilterRow/wireColumnFilters, app.js). Tek genel arama
+   kutusu yerine bunu tercih eden ekranlarda kullanilir. */
+table.report thead tr.report-filter-row td { background: var(--navy); padding: 6px 12px 10px; }
+table.report thead tr.report-filter-row input, table.report thead tr.report-filter-row select {
+  width: 100%; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25); color: #fff;
+  border-radius: 6px; padding: 5px 8px; font-size: 12.5px; font-weight: 400; text-transform: none;
+}
+table.report thead tr.report-filter-row input::placeholder { color: rgba(255,255,255,.5); }
+table.report thead tr.report-filter-row select option { color: var(--ink); }
+
 /* ---------------- Kapıcı AI (uygulama-ici kullanim yardimcisi) ---------------- */
 .kapici-fab {
   position: fixed; right: 22px; bottom: 22px; z-index: 45;

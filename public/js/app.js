@@ -1917,17 +1917,38 @@ async function renderKullanicilar(c) {
   const resetRequests = approved.filter((u) => u.resetRequestedAt);
   c.innerHTML = `
     ${sectionTitle("Kullanıcılar")}
-    ${pending.length ? `<div class="card tight mb-16"><div class="ledger-title">Onay Bekleyenler</div>${pending.map((u) => {
-      const days = daysSince(u.createdAt);
-      return `<div class="ledger-row"><div class="person-row"><span class="avatar-chip md">${esc(initials(u.name))}</span><div class="person-row-text"><div style="font-size:14px;font-weight:600;">${esc(u.name)} ${days >= 3 ? '<span class="pill red"><span class="dot"></span>Gecikti</span>' : ""}</div><div class="small muted">${esc(u.email)} · ${esc(u.unitLabel || "-")} · ${days === 0 ? "bugün" : days + " gündür bekliyor"}</div></div></div>
-      <div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" data-approve="${u.id}">Onayla</button><button class="btn-danger" data-deluser="${u.id}">Reddet</button></div></div>`;
-    }).join("")}</div>` : ""}
-    ${resetRequests.length ? `<div class="card tight mb-16"><div class="ledger-title">Şifre Sıfırlama Talepleri</div>${resetRequests.map((u) => `
-      <div class="ledger-row"><div class="person-row"><span class="avatar-chip md">${esc(initials(u.name))}</span><div class="person-row-text"><div style="font-size:14px;font-weight:600;">${esc(u.name)}</div><div class="small muted">${esc(u.email)} · Talep: ${dt(u.resetRequestedAt)}</div></div></div>
-      <button class="btn btn-primary btn-sm" data-reset="${u.id}">Geçici Şifre Oluştur</button></div>`).join("")}</div>` : ""}
-    <div class="card tight mb-16"><div class="ledger-title">Sakinler &amp; Personel</div>${approved.map((u) => `
-      <div class="ledger-row" style="${u.isActive === false ? "opacity:.55;" : ""}"><div class="person-row"><span class="avatar-chip md">${esc(initials(u.name))}</span><div class="person-row-text"><div style="font-size:14px;font-weight:600;">${esc(u.name)} ${u.role === "yonetici" ? "👑" : ""} ${u.isActive === false ? pill("Pasif") : ""}</div><div class="small muted">${esc(u.email)} · ${u.role === "sakin" ? esc(u.unitLabel || "-") : u.role === "personel" ? esc(u.department || "Personel") : "Yönetici"}</div></div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-ghost btn-sm" data-edit="${u.id}">Düzenle</button>${u.role !== "yonetici" ? `<button class="btn btn-ghost btn-sm" data-reset="${u.id}">Şifre Sıfırla</button>` : ""}${u.role !== "yonetici" && u.id !== state.user.id ? (u.isActive === false ? `<button class="btn btn-ghost btn-sm" data-reactivate="${u.id}">Aktif Et</button>` : `<button class="btn btn-ghost btn-sm" data-deactivate="${u.id}">Pasife Al</button>`) : ""}${u.id !== state.user.id ? `<button class="btn-danger" data-deluser="${u.id}">Kalıcı Sil</button>` : ""}</div></div>`).join("")}</div>
+    ${pending.length ? `
+    <div class="flex-between"><div class="ledger-title" style="padding:0 0 8px;">Onay Bekleyenler</div></div>
+    <div class="report-wrap mb-16"><table class="report">
+      <thead><tr><th>Ad Soyad</th><th>E-posta</th><th>Daire</th><th>Bekleme Süresi</th><th>İşlemler</th></tr></thead>
+      <tbody>
+        ${pending.map((u) => {
+          const days = daysSince(u.createdAt);
+          return `<tr><td><div class="person-row"><span class="avatar-chip sm">${esc(initials(u.name))}</span>${esc(u.name)} ${days >= 3 ? '<span class="pill red"><span class="dot"></span>Gecikti</span>' : ""}</div></td><td>${esc(u.email)}</td><td>${esc(u.unitLabel || "-")}</td><td>${days === 0 ? "bugün" : days + " gündür"}</td><td><div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" data-approve="${u.id}">Onayla</button><button class="btn-danger" data-deluser="${u.id}">Reddet</button></div></td></tr>`;
+        }).join("")}
+      </tbody>
+    </table></div>` : ""}
+    ${resetRequests.length ? `
+    <div class="flex-between"><div class="ledger-title" style="padding:0 0 8px;">Şifre Sıfırlama Talepleri</div></div>
+    <div class="report-wrap mb-16"><table class="report">
+      <thead><tr><th>Ad Soyad</th><th>E-posta</th><th>Talep Tarihi</th><th>İşlemler</th></tr></thead>
+      <tbody>
+        ${resetRequests.map((u) => `<tr><td><div class="person-row"><span class="avatar-chip sm">${esc(initials(u.name))}</span>${esc(u.name)}</div></td><td>${esc(u.email)}</td><td>${dt(u.resetRequestedAt)}</td><td><button class="btn btn-primary btn-sm" data-reset="${u.id}">Geçici Şifre Oluştur</button></td></tr>`).join("")}
+      </tbody>
+    </table></div>` : ""}
+    <div class="flex-between">${sectionTitle("Sakinler & Personel", `${approved.length} kayıt`)}</div>
+    <div class="report-wrap mb-16"><table class="report">
+      <thead>
+        <tr><th>Ad Soyad</th><th>Rol / Daire</th><th>E-posta</th><th>Durum</th><th>İşlemler</th></tr>
+        ${columnFilterRow([{ key: "adsoyad" }, { key: "roldaire" }, { key: "eposta" }, { key: "durum", type: "select", options: [{ value: "aktif", label: "Aktif" }, { value: "pasif", label: "Pasif" }] }, null])}
+      </thead>
+      <tbody>
+        ${approved.map((u) => {
+          const roldaire = u.role === "sakin" ? (u.unitLabel || "-") : u.role === "personel" ? (u.department || "Personel") : "Yönetici";
+          return `<tr data-listrow data-adsoyad="${esc(u.name)}" data-roldaire="${esc(roldaire)}" data-eposta="${esc(u.email)}" data-durum="${u.isActive === false ? "pasif" : "aktif"}" style="${u.isActive === false ? "opacity:.55;" : ""}"><td><div class="person-row"><span class="avatar-chip sm">${esc(initials(u.name))}</span>${esc(u.name)} ${u.role === "yonetici" ? "👑" : ""}</div></td><td>${esc(roldaire)}</td><td>${esc(u.email)}</td><td>${u.isActive === false ? pill("Pasif") : pill("Aktif")}</td><td><div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-ghost btn-sm" data-edit="${u.id}">Düzenle</button>${u.role !== "yonetici" ? `<button class="btn btn-ghost btn-sm" data-reset="${u.id}">Şifre Sıfırla</button>` : ""}${u.role !== "yonetici" && u.id !== state.user.id ? (u.isActive === false ? `<button class="btn btn-ghost btn-sm" data-reactivate="${u.id}">Aktif Et</button>` : `<button class="btn btn-ghost btn-sm" data-deactivate="${u.id}">Pasife Al</button>`) : ""}${u.id !== state.user.id ? `<button class="btn-danger" data-deluser="${u.id}">Kalıcı Sil</button>` : ""}</div></td></tr>`;
+        }).join("") || '<tr><td colspan="5" class="empty-row">Kayıt yok.</td></tr>'}
+      </tbody>
+    </table></div>
     <div class="card form-card">
       <div class="ledger-title" style="padding:0 0 10px;">Yeni Personel Ekle</div>
       <form id="perForm" class="form-row">
@@ -1940,6 +1961,7 @@ async function renderKullanicilar(c) {
       </form>
     </div>
   `;
+  wireColumnFilters(c, "[data-listrow]");
   c.querySelectorAll("[data-approve]").forEach((b) => b.addEventListener("click", async () => { try { await api("/users/" + b.dataset.approve + "/approve", { method: "PATCH" }); toast("Kullanıcı onaylandı."); renderTab("kullanicilar"); } catch (err) { toast(err.message); } }));
   c.querySelectorAll("[data-deluser]").forEach((b) => b.addEventListener("click", async () => { if (!confirm("Kalıcı olarak silinsin mi? Bu işlem geri alınamaz, geçmiş kayıtlar için 'Pasife Al' seçeneğini kullanmanız önerilir.")) return; try { await api("/users/" + b.dataset.deluser, { method: "DELETE" }); renderTab("kullanicilar"); } catch (err) { toast(err.message); } }));
   c.querySelectorAll("[data-deactivate]").forEach((b) => b.addEventListener("click", async () => { if (!confirm("Kullanıcı pasife alınsın mı? Geçmiş kayıtları korunur, sadece giriş yapamaz hale gelir.")) return; try { await api("/users/" + b.dataset.deactivate + "/deactivate", { method: "PATCH" }); toast("Kullanıcı pasife alındı."); renderTab("kullanicilar"); } catch (err) { toast(err.message); } }));
@@ -2041,6 +2063,35 @@ function wireListSearch(c, rowSelector, matchFields) {
       row.style.display = !q || text.includes(q) ? "" : "none";
     });
   });
+}
+
+// Sutun-bazli filtre satiri: tek genel arama kutusu yerine, her sutunun
+// KENDI arama kutusu/secicisi - "ad soyad: mert" + "durum: aktif" gibi
+// birden fazla filtreyi AYNI ANDA (VE mantigiyla) uygulamak icin (Mert'in
+// Kullanicilar ekrani geri bildirimi uzerine kuruldu). columns: tablonun
+// <th> sirasiyla birebir - metin sutunlari icin {key}, sabit degerli
+// sutunlar (orn. Durum) icin {key, type:"select", options:[{value,label}]},
+// aksiyon/ikon gibi filtrelenemeyecek sutunlar icin null.
+function columnFilterRow(columns) {
+  return `<tr class="report-filter-row">${columns.map((col) => {
+    if (!col) return "<td></td>";
+    if (col.type === "select") {
+      return `<td><select data-filtercol="${esc(col.key)}"><option value="">Tümü</option>${col.options.map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join("")}</select></td>`;
+    }
+    return `<td><input type="text" data-filtercol="${esc(col.key)}" placeholder="Ara…" /></td>`;
+  }).join("")}</tr>`;
+}
+function wireColumnFilters(c, rowSelector) {
+  const controls = c.querySelectorAll("[data-filtercol]");
+  if (!controls.length) return;
+  function applyFilters() {
+    const active = [...controls].map((el) => ({ key: el.dataset.filtercol, value: el.value.trim().toLowerCase() })).filter((f) => f.value);
+    c.querySelectorAll(rowSelector).forEach((row) => {
+      const match = active.every((f) => (row.dataset[f.key] || "").toLowerCase().includes(f.value));
+      row.style.display = match ? "" : "none";
+    });
+  }
+  controls.forEach((el) => el.addEventListener(el.tagName === "SELECT" ? "change" : "input", applyFilters));
 }
 
 async function renderIkametEdenlerListesi(c) {
