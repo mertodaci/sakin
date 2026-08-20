@@ -7,8 +7,9 @@ const prisma = db.prisma;
 
 // data.meta artik db.js icinde istegin kendi tenant baglamindaki Site
 // satirindan geliyor (bkz. db.js loadMeta/save - eskiden global, TEK
-// satirlik Settings singleton'iydi, siteler-arasi sizinti + baska bir
-// sitenin ayarlarini sessizce ezme riski vardi).
+// satirlik bir Settings singleton'iydi, siteler-arasi sizinti + baska bir
+// sitenin ayarlarini sessizce ezme riski vardi - o model artik semadan
+// tamamen kaldirildi).
 router.get("/settings", requireAuth, requireRole("yonetici"), async (req, res) => {
   const data = await db.load();
   res.json(data.meta);

@@ -173,23 +173,6 @@ model HelpMiss {
   @@index([siteId])
 }
 
-model Settings {
-  id                String   @id @default("singleton")
-  buildingName      String
-  address           String
-  initializedAt     DateTime
-  monthlyDueDefault Decimal  @db.Decimal(12, 2)
-  lateFeeRate       Decimal  @db.Decimal(5, 2)
-  lateFeeGraceDays  Int
-  autoDueEnabled    Boolean
-  autoDueDay        Int
-  autoDueAmount     Decimal  @db.Decimal(12, 2)
-  lastAutoDuePeriod String?
-  ticketCategories  String[]
-  defaultAccountId  String
-  defaultAccount    Account  @relation(fields: [defaultAccountId], references: [id], onDelete: Restrict)
-}
-
 // ---------------- Daire / Kullanici ----------------
 
 model Unit {
@@ -403,7 +386,6 @@ model Account {
   partyPayments      PartyPayment[]
   transfersFrom      Transfer[]     @relation("TransferFrom")
   transfersTo        Transfer[]     @relation("TransferTo")
-  settingsDefaultFor Settings[]
 
   @@index([siteId])
 }

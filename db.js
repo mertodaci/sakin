@@ -49,8 +49,8 @@ function toPlain(value) {
 // (bina adi/adres/gecikme faizi/varsayilan hesap vb.) icin AYNI satiri
 // gormesi demekti (siteler-arasi sizinti + belge/PDF'lerde yanlis site
 // bilgisi). Artik cagiran istegin kendi tenant baglamindaki Site satirini
-// okur - Settings modeli sadece seed.js'in gecmis uyumlulugu icin duruyor,
-// hicbir route artik ondan okumuyor/yazmiyor.
+// okur - eski Settings modeli (hicbir route okumuyor/yazmiyordu) semadan
+// tamamen kaldirildi (2026-08-20).
 async function loadMeta() {
   const s = await prisma.site.findUniqueOrThrow({ where: { id: tenantContext.getSiteId() } });
   const plain = toPlain(s);

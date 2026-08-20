@@ -93,25 +93,6 @@ async function main() {
       // Her kullanici bu tek siteye erisim kazanir (coklu-kiracili donusum).
       for (const u of users) await tx.userSiteAccess.create({ data: { userId: u.id, siteId: site.id } });
 
-      // ---- Ayarlar (eski "meta") ----
-      await tx.settings.create({
-        data: {
-          id: "singleton",
-          buildingName: "Örnek Site",
-          address: "",
-          initializedAt: new Date().toISOString(),
-          monthlyDueDefault: DUE_AMOUNT,
-          lateFeeRate: 5,
-          lateFeeGraceDays: 10,
-          autoDueEnabled: true,
-          autoDueDay: 1,
-          autoDueAmount: DUE_AMOUNT,
-          lastAutoDuePeriod: monthsAgoPeriod(0),
-          defaultAccountId: DEFAULT_ACCOUNT_ID,
-          ticketCategories: ["Tesisat", "Elektrik", "Asansör", "Ortak Alan", "Diğer"],
-        },
-      });
-
       // ---- Personel ----
       await tx.personnel.create({ data: { id: "per1", name: "Hasan Kapıcı", phone: "0533 111 22 33", department: "Temizlik", active: true, userId: "per1", monthlySalary: 22000 } });
       await tx.personnel.create({ data: { id: "per2", name: "Osman Teknisyen", phone: "0533 444 55 66", department: "Bakım-Onarım", active: true, userId: "per2", monthlySalary: 26000 } });
