@@ -5,9 +5,60 @@ const { accountBalance } = require("./accounts");
 const { myUnitIds } = require("../lib/residentUnits");
 
 const router = express.Router();
+const prisma = db.prisma;
+
+// Onceki halde db.load() TUM 27 legacy/passthrough koleksiyonu (siteId
+// filtresiyle bile) her /dashboard istegi geldiginde cekiyordu - bu route
+// bunlardan sadece 12'sini kullaniyordu. Yuk testinde (2026-08-20) bu,
+// dashboard'un uygulamadaki en yavas uc olmasina yol aciyordu (bkz. proje
+// notlari). Artik SADECE ihtiyac duyulan alanlar, `select` ile hafif
+// sorgularla cekiliyor (orn. equipment icin bakim gecmisi, tickets icin
+// yorumlar artik cekilmiyor). Decimal alanlar (amount/openingBalance/
+// creditBalance) db.js'in eskiden yaptigi gibi acikca Number()'a
+// cevriliyor - Prisma.Decimal nesneleri +/- operatorleriyle guvenilir
+// calismaz (string donusumu uzerinden sessizce yanlis sonuc verebilir).
+async function loadDashboardData() {
+  const [charges, units, partyCharges, transactions, accounts, transfers, tickets, equipment, notifications, reservations, packages] = await Promise.all([
+    prisma.charge.findMany({ select: { unitId: true, status: true, amount: true, paidAmount: true } }),
+    prisma.unit.findMany({ select: { id: true, creditBalance: true } }),
+    prisma.partyCharge.findMany({ select: { status: true, amount: true, paidAmount: true } }),
+    prisma.transaction.findMany({ select: { type: true, amount: true, accountId: true } }),
+    prisma.account.findMany({ select: { id: true, openingBalance: true } }),
+    prisma.transfer.findMany({ select: { fromAccountId: true, toAccountId: true, amount: true } }),
+    prisma.ticket.findMany({ select: { userId: true, status: true } }),
+    prisma.equipment.findMany({ select: { lastMaintenanceDate: true, maintenancePeriodDays: true } }),
+    prisma.notification.findMany({ select: { userId: true, read: true } }),
+    prisma.reservation.findMany({ select: { userId: true, date: true } }),
+    prisma.package.findMany({ select: { unitId: true, status: true } }),
+  ]);
+  return {
+    charges: charges.map((c) => ({ ...c, amount: Number(c.amount), paidAmount: Number(c.paidAmount) })),
+    units: units.map((u) => ({ ...u, creditBalance: Number(u.creditBalance) })),
+    partyCharges: partyCharges.map((c) => ({ ...c, amount: Number(c.amount), paidAmount: Number(c.paidAmount) })),
+    transactions: transactions.map((t) => ({ ...t, amount: Number(t.amount) })),
+    accounts: accounts.map((a) => ({ ...a, openingBalance: Number(a.openingBalance) })),
+    transfers: transfers.map((tr) => ({ ...tr, amount: Number(tr.amount) })),
+    tickets,
+    equipment,
+    notifications,
+    reservations,
+    packages,
+  };
+}
+
+// User modeli bilerek global (coklu-siteli personelin tek giris kimligi
+// olmasi icin) - UserSiteAccess uzerinden SADECE bu sitenin onay bekleyen
+// kayitlarini sayiyoruz. Eskiden data.users (loadUsers) TUM PLATFORMU
+// donuyordu, yani coklu-siteli bir platform sahibi icin bu sayi yanlis
+// olabilirdi (routes/help.js'teki ayni sinif duzeltmeyle tutarli, bkz.
+// computePendingApprovals).
+async function countPendingApprovals(siteId) {
+  const access = await prisma.userSiteAccess.findMany({ where: { siteId }, include: { user: true } });
+  return access.filter((a) => !a.user.isApproved).length;
+}
 
 router.get("/dashboard", requireAuth, async (req, res) => {
-  const data = await db.load();
+  const data = await loadDashboardData();
 
   if (req.user.role === "sakin") {
     // Coklu daireli bir sakin icin (orn. ayni sitede 2 evi olan) varsayilan
@@ -56,7 +107,7 @@ router.get("/dashboard", requireAuth, async (req, res) => {
   // Genel kasa durumu: tum hesaplarin (banka/nakit/pos) toplam bakiyesi (acilis bakiyeleri dahil)
   const kasa = data.accounts.reduce((s, a) => s + accountBalance(data, a.id), 0);
   const openTickets = data.tickets.filter((t) => t.status !== "Çözüldü").length;
-  const pendingApprovals = data.users.filter((u) => !u.isApproved).length;
+  const pendingApprovals = await countPendingApprovals(req.user.siteId);
   const overdueEquipment = data.equipment.filter((e) => e.lastMaintenanceDate && Date.now() - new Date(e.lastMaintenanceDate).getTime() > e.maintenancePeriodDays * 86400000).length;
   const unread = data.notifications.filter((n) => n.userId === req.user.id && !n.read).length;
 
