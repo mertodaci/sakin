@@ -7,6 +7,58 @@ yardım istediğini anlayabilir.
 
 ---
 
+## 🚀 10 Bin Kullanıcı Ölçeği — Üretim Sertleştirme — TAMAMLANDI (2026-08-20)
+
+2026-08-20'de yapılan bir değerlendirmede ("10 bin kullanıcı ölçeğine hazır
+mı?") bulunan 6 maddenin tamamı, öncelik sırasıyla, her biri test edilip
+commit'lenerek tamamlandı:
+
+1. **`db.js`'in en büyük performans riski düzeltildi**: `logActivity()`
+   eskiden `data.activityLog` dizisine mutasyon yapıp gerçek yazmayı
+   `save()`'e bırakıyordu — `save()` ise `touchedCollections` ne olursa
+   olsun HER ÇAĞRIDA tüm `activityLog` geçmişini (yıllar boyu birikmiş,
+   sınırsız) satır satır yeniden upsert ediyordu. Artık doğrudan
+   `prisma.activityLog.create()` ile tek satır yazıyor. `documents.js`'teki
+   10 PDF/CSV ucundaki gereksiz `db.save(data, [])` çağrıları da kaldırıldı.
+2. **`helmet` + genel API rate limiting (600 istek/15dk/IP) + `compression`**
+   eklendi — önceden sadece auth uçlarında rate limit vardı, hiç güvenlik
+   header'ı/sıkıştırma yoktu.
+3. **PM2 cluster modu** (`ecosystem.config.js`, `npm run cluster`) — ama
+   önce `jobs.js`'teki `materializeRecurringPartyCharges()`'ın mükerrer
+   faturalama race condition'ı (optimistik kilit ile) düzeltildi, sonra
+   zamanlanmış bakım görevi (`server.js`) sadece PM2 worker 0'da çalışacak
+   şekilde kilitlendi.
+4. **DB connection pool boyutlandırıldı** (`DATABASE_URL`'e
+   `connection_limit=10&pool_timeout=20`) — cluster modu sonrası
+   varsayılan havuz boyutu worker sayısıyla çarpılıp Postgres'in
+   `max_connections`'ını (100) aşabilirdi.
+5. **`GET /health`** (gerçek bir Postgres sorgusu çalıştırır) + `morgan` ile
+   yapılandırılmış istek/hata loglama eklendi.
+6. **İlk otomatik test suite** (`node:test`, `npm test`) — finans akışları
+   (ödeme, kısmi tahsilat, iptal, mükerrer istek koruması, gecikme faizi,
+   otomatik aylık borçlandırma) ayrı bir test veritabanına (`sakin_test`)
+   karşı gerçek HTTP istekleriyle test ediliyor.
+
+**Bu süreçte bulunan/düzeltilen 3 gerçek hata** (hiçbiri önceden bilinmiyordu):
+- `finance.js`/`workspace.js`'te bildirim yazarken `userId` sabit `"admin1"`
+  idi (sadece seed script'inin demo hesabı) — kayıt/onay akışıyla oluşmuş
+  GERÇEK bir sitede FK ihlali fırlatıp **tüm ödemeyi geri alıyordu**. Test
+  suite'i bunu İLK çalışmada yakaladı. `UserSiteAccess` üzerinden sitenin
+  gerçek yöneticilerini bulacak şekilde düzeltildi (ops.js'teki aynı sınıf
+  düzeltmeyle tutarlı).
+- `materializeRecurringPartyCharges()`'ta mükerrer fatura race condition'ı.
+- `prisma/migrations/20260817230905_multi_tenant_foundation/migration.sql`'in
+  başına kaçmış Prisma CLI uyarı metni — proje sıfırdan (yeni ortam/CI)
+  kurulamıyordu, sadece mevcut geliştirme makinesinde çalışıyordu.
+
+**Hâlâ bilinçli olarak yapılmayanlar**: gerçek APM/hata izleme (Sentry vb.
+— hesap/API anahtarı gerektirir), gerçek PgBouncer (şimdiki tek-makine
+ölçeğinde gerekmiyor), rate limiter'ın paylaşımlı (Redis) store'a taşınması
+(cluster'da worker-başına ayrı, N worker'la limit ~N kat genişliyor — küçük
+N için kabul edilebilir).
+
+---
+
 ## 💬 Kapıcı AI → "Yardım": Eşleştirme Motoru + İçerik İndeksi + Yeniden Adlandırma (2026-08-18)
 
 Mert canlıda test ederken chatbot'un çok yetersiz kaldığını fark etti ("talepleri
