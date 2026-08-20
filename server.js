@@ -6,6 +6,8 @@ const path = require("path");
 const helmet = require("helmet");
 const compression = require("compression");
 const rateLimit = require("express-rate-limit");
+const morgan = require("morgan");
+const db = require("./db");
 
 const authRoutes = require("./routes/auth");
 const directoryRoutes = require("./routes/directory");
@@ -40,6 +42,26 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(compression());
 app.use(cors());
 app.use(express.json());
+// [:date[iso]] YONTEM YOL DURUM sure(ms) - basit ama yapilandirilmis istek
+// logu (kim ne zaman hangi ucu ne kadar surede cagirdi) - onceden HICBIR
+// istek logu yoktu, bir sey patladiginda hangi istegin sebep oldugunu
+// anlamanin yolu yoktu.
+app.use(morgan("[:date[iso]] :method :url :status :response-time ms - :res[content-length]b"));
+
+// Orkestratorlerin/uptime izleyicilerinin kullanmasi icin: /api altinda
+// DEGIL (rate limit'e takilmasin, auth gerektirmesin diye) ve gercek bir DB
+// sorgusu calistirir - process ayakta ama Postgres'e ulasamiyorsa (orn.
+// container coktu) bunu 503 ile yakalar, sadece "process yasiyor" degil
+// "istekleri gercekten karsilayabilir mi" sorusuna cevap verir.
+app.get("/health", async (req, res) => {
+  try {
+    await db.prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() });
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] Health check basarisiz:`, err);
+    res.status(503).json({ status: "error" });
+  }
+});
 
 // Genel API rate limiti: auth uclarinin (login/register/forgot) kendi daha
 // siki limitleri zaten var (routes/auth.js) - bu, geri kalan tum /api
@@ -83,7 +105,7 @@ app.get("*", (req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  console.error(err);
+  console.error(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} -`, err);
   res.status(500).json({ error: "Sunucu hatası." });
 });
 
