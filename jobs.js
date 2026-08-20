@@ -148,7 +148,29 @@ async function materializeRecurringPartyCharges() {
 
   let created = 0;
   for (const r of due) {
-    await prisma.$transaction(async (tx) => {
+    const isLastOccurrence = r.frequency === "once";
+    let next = null;
+    if (!isLastOccurrence) {
+      next = new Date(r.nextDate);
+      if (r.frequency === "yearly") next.setFullYear(next.getFullYear() + 1);
+      else next.setMonth(next.getMonth() + 1);
+    }
+
+    const claimed = await prisma.$transaction(async (tx) => {
+      // Optimistik kilit: WHERE'e eski nextDate degerini de ekleyerek
+      // guncelliyoruz - baska bir process/worker (orn. PM2 cluster'da paralel
+      // calisan bir baska instance) bu satiri araya girip zaten islediyse
+      // nextDate artik farkli olur, updateMany 0 satir eslestirir ve bu
+      // sablonu atlariz. Eskiden bu kontrol yoktu: findMany() ile once TUM
+      // vadesi gelenler okunuyordu, sonra her biri ayri ayri islenirken iki
+      // paralel calisma ayni sablonu ayni anda "vadesi gelmis" gorup IKI KEZ
+      // gercek borca cevirebilirdi (mukerrer fatura riski).
+      const result = await tx.recurringPartyCharge.updateMany({
+        where: { id: r.id, active: true, nextDate: r.nextDate },
+        data: isLastOccurrence ? { active: false } : { nextDate: next },
+      });
+      if (result.count === 0) return false;
+
       await tx.partyCharge.create({
         data: {
           partyType: r.partyType,
@@ -163,20 +185,14 @@ async function materializeRecurringPartyCharges() {
           createdBy: r.createdBy,
         },
       });
-
-      if (r.frequency === "once") {
-        await tx.recurringPartyCharge.update({ where: { id: r.id }, data: { active: false } });
-      } else {
-        const next = new Date(r.nextDate);
-        if (r.frequency === "yearly") next.setFullYear(next.getFullYear() + 1);
-        else next.setMonth(next.getMonth() + 1);
-        await tx.recurringPartyCharge.update({ where: { id: r.id }, data: { nextDate: next } });
-      }
+      return true;
     });
-    created++;
+    if (claimed) created++;
   }
 
-  await prisma.activityLog.create({ data: { actorId: "sistem", actorName: "Otomatik Sistem", action: "recurring.materialize", detail: `${created} tekrarlayan/ileri tarihli fatura gerçek borca çevrildi.` } });
+  if (created > 0) {
+    await prisma.activityLog.create({ data: { actorId: "sistem", actorName: "Otomatik Sistem", action: "recurring.materialize", detail: `${created} tekrarlayan/ileri tarihli fatura gerçek borca çevrildi.` } });
+  }
   return created;
 }
 
