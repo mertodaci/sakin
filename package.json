@@ -5,7 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "cluster": "pm2 start ecosystem.config.js",
+    "cluster:stop": "pm2 stop ecosystem.config.js",
+    "cluster:logs": "pm2 logs sakin"
   },
   "license": "UNLICENSED",
   "dependencies": {
@@ -22,6 +25,7 @@
     "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
+    "pm2": "^7.0.3",
     "prisma": "^6.19.3"
   },
   "prisma": {

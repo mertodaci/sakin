@@ -88,8 +88,18 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
+// PM2 cluster modunda (bkz. ecosystem.config.js) her worker'a NODE_APP_INSTANCE
+// ile 0'dan baslayan bir sira no atanir. Zamanlanmis bakim gorevini SADECE
+// 0 numarali worker'da calistiriyoruz - aksi halde her worker kendi setInterval'ini
+// bagimsiz calistirir, ayni gorev N kere tekrarlanir (gereksiz yuk + jobs.js'teki
+// bazi kontrollerin tek transaction icinde olmasina ragmen N kat fazla sorgu).
+// PM2 disinda (npm start / npm run dev, tek process) NODE_APP_INSTANCE tanimsizdir,
+// bu da "sahibim" sayilir - boylece normal gelistirme akisi degismez.
+const isSchedulerOwner = process.env.NODE_APP_INSTANCE === undefined || process.env.NODE_APP_INSTANCE === "0";
+
 app.listen(PORT, () => {
   console.log(`Sakin sunucu ${PORT} portunda çalışıyor: http://localhost:${PORT}`);
+  if (!isSchedulerOwner) return;
   // Gecikme faizi ve otomatik aylik borclandirma icin: acilista bir kez, sonra
   // her 6 saatte bir kontrol edilir (gun degisiminde islemlerin gecikmeden yapilmasi icin).
   runMaintenanceTasks().catch((err) => console.error("Bakim gorevi hatasi:", err));
