@@ -8,8 +8,51 @@
 const express = require("express");
 const prisma = require("../lib/prismaClient");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { myUnitIds } = require("../lib/residentUnits");
 
 const router = express.Router();
+
+function tl(n) {
+  return `${Number(n).toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}₺`;
+}
+
+// Dashboard'daki (routes/dashboard.js) ayni hesabin kucuk, dogrudan-Prisma
+// bir tekrari - db.load()'un butun legacy koleksiyonlarini cekmek yerine
+// (bu YENI ozellik icin gereksiz agir olurdu) sadece ihtiyaci olan iki
+// sorguyu (Charge+Unit) yapar. Iki yerde ayni formul oldugu icin dashboard.js
+// degisirse burasi da elle guncellenmeli.
+async function unitNetDebts() {
+  const [charges, units] = await Promise.all([
+    prisma.charge.findMany({ where: { status: { not: "paid" } }, select: { unitId: true, amount: true, paidAmount: true } }),
+    prisma.unit.findMany({ select: { id: true, creditBalance: true } }),
+  ]);
+  const openByUnit = new Map();
+  charges.forEach((c) => openByUnit.set(c.unitId, (openByUnit.get(c.unitId) || 0) + Number(c.amount) - Number(c.paidAmount)));
+  return units.map((u) => (openByUnit.get(u.id) || 0) - Number(u.creditBalance || 0));
+}
+
+// Kasa toplam bakiyesi: acilis bakiyeleri + gelir/gider hareketleri. Kasalar
+// ARASI transferler toplami degistirmez (biri +tutar, digeri -ayni tutar,
+// site-geneli toplamda birbirini goturur) - dashboard.js/accounts.js'in
+// tek-hesap `accountBalance()`'inin aksine burada hesap bazinda ayirmaya
+// gerek yok, tum hesaplari tek sorguda toplayabiliriz.
+async function computeKasaTotal() {
+  const [accounts, transactions] = await Promise.all([
+    prisma.account.findMany({ select: { openingBalance: true } }),
+    prisma.transaction.findMany({ select: { type: true, amount: true } }),
+  ]);
+  const opening = accounts.reduce((s, a) => s + Number(a.openingBalance), 0);
+  const net = transactions.reduce((s, t) => s + (t.type === "gelir" ? Number(t.amount) : -Number(t.amount)), 0);
+  return opening + net;
+}
+
+// User modeli bilerek global (coklu-siteli personelin tek giris kimligi
+// olmasi icin) - UserSiteAccess uzerinden SADECE bu sitenin kullanicilarini
+// sayiyoruz (bkz. ops.js/finance.js'teki ayni sinif duzeltmeler).
+async function computePendingApprovals(siteId) {
+  const access = await prisma.userSiteAccess.findMany({ where: { siteId }, include: { user: true } });
+  return access.filter((a) => !a.user.isApproved).length;
+}
 
 // Ekran-icerik indeksi: scripts/build-help-index.js tarafindan public/js/
 // app.js'teki her ekranin GERCEK metninden otomatik uretilir (bkz. o
@@ -233,6 +276,87 @@ const KB = [
   },
 ];
 
+// 0. kademe (KB'den ONCE denenir): "toplam borç ne kadar" gibi RAKAM isteyen
+// sorular icin - eskiden (bkz. ROADMAP) chatbot bu tarz sorulara sadece
+// dogru ekrana yonlendiriyordu, rakam vermiyordu. compute() her cagrida
+// CANLI hesaplanir (KB gibi sabit metin degil). Ayni kelime-kumesi
+// eslestirici (bkz. bestKeywordMatch) KB ile paylasilir - roller/keywords
+// ayni sekilde calisir, sadece answer yerine compute(req) var.
+const LIVE_QUERIES = [
+  {
+    id: "toplam-alacak-canli",
+    roles: ["yonetici", "personel"],
+    // DIKKAT: bu uygulamada "alacak" SITENIN acisindandir (sakinlerin
+    // siteye olan borcu = sitenin alacagi) - "toplam borc (odenecek)"
+    // ise sitenin firma/personele olan borcu (bkz. public/js/app.js:1633-1634
+    // "TOPLAM ALACAK" -> dash.totalDebt, "TOPLAM BORÇ (ÖDENECEK)" ->
+    // dash.totalPayables). Iki ayri girdi, karistirilmasin diye cevap
+    // metninde de aciklaniyor.
+    keywords: ["toplam alacak", "üyelerin borcu ne kadar", "sakinlerin borcu ne kadar", "dairelerin borcu ne kadar", "ne kadar alacağımız var", "kaç alacak var"],
+    compute: async () => {
+      const debts = await unitNetDebts();
+      const total = debts.reduce((s, d) => s + Math.max(0, d), 0);
+      return { answer: `Şu an dairelerin siteye toplam açık borcu (sitenin alacağı) **${tl(total)}**.`, tab: "tahsilat" };
+    },
+  },
+  {
+    id: "toplam-odenecek-borc-canli",
+    roles: ["yonetici", "personel"],
+    keywords: ["toplam borcumuz", "sitenin borcu ne kadar", "firmalara borç ne kadar", "ödenecek borç ne kadar", "ne kadar borcumuz var", "kaç borcumuz var"],
+    compute: async () => {
+      const payables = await prisma.partyCharge.findMany({ where: { status: { not: "paid" } }, select: { amount: true, paidAmount: true } });
+      const total = payables.reduce((s, c) => s + Number(c.amount) - Number(c.paidAmount), 0);
+      return { answer: `Sitenin firma/personele olan toplam ödenecek borcu **${tl(total)}**.`, tab: "borclistesi" };
+    },
+  },
+  {
+    id: "kasa-bakiyesi-canli",
+    roles: ["yonetici", "personel"],
+    keywords: ["kasa bakiyesi", "kasada ne kadar var", "toplam kasa", "ne kadar paramız var", "banka bakiyesi ne kadar"],
+    compute: async () => {
+      const total = await computeKasaTotal();
+      return { answer: `Tüm kasa/banka hesaplarının toplam bakiyesi **${tl(total)}**.`, tab: "kasalar" };
+    },
+  },
+  {
+    id: "acik-talep-sayisi-canli",
+    roles: ["yonetici", "personel"],
+    keywords: ["kaç açık talep", "açık talep sayısı", "bekleyen arıza kaç", "kaç arıza var", "kaç talep var"],
+    compute: async () => {
+      const count = await prisma.ticket.count({ where: { status: { not: "Çözüldü" } } });
+      return { answer: `Şu an **${count}** açık talep var.`, tab: "talep" };
+    },
+  },
+  {
+    id: "onay-bekleyen-canli",
+    roles: ["yonetici"],
+    keywords: ["kaç onay bekleyen", "onay bekleyen kaç kişi", "bekleyen kayıt sayısı", "kaç kayıt bekliyor"],
+    compute: async (req) => {
+      const count = await computePendingApprovals(req.user.siteId);
+      return { answer: `Onay bekleyen **${count}** kayıt var.`, tab: "kullanicilar" };
+    },
+  },
+  {
+    id: "sakin-borcu-canli",
+    roles: ["sakin"],
+    keywords: ["borcum ne kadar", "ne kadar borcum var", "kaç para borçluyum", "bakiyem ne kadar"],
+    compute: async (req) => {
+      const unitIds = await myUnitIds(prisma, req.user);
+      let total = 0;
+      for (const unitId of unitIds) {
+        const [charges, unit] = await Promise.all([
+          prisma.charge.findMany({ where: { unitId, status: { not: "paid" } }, select: { amount: true, paidAmount: true } }),
+          prisma.unit.findUnique({ where: { id: unitId }, select: { creditBalance: true } }),
+        ]);
+        const open = charges.reduce((s, c) => s + Number(c.amount) - Number(c.paidAmount), 0);
+        total += open - Number(unit?.creditBalance || 0);
+      }
+      if (total <= 0) return { answer: "Görünürde açık bir borcunuz yok. 🎉", tab: "aidat" };
+      return { answer: `Toplam açık borcunuz **${tl(total)}**.`, tab: "aidat" };
+    },
+  },
+];
+
 // 2. kademe eslesme icin: public/js/app.js'teki NAV_GROUPS ile ayni
 // ekran isimleri (bilerek kucuk bir kopya - nav degisince burasi da elle
 // guncellenmeli, ama nav degisiklikleri seyrek). KB'de eslesme yoksa,
@@ -410,12 +534,14 @@ function wordsMatch(a, b) {
 // icindeki kelimeler farkli sirada olsa, ek almis olsa ya da kucuk bir yazim
 // hatasi icerse bile eslesir. Bir anahtar-kelime ifadesinin TUM kelimeleri
 // (fuzzy olarak) soruda gecmeli - aksi halde "ekle" gibi tek kelimeler cok
-// fazla girdiyle zayifca eslesip yanlis yonlendirir.
-function findBestMatch(question, role) {
+// fazla girdiyle zayifca eslesip yanlis yonlendirir. KB ve LIVE_QUERIES
+// ayni {roles, keywords} seklini paylastigi icin tek bir fonksiyon ikisine
+// de hizmet eder.
+function bestKeywordMatch(entries, question, role) {
   const qWords = normalize(question).split(" ").filter(Boolean);
   let best = null;
   let bestScore = 0;
-  for (const entry of KB) {
+  for (const entry of entries) {
     if (!entry.roles.includes(role)) continue;
     let score = 0;
     for (const kw of entry.keywords) {
@@ -428,6 +554,14 @@ function findBestMatch(question, role) {
   return bestScore > 0 ? best : null;
 }
 
+function findBestMatch(question, role) {
+  return bestKeywordMatch(KB, question, role);
+}
+
+function findLiveQueryMatch(question, role) {
+  return bestKeywordMatch(LIVE_QUERIES, question, role);
+}
+
 router.get("/help/suggestions", requireAuth, (req, res) => {
   res.json({ suggestions: FALLBACK_SUGGESTIONS[req.user.role] || FALLBACK_SUGGESTIONS.sakin });
 });
@@ -435,6 +569,16 @@ router.get("/help/suggestions", requireAuth, (req, res) => {
 router.post("/help/ask", requireAuth, async (req, res) => {
   const { question } = req.body || {};
   if (!question || !question.trim()) return res.status(400).json({ error: "Bir soru yazmalısınız." });
+
+  // 0. kademe: "toplam alacak ne kadar" gibi rakam isteyen sorular - KB'den
+  // ONCE denenir, cunku KB'deki bazi genel-kapsamli girdiler ("borç hareketi
+  // gör" gibi) bunlarla kelime ortusebilir ama tier 0 daha spesifik/dogru.
+  const liveMatch = findLiveQueryMatch(question, req.user.role);
+  if (liveMatch) {
+    const result = await liveMatch.compute(req);
+    return res.json({ answer: result.answer, tab: result.tab || null, suggestions: [] });
+  }
+
   const match = findBestMatch(question, req.user.role);
   if (match) return res.json({ answer: match.answer, tab: match.tab || null, suggestions: [] });
 
