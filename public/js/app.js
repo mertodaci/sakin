@@ -2005,28 +2005,37 @@ async function renderDaireler(c) {
         <button class="btn btn-primary" type="submit">Ekle</button>
       </form>
     </div>
-    <div class="grid grid-cards">
-      ${list.map((u) => `
-        <div class="card pad">
-          <div class="icon-card-head">
-            <div class="icon-card-icon">${navIcon("daireler")}</div>
-            <div class="icon-card-text">
-              <div class="icon-card-title">${esc(u.block)} - Daire ${esc(u.no)}</div>
-              <div class="small muted">${esc(u.ownerName || "-")}${u.tenantName ? " (Kiracı: " + esc(u.tenantName) + ")" : ""}${u.feeGroup ? " · " + esc(u.feeGroup) : ""}${u.squareMeters ? " · " + esc(String(u.squareMeters)) + " m²" : ""}</div>
-            </div>
-            ${u.occupancy === "vacant" ? pill("Boş") : pill(debtStatusLabel(u.debt))}
-          </div>
-          <div class="flex-between" style="margin-top:12px;">
-            <div class="f-num" style="color:${debtColor(u.debt)};font-weight:700;font-size:16px;">${tl(Math.abs(u.debt))}</div>
-            <div style="display:flex;gap:6px;">
+    <div class="report-wrap"><table class="report">
+      <thead>
+        <tr><th>Blok / No</th><th>Malik / Kiracı</th><th>Durum</th><th class="num">Bakiye</th><th>İşlemler</th></tr>
+        ${columnFilterRow([
+          { key: "blok" },
+          { key: "malik" },
+          { key: "durum", type: "select", options: [{ value: "Boş", label: "Boş" }, { value: "Borçlu", label: "Borçlu" }, { value: "Alacaklı", label: "Alacaklı" }, { value: "Ödendi", label: "Ödendi" }] },
+          null,
+          null,
+        ])}
+      </thead>
+      <tbody>
+        ${list.map((u) => {
+          const durum = u.occupancy === "vacant" ? "Boş" : debtStatusLabel(u.debt);
+          const malikKiraci = (u.ownerName || "-") + (u.tenantName ? " (Kiracı: " + u.tenantName + ")" : "");
+          return `<tr data-listrow data-blok="${esc(u.block + " " + u.no)}" data-malik="${esc(malikKiraci)}" data-durum="${esc(durum)}">
+            <td>${esc(u.block)} - Daire ${esc(u.no)}</td>
+            <td>${esc(malikKiraci)}${u.feeGroup ? " · " + esc(u.feeGroup) : ""}${u.squareMeters ? " · " + esc(String(u.squareMeters)) + " m²" : ""}</td>
+            <td>${u.occupancy === "vacant" ? pill("Boş") : pill(debtStatusLabel(u.debt))}</td>
+            <td class="num f-num" style="color:${debtColor(u.debt)};font-weight:700;">${tl(Math.abs(u.debt))}</td>
+            <td><div style="display:flex;gap:6px;">
               <button class="btn btn-ghost btn-sm" data-ozet="${u.id}" title="Hesap Özeti">📄</button>
               <button class="btn btn-ghost btn-sm" data-borcdokumu="${u.id}" title="Borç Dökümü">📋</button>
               <button class="btn btn-ghost btn-sm" data-editunit="${u.id}">Düzenle</button>
-            </div>
-          </div>
-        </div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
-    </div>
+            </div></td>
+          </tr>`;
+        }).join("") || '<tr><td colspan="5" class="empty-row">Kayıt yok.</td></tr>'}
+      </tbody>
+    </table></div>
   `;
+  wireColumnFilters(c, "[data-listrow]");
   document.getElementById("unitForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
@@ -2477,13 +2486,18 @@ async function renderMuhasebe(c) {
           </div>`).join("")}
       </div>
     </div>
-    <div class="card tight">
-      <div class="ledger-title">Hareket Dökümü</div>
-      ${transactions.slice(0, 25).map((t) => `
-        <div class="ledger-row"><div><div style="font-size:14px;font-weight:600;">${esc(t.category)}</div><div class="small muted">${esc(t.description)} · ${accName(t.accountId)} · ${dt(t.date)}</div></div>
-        <div style="display:flex;align-items:center;gap:8px;"><span class="f-num" style="font-weight:600;color:${t.type === "gelir" ? "var(--green)" : "var(--red)"};">${t.type === "gelir" ? "+" : "-"}${tl(t.amount)}</span><button class="btn-danger" data-deltxn="${t.id}">Sil</button></div></div>`).join("") || '<div class="empty-row">Kayıt yok.</div>'}
-    </div>
+    <div class="flex-between"><div class="ledger-title" style="padding:0 0 8px;">Hareket Dökümü</div></div>
+    <div class="report-wrap"><table class="report">
+      <thead>
+        <tr><th>Kategori</th><th>Açıklama</th><th>Hesap</th><th>Tarih</th><th class="num">Tutar</th><th></th></tr>
+        ${columnFilterRow([{ key: "kategori" }, { key: "aciklama" }, { key: "hesap", type: "select", options: accounts.map((a) => ({ value: a.name, label: a.name })) }, null, null, null])}
+      </thead>
+      <tbody>
+        ${transactions.slice(0, 25).map((t) => `<tr data-listrow data-kategori="${esc(t.category)}" data-aciklama="${esc(t.description)}" data-hesap="${esc(accName(t.accountId))}"><td>${esc(t.category)}</td><td>${esc(t.description)}</td><td>${esc(accName(t.accountId))}</td><td>${dt(t.date)}</td><td class="num f-num" style="font-weight:600;color:${t.type === "gelir" ? "var(--green)" : "var(--red)"};">${t.type === "gelir" ? "+" : "-"}${tl(t.amount)}</td><td><button class="btn-danger" data-deltxn="${t.id}">Sil</button></td></tr>`).join("") || '<tr><td colspan="6" class="empty-row">Kayıt yok.</td></tr>'}
+      </tbody>
+    </table></div>
   `;
+  wireColumnFilters(c, "[data-listrow]");
   document.getElementById("newTxnBtn").addEventListener("click", () => {
     document.getElementById("txnForm").innerHTML = `
       <form id="txnCreateForm" class="card form-card form-row">
@@ -3383,21 +3397,23 @@ async function renderKasalar(c) {
       ${statCard("tahsilat", "tahsilat", "ALACAKLAR (ÜYE BORÇLARI)", tl(dash.totalDebt), "var(--red)")}
       ${statCard("borclistesi", "borclistesi", "BORÇLAR (ÖDENECEK)", tl(dash.totalPayables), "var(--amber)")}
     </div>
-    <div class="grid grid-cards" id="accountsGrid">
-      ${accounts.map((a) => `
-        <div class="card pad">
-          <div class="icon-card-head">
-            <div class="icon-card-icon">${navIcon("kasalar")}</div>
-            <div class="icon-card-text">
-              <div class="icon-card-title">${esc(a.name)}</div>
-              <div class="small muted">${typeLabel[a.type] || a.type}${a.bankName ? " · " + esc(a.bankName) : ""}${a.iban ? " · " + esc(a.iban) : ""}</div>
-            </div>
-          </div>
-          <div class="f-num" style="font-weight:700;font-size:20px;margin-top:12px;color:${a.balance >= 0 ? "var(--green)" : "var(--red)"};">${tl(a.balance)}</div>
-          <button class="btn btn-ghost btn-sm" style="margin-top:10px;" data-ledger="${a.id}">Hesap Ekstresi</button>
-          <div id="ledger-${a.id}" style="margin-top:10px;"></div>
-        </div>`).join("")}
-    </div>
+    <div class="report-wrap"><table class="report">
+      <thead>
+        <tr><th>Hesap Adı</th><th>Tür</th><th>Banka / IBAN</th><th class="num">Bakiye</th><th></th></tr>
+        ${columnFilterRow([{ key: "ad" }, { key: "tur", type: "select", options: Object.entries(typeLabel).map(([value, label]) => ({ value: label, label })) }, { key: "banka" }, null, null])}
+      </thead>
+      <tbody>
+        ${accounts.map((a) => `
+          <tr data-listrow data-ad="${esc(a.name)}" data-tur="${esc(typeLabel[a.type] || a.type)}" data-banka="${esc(a.bankName || "")}">
+            <td><div class="person-row"><span class="icon-card-icon" style="width:26px;height:26px;flex:0 0 26px;">${navIcon("kasalar")}</span>${esc(a.name)}</div></td>
+            <td>${typeLabel[a.type] || a.type}</td>
+            <td>${a.bankName ? esc(a.bankName) : "-"}${a.iban ? " · " + esc(a.iban) : ""}</td>
+            <td class="num f-num" style="font-weight:700;color:${a.balance >= 0 ? "var(--green)" : "var(--red)"};">${tl(a.balance)}</td>
+            <td><button class="btn btn-ghost btn-sm" data-ledger="${a.id}">Hesap Ekstresi</button></td>
+          </tr>
+          <tr id="ledger-${a.id}" style="display:none;"><td colspan="5"></td></tr>`).join("") || '<tr><td colspan="5" class="empty-row">Kayıt yok.</td></tr>'}
+      </tbody>
+    </table></div>
     <div class="card form-card">
       <div class="ledger-title" style="padding:0 0 10px;">Yeni Kasa/Hesap Ekle</div>
       <form id="accForm" class="form-row">
@@ -3449,14 +3465,15 @@ async function renderKasalar(c) {
     });
   });
   c.querySelectorAll("[data-ledger]").forEach((b) => b.addEventListener("click", async () => {
-    const box = document.getElementById("ledger-" + b.dataset.ledger);
-    if (box.dataset.open === "1") { box.innerHTML = ""; box.dataset.open = "0"; return; }
+    const holder = document.getElementById("ledger-" + b.dataset.ledger);
+    if (holder.style.display === "table-row") { holder.style.display = "none"; holder.querySelector("td").innerHTML = ""; return; }
     try {
       const { rows } = await api("/accounts/" + b.dataset.ledger + "/ledger");
-      box.dataset.open = "1";
-      box.innerHTML = `<div class="card tight" style="margin-top:6px;">${rows.slice(0, 20).map((r) => ledgerRow(esc(r.label), esc(r.description || "") + " · " + dt(r.date), (r.amount >= 0 ? "+" : "") + tl(r.amount), r.amount >= 0 ? "var(--green)" : "var(--red)")).join("") || '<div class="empty-row">Hareket yok.</div>'}</div>`;
+      holder.style.display = "table-row";
+      holder.querySelector("td").innerHTML = `<div class="card tight" style="margin:6px 0;">${rows.slice(0, 20).map((r) => ledgerRow(esc(r.label), esc(r.description || "") + " · " + dt(r.date), (r.amount >= 0 ? "+" : "") + tl(r.amount), r.amount >= 0 ? "var(--green)" : "var(--red)")).join("") || '<div class="empty-row">Hareket yok.</div>'}</div>`;
     } catch (err) { toast(err.message); }
   }));
+  wireColumnFilters(c, "[data-listrow]");
 }
 
 async function renderCari(c) {
@@ -3465,26 +3482,30 @@ async function renderCari(c) {
   const categoryOptions = `<option value="">Kategori seçin (opsiyonel)</option>` + categories.map((cat) => `<option value="${cat.id}">${esc(cat.group)} / ${esc(cat.name)}</option>`).join("");
 
   const partyNameMap = new Map();
-  function partyCard(name, sub, debt, partyType, partyId) {
+  function partyRow(name, sub, debt, partyType, partyId) {
     partyNameMap.set(`${partyType}|${partyId}`, name);
     return `
-      <div class="card pad">
-        <div class="icon-card-head">
-          <div class="icon-card-icon">${navIcon(partyType === "firma" ? "cari" : "personel")}</div>
-          <div class="icon-card-text">
-            <div class="icon-card-title">${esc(name)}</div>
-            <div class="small muted">${esc(sub)}</div>
-          </div>
-          <div class="f-num" style="font-weight:600;color:${debt > 0 ? "var(--red)" : "var(--green)"};">${tl(debt)}</div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+      <tr data-listrow data-ad="${esc(name)}" data-kategori="${esc(sub)}">
+        <td><div class="person-row"><span class="icon-card-icon" style="width:26px;height:26px;flex:0 0 26px;">${navIcon(partyType === "firma" ? "cari" : "personel")}</span>${esc(name)}</div></td>
+        <td>${esc(sub)}</td>
+        <td class="num f-num" style="font-weight:600;color:${debt > 0 ? "var(--red)" : "var(--green)"};">${tl(debt)}</td>
+        <td><div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-ghost btn-sm" data-charge="${partyType}|${partyId}">+ Borçlandır</button>
           ${debt > 0 ? `<button class="btn btn-ghost btn-sm" data-pay="${partyType}|${partyId}|${debt}">Öde</button>` : ""}
-          <button class="btn btn-ghost btn-sm" data-hesap="${partyType}|${partyId}" title="Hesap Hareketleri">📄 Hesap Hareketleri</button>
-          ${partyType === "firma" ? `<button class="btn btn-ghost btn-sm" data-mutabakat="${partyId}" title="Mutabakat Mektubu">✉️ Mutabakat</button>` : ""}
-        </div>
-        <div id="cari-action-${partyType}-${partyId}"></div>
-      </div>`;
+          <button class="btn btn-ghost btn-sm" data-hesap="${partyType}|${partyId}" title="Hesap Hareketleri">📄</button>
+          ${partyType === "firma" ? `<button class="btn btn-ghost btn-sm" data-mutabakat="${partyId}" title="Mutabakat Mektubu">✉️</button>` : ""}
+        </div></td>
+      </tr>
+      <tr id="cari-action-${partyType}-${partyId}" style="display:none;"><td colspan="4"></td></tr>`;
+  }
+  function partyTable(rows, emptyText) {
+    return `<div class="report-wrap"><table class="report">
+      <thead>
+        <tr><th>Ad</th><th>Kategori / Departman</th><th class="num">Bakiye</th><th>İşlemler</th></tr>
+        ${columnFilterRow([{ key: "ad" }, { key: "kategori" }, null, null])}
+      </thead>
+      <tbody>${rows || `<tr><td colspan="4" class="empty-row">${emptyText}</td></tr>`}</tbody>
+    </table></div>`;
   }
 
   c.innerHTML = `
@@ -3501,10 +3522,12 @@ async function renderCari(c) {
       </form>
     </div>
     <h3 class="f-display" style="font-size:15px;margin:18px 0 10px;">Firmalar</h3>
-    <div class="grid grid-cards">${vendors.map((v) => partyCard(v.name, v.category || "Firma", v.debt, "firma", v.id)).join("") || '<div class="empty-row">Kayıtlı firma yok.</div>'}</div>
+    <div id="vendorTableWrap">${partyTable(vendors.map((v) => partyRow(v.name, v.category || "Firma", v.debt, "firma", v.id)).join(""), "Kayıtlı firma yok.")}</div>
     <h3 class="f-display" style="font-size:15px;margin:18px 0 10px;">Personel</h3>
-    <div class="grid grid-cards">${personnel.map((p) => partyCard(p.name, p.department || "Personel", personnelDebt(p.id), "personel", p.id)).join("") || '<div class="empty-row">Kayıtlı personel yok.</div>'}</div>
+    <div id="personnelTableWrap">${partyTable(personnel.map((p) => partyRow(p.name, p.department || "Personel", personnelDebt(p.id), "personel", p.id)).join(""), "Kayıtlı personel yok.")}</div>
   `;
+  wireColumnFilters(document.getElementById("vendorTableWrap"), "[data-listrow]");
+  wireColumnFilters(document.getElementById("personnelTableWrap"), "[data-listrow]");
 
   document.getElementById("vendorForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -3515,15 +3538,16 @@ async function renderCari(c) {
 
   c.querySelectorAll("[data-charge]").forEach((b) => b.addEventListener("click", () => {
     const [partyType, partyId] = b.dataset.charge.split("|");
-    const box = document.getElementById(`cari-action-${partyType}-${partyId}`);
-    box.innerHTML = `
-      <form class="form-row" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;" data-charge-form="${partyType}|${partyId}">
+    const holder = document.getElementById(`cari-action-${partyType}-${partyId}`);
+    holder.style.display = "table-row";
+    holder.querySelector("td").innerHTML = `
+      <form class="form-row" style="padding:8px 0;" data-charge-form="${partyType}|${partyId}">
         <div class="field"><label>Tutar (₺)</label><input name="amount" type="number" required /></div>
         <div class="field" style="flex:2 1 200px;"><label>Açıklama</label><input name="description" placeholder="Aylık bakım bedeli, maaş…" required /></div>
         <div class="field" style="flex:2 1 200px;"><label>Gider Kategorisi</label><select name="categoryId">${categoryOptions}</select></div>
         <button class="btn btn-primary btn-sm" type="submit">Kaydet</button>
       </form>`;
-    box.querySelector("form").addEventListener("submit", async (e) => {
+    holder.querySelector("form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(e.target));
       try { await api("/party-charges", { method: "POST", body: { partyType, partyId, ...f } }); toast("Borçlandırma kaydedildi."); renderTab("cari"); }
@@ -3533,14 +3557,15 @@ async function renderCari(c) {
 
   c.querySelectorAll("[data-pay]").forEach((b) => b.addEventListener("click", () => {
     const [partyType, partyId, debt] = b.dataset.pay.split("|");
-    const box = document.getElementById(`cari-action-${partyType}-${partyId}`);
-    box.innerHTML = `
-      <form class="form-row" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
+    const holder = document.getElementById(`cari-action-${partyType}-${partyId}`);
+    holder.style.display = "table-row";
+    holder.querySelector("td").innerHTML = `
+      <form class="form-row" style="padding:8px 0;">
         <div class="field"><label>Tutar (₺)</label><input name="amount" type="number" value="${debt}" required /></div>
         <div class="field"><label>Hesap</label><select name="accountId">${accounts.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></div>
         <button class="btn btn-primary btn-sm" type="submit">Öde</button>
       </form>`;
-    box.querySelector("form").addEventListener("submit", async (e) => {
+    holder.querySelector("form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(e.target));
       try { await api("/party-payments/pay", { method: "POST", body: { partyType, partyId, requestId: crypto.randomUUID(), ...f } }); toast("Ödeme kaydedildi."); renderTab("cari"); }
@@ -3567,19 +3592,19 @@ async function renderGiderler(c) {
 
   function chargeRow(ch) {
     const kalan = ch.amount - ch.paidAmount;
+    const kategori = ch.category ? `${ch.category.group} / ${ch.category.name}` : "Kategorisiz";
+    const durum = ch.status === "paid" ? "Ödendi" : ch.status === "partial" ? "Kısmi" : "Açık";
     return `
-      <div class="ledger-row">
-        <div>
-          <div style="font-weight:600;">${esc(ch.category ? `${ch.category.group} / ${ch.category.name}` : "Kategorisiz")}</div>
-          <div class="small muted">${esc(ch.description)} · Fatura ${esc(ch.invoiceNo)} · Vade ${dt(ch.dueDate)}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          ${pill(ch.status === "paid" ? "Ödendi" : ch.status === "partial" ? "Kısmi" : "Açık")}
-          <div class="f-num" style="font-weight:600;">${tl(kalan)}</div>
-          ${kalan > 0 ? `<button class="btn btn-ghost btn-sm" data-pay-charge="${ch.id}|${kalan}">Öde</button>` : ""}
-        </div>
-        <div id="gider-pay-${ch.id}" style="flex-basis:100%;"></div>
-      </div>`;
+      <tr data-listrow data-kategori="${esc(kategori)}" data-aciklama="${esc(ch.description)}" data-durum="${esc(durum)}">
+        <td>${esc(kategori)}</td>
+        <td>${esc(ch.description)}</td>
+        <td>${esc(ch.invoiceNo)}</td>
+        <td>${dt(ch.dueDate)}</td>
+        <td>${pill(durum)}</td>
+        <td class="num f-num" style="font-weight:600;">${tl(kalan)}</td>
+        <td>${kalan > 0 ? `<button class="btn btn-ghost btn-sm" data-pay-charge="${ch.id}|${kalan}">Öde</button>` : ""}</td>
+      </tr>
+      <tr id="gider-pay-${ch.id}" style="display:none;"><td colspan="7"></td></tr>`;
   }
 
   c.innerHTML = `
@@ -3610,11 +3635,18 @@ async function renderGiderler(c) {
         </form>
       </div>
     </div>
-    <div class="card tight" style="margin-top:16px;">
-      <div class="ledger-title">Genel Giderler</div>
-      ${generalCharges.map(chargeRow).join("") || '<div class="empty-row">Kayıtlı genel gider yok.</div>'}
-    </div>
+    <div class="flex-between" style="margin-top:16px;"><div class="ledger-title" style="padding:0 0 8px;">Genel Giderler</div></div>
+    <div class="report-wrap"><table class="report">
+      <thead>
+        <tr><th>Kategori</th><th>Açıklama</th><th>Fatura No</th><th>Vade</th><th>Durum</th><th class="num">Kalan</th><th></th></tr>
+        ${columnFilterRow([{ key: "kategori" }, { key: "aciklama" }, null, null, { key: "durum", type: "select", options: [{ value: "Açık", label: "Açık" }, { value: "Kısmi", label: "Kısmi" }, { value: "Ödendi", label: "Ödendi" }] }, null, null])}
+      </thead>
+      <tbody>
+        ${generalCharges.map(chargeRow).join("") || '<tr><td colspan="7" class="empty-row">Kayıtlı genel gider yok.</td></tr>'}
+      </tbody>
+    </table></div>
   `;
+  wireColumnFilters(c, "[data-listrow]");
 
   document.getElementById("categoryForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -3635,14 +3667,15 @@ async function renderGiderler(c) {
   });
   c.querySelectorAll("[data-pay-charge]").forEach((b) => b.addEventListener("click", () => {
     const [chargeId, kalan] = b.dataset.payCharge.split("|");
-    const box = document.getElementById(`gider-pay-${chargeId}`);
-    box.innerHTML = `
-      <form class="form-row" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;width:100%;">
+    const holder = document.getElementById(`gider-pay-${chargeId}`);
+    holder.style.display = "table-row";
+    holder.querySelector("td").innerHTML = `
+      <form class="form-row" style="padding:8px 0;">
         <div class="field"><label>Tutar (₺)</label><input name="amount" type="number" value="${kalan}" required /></div>
         <div class="field"><label>Hesap</label><select name="accountId">${accounts.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></div>
         <button class="btn btn-primary btn-sm" type="submit">Öde</button>
       </form>`;
-    box.querySelector("form").addEventListener("submit", async (e) => {
+    holder.querySelector("form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(e.target));
       try { await api("/party-payments/pay", { method: "POST", body: { chargeId, requestId: crypto.randomUUID(), ...f } }); toast("Ödeme kaydedildi."); renderTab("giderler"); }
