@@ -212,4 +212,4 @@ async function runMaintenanceTasks() {
   }
 }
 
-module.exports = { runMaintenanceTasks, materializeRecurringPartyCharges };
+module.exports = { runMaintenanceTasks, materializeRecurringPartyCharges, applyLateFees, autoGenerateMonthlyDues };
