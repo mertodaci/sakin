@@ -23,10 +23,52 @@ async function findSiteUser(userId, siteId) {
   return prisma.user.findUnique({ where: { id: userId } });
 }
 
+// DIKKAT (2026-08-20'de bulunan gercek hata): User global (site-scope'suz)
+// oldugu icin prisma.user.findMany() TEK BASINA hicbir site filtresi
+// UYGULAMAZ - bu dosyadaki asagidaki uc/rapor GET'leri eskiden db.load()
+// uzerinden gelen data.users'i (db.js'in loadUsers()'i, ayni sekilde
+// unscoped) DOGRUDAN kullaniyordu. Sonuc: herhangi bir sitenin yoneticisi,
+// Kullanicilar ekranini (ve TC Kimlik/Arac Plaka/Detayli Uye Listesi
+// raporlarini) actiginda TUM PLATFORMDAKI diger sitelerin kullanicilarini
+// da (isim/e-posta/telefon/TC kimlik no dahil) goruyordu - siteler-arasi
+// gercek bir veri sizintisiydi, dogrulandi (yonetici2@site.com ile giris
+// yapip GET /users'in Ornek Site'nin 9 kullanicisini da dondurdugu
+// gozlemlendi). UserSiteAccess uzerinden SADECE bu sitenin kullanicilarini
+// donen bu yardimci fonksiyon, ayni sinif diger duzeltmelerle (ops.js,
+// help.js, dashboard.js) tutarli.
+async function loadSiteUsers(siteId) {
+  const access = await prisma.userSiteAccess.findMany({ where: { siteId }, include: { user: true } });
+  return access.map((a) => a.user);
+}
+
+// Unit tenant-scope'lu bir model (extension otomatik siteId filtreler) -
+// bu yuzden units okumak icin ekstra bir scoping'e gerek yok, sadece
+// db.load()'un gereksiz 27 koleksiyon cekmesinden kacinmak icin sadece
+// units+acik charges'i dogrudan cekip db.netDebt (ayni charges/units
+// seklini bekleyen paylasilan fonksiyon) ile birlikte kullanilabilir
+// kucuk bir "data" nesnesi olusturuyoruz. Decimal alanlar (landShare/
+// squareMeters/creditBalance/amount/paidAmount) acikca Number()'a
+// cevriliyor - aksi halde JSON'a Decimal degil string olarak yazilirdi.
+async function loadUnitsAndOpenCharges() {
+  const [units, charges] = await Promise.all([
+    prisma.unit.findMany({ orderBy: [{ block: "asc" }, { no: "asc" }] }),
+    prisma.charge.findMany({ where: { status: { not: "paid" } }, select: { unitId: true, amount: true, paidAmount: true } }),
+  ]);
+  return {
+    units: units.map((u) => ({
+      ...u,
+      landShare: u.landShare != null ? Number(u.landShare) : null,
+      squareMeters: u.squareMeters != null ? Number(u.squareMeters) : null,
+      creditBalance: Number(u.creditBalance),
+    })),
+    charges: charges.map((c) => ({ ...c, amount: Number(c.amount), paidAmount: Number(c.paidAmount) })),
+  };
+}
+
 /* ---------------- UNITS (Daireler) ---------------- */
 
 router.get("/units", requireAuth, async (req, res) => {
-  const data = await db.load();
+  const data = await loadUnitsAndOpenCharges();
   const list = data.units.map((u) => ({ ...u, debt: unitDebt(data, u.id) }));
   res.json(list);
 });
@@ -36,7 +78,7 @@ router.get("/units", requireAuth, async (req, res) => {
 // User/Malik tablosu olarak modellenmedigi icin (Unit.ownerName/ownerPhone
 // serbest metin), "ayni kisi" eslestirmesi isim/telefon uzerinden yapilir.
 router.get("/units/:id/related", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
+  const data = await loadUnitsAndOpenCharges();
   const unit = data.units.find((u) => u.id === req.params.id);
   if (!unit) return res.status(404).json({ error: "Daire bulunamadı." });
   const name = (unit.ownerName || "").trim().toLowerCase();
@@ -91,8 +133,8 @@ router.patch("/units/:id", requireAuth, requireRole("yonetici"), async (req, res
 // anlamsiz "Sunucu hatasi" mesaji) firlatirdi. Silmeden once hepsini
 // kontrol edip dostane bir Turkce hata donuyoruz.
 router.delete("/units/:id", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const inUse = data.users.some((u) => u.unitId === req.params.id);
+  const siteUsers = await loadSiteUsers(req.user.siteId);
+  const inUse = siteUsers.some((u) => u.unitId === req.params.id);
   if (inUse) return res.status(400).json({ error: "Bu daireye bağlı kullanıcılar var, önce onları kaldırın." });
 
   const [chargeCount, paymentCount, reservationCount, ticketCount, meterCount, packageCount] = await Promise.all([
@@ -146,14 +188,16 @@ router.delete("/household/:id", requireAuth, requireRole("yonetici"), async (req
 // Edenler Listesi" - tum siteyi tek, aranabilir tabloda gosterir (malik/kiraci
 // kendisi + guncel HouseholdMember kayitlari). Bos daireler listelenmez.
 router.get("/reports/ikamet-edenler", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
-  const data = await db.load();
-  const members = await prisma.householdMember.findMany({ where: { isCurrent: true }, orderBy: { name: "asc" } });
+  const [units, members] = await Promise.all([
+    prisma.unit.findMany({ orderBy: [{ block: "asc" }, { no: "asc" }] }),
+    prisma.householdMember.findMany({ where: { isCurrent: true }, orderBy: { name: "asc" } }),
+  ]);
   const membersByUnit = members.reduce((acc, m) => {
     (acc[m.unitId] = acc[m.unitId] || []).push(m);
     return acc;
   }, {});
   const rows = [];
-  for (const u of data.units) {
+  for (const u of units) {
     if (u.occupancy === "vacant") continue;
     const sifat = u.occupancy === "tenant" ? "Kiracı" : "Malik";
     const primaryName = u.occupancy === "tenant" ? u.tenantName : u.ownerName;
@@ -170,7 +214,7 @@ router.get("/reports/ikamet-edenler", requireAuth, requireRole("yonetici", "pers
 // Yonetimcell karsilastirmasi: "Bos/Dolu Tasinmaz Listesi" - her tasinmazin
 // doluluk durumu (bos/malik oturuyor/kiraci oturuyor) tek tabloda, bakiyesiyle.
 router.get("/reports/bos-dolu-tasinmaz", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
-  const data = await db.load();
+  const data = await loadUnitsAndOpenCharges();
   const rows = data.units
     .map((u) => ({
       block: u.block,
@@ -188,11 +232,11 @@ router.get("/reports/bos-dolu-tasinmaz", requireAuth, requireRole("yonetici", "p
 // (giris yapabilen) sakinlerin TC kimlik no'larini tek tabloda gosterir.
 // Hesabi olmayan eski/kayitsiz sakinlerin TC no'su sistemde tutulmuyor.
 router.get("/reports/tc-kimlik-listesi", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
-  const data = await db.load();
-  const rows = data.users
+  const [users, units] = await Promise.all([loadSiteUsers(req.user.siteId), prisma.unit.findMany()]);
+  const rows = users
     .filter((u) => u.role === "sakin" && u.unitId)
     .map((u) => {
-      const unit = data.units.find((x) => x.id === u.unitId);
+      const unit = units.find((x) => x.id === u.unitId);
       if (!unit) return null;
       return { block: unit.block, no: unit.no, durum: unit.occupancy === "tenant" ? "Kiracı" : "Malik", name: u.name, nationalId: u.nationalId || "" };
     })
@@ -204,13 +248,12 @@ router.get("/reports/tc-kimlik-listesi", requireAuth, requireRole("yonetici", "p
 // Yonetimcell karsilastirmasi: "Arac Plaka Listesi" - Vehicle modelinin
 // (mevcut, task #6) tum siteyi kapsayan filtrelenebilir liste gorunumu.
 router.get("/reports/arac-plaka-listesi", requireAuth, requireRole("yonetici", "personel"), async (req, res) => {
-  const data = await db.load();
-  const vehicles = await prisma.vehicle.findMany({ orderBy: { plate: "asc" } });
+  const [users, units, vehicles] = await Promise.all([loadSiteUsers(req.user.siteId), prisma.unit.findMany(), prisma.vehicle.findMany({ orderBy: { plate: "asc" } })]);
   const rows = [];
   for (const v of vehicles) {
-    const u = data.users.find((x) => x.id === v.userId);
+    const u = users.find((x) => x.id === v.userId);
     if (!u) continue;
-    const unit = u.unitId ? data.units.find((x) => x.id === u.unitId) : null;
+    const unit = u.unitId ? units.find((x) => x.id === u.unitId) : null;
     rows.push({ block: unit ? unit.block : "", no: unit ? unit.no : "", durum: unit && unit.occupancy === "tenant" ? "Kiracı" : "Malik", name: u.name, phone: u.phone || "", plate: v.plate, brand: v.brand || "", color: v.color || "" });
   }
   rows.sort((a, b) => a.block.localeCompare(b.block, "tr") || a.no.localeCompare(b.no, "tr", { numeric: true }));
@@ -220,17 +263,16 @@ router.get("/reports/arac-plaka-listesi", requireAuth, requireRole("yonetici", "
 /* ---------------- USERS (Sakinler / Onay / Personel) ---------------- */
 
 router.get("/users", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const extra = await prisma.userUnit.findMany();
+  const [users, units, extra] = await Promise.all([loadSiteUsers(req.user.siteId), prisma.unit.findMany(), prisma.userUnit.findMany()]);
   const extraByUser = new Map();
   for (const e of extra) {
     if (!extraByUser.has(e.userId)) extraByUser.set(e.userId, []);
     extraByUser.get(e.userId).push(e.unitId);
   }
-  const list = data.users.map((u) => {
-    const unit = u.unitId ? data.units.find((x) => x.id === u.unitId) : null;
+  const list = users.map((u) => {
+    const unit = u.unitId ? units.find((x) => x.id === u.unitId) : null;
     const additionalUnits = (extraByUser.get(u.id) || [])
-      .map((id) => data.units.find((x) => x.id === id))
+      .map((id) => units.find((x) => x.id === id))
       .filter(Boolean)
       .map((x) => ({ id: x.id, label: `${x.block} - Daire ${x.no}` }));
     return { id: u.id, name: u.name, email: u.email, email2: u.email2 || null, phone: u.phone, phone2: u.phone2 || null, role: u.role, unitId: u.unitId, unitLabel: unit ? `${unit.block} - Daire ${unit.no}` : null, additionalUnits, department: u.department || null, nationalId: u.nationalId || null, isApproved: u.isApproved, isActive: u.isActive !== false, createdAt: u.createdAt, resetRequestedAt: u.resetRequestedAt || null, gender: u.gender || null, birthDate: u.birthDate || null, bloodType: u.bloodType || null, sector: u.sector || null, workplace: u.workplace || null, workAddress: u.workAddress || null, homeAddress: u.homeAddress || null };
@@ -437,20 +479,19 @@ router.post("/users/personnel", requireAuth, requireRole("yonetici"), async (req
 // üye bilgilerini tek genis satirda birlestirir, hangi sutunlarin
 // gosterilecegine frontend'te checkbox'larla karar verilir (esnek dokum).
 router.get("/reports/detayli-uye-listesi", requireAuth, requireRole("yonetici"), async (req, res) => {
-  const data = await db.load();
-  const meters = await prisma.meter.findMany();
+  const [users, units, meters] = await Promise.all([loadSiteUsers(req.user.siteId), prisma.unit.findMany(), prisma.meter.findMany()]);
   const metersByUnit = meters.reduce((acc, m) => { (acc[m.unitId] = acc[m.unitId] || []).push(m); return acc; }, {});
 
-  const rows = data.users
+  const rows = users
     .filter((u) => u.role === "sakin" && u.unitId)
     .map((u) => {
-      const unit = data.units.find((x) => x.id === u.unitId);
+      const unit = units.find((x) => x.id === u.unitId);
       if (!unit) return null;
       const unitMeters = metersByUnit[unit.id] || [];
       const meterOf = (type) => unitMeters.find((m) => m.type === type)?.serialNo || "";
       return {
         block: unit.block, no: unit.no, feeGroup: unit.feeGroup || "", floor: unit.floor,
-        squareMeters: unit.squareMeters || null, landShare: unit.landShare || null,
+        squareMeters: unit.squareMeters != null ? Number(unit.squareMeters) : null, landShare: unit.landShare != null ? Number(unit.landShare) : null,
         yakitSayacNo: meterOf("yakit") || meterOf("dogalgaz"), sicakSuSayacNo: meterOf("sicak_su"), sogukSuSayacNo: meterOf("soguk_su") || meterOf("su"), elektrikSayacNo: meterOf("elektrik"),
         gender: u.gender || "", name: u.name, birthDate: u.birthDate || null, bloodType: u.bloodType || "",
         nationalId: u.nationalId || "", phone: u.phone || "", phone2: u.phone2 || "", email: u.email || "", email2: u.email2 || "",
