@@ -184,7 +184,7 @@ function loginTemplate() {
     <div class="login-lang-corner">${langSelectHtml('id="loginLangSelect"')}</div>
     <div class="login-side">
       <div>
-        <div class="eyebrow">SAKİN</div>
+        <div class="login-brand f-display">Sakin</div>
         <h1>${esc(t("brand.tagline"))}</h1>
       </div>
       <div class="foot">${esc(t("brand.footer"))}</div>
@@ -340,7 +340,7 @@ function renderSitePicker(sites, token, endpoint, onComplete) {
   app.innerHTML = `
   <div class="login-screen">
     <div class="login-side">
-      <div><div class="eyebrow">SAKİN</div><h1>${esc(t("sitePicker.title"))}</h1></div>
+      <div><div class="login-brand f-display">Sakin</div><h1>${esc(t("sitePicker.title"))}</h1></div>
       <div class="foot">${esc(t("sitePicker.sub"))}</div>
     </div>
     <div class="login-main">
@@ -391,7 +391,7 @@ function renderForceChangePassword() {
   app.innerHTML = `
   <div class="login-screen">
     <div class="login-side">
-      <div><div class="eyebrow">SAKİN</div><h1>${esc(t("forceChange.title"))}</h1></div>
+      <div><div class="login-brand f-display">Sakin</div><h1>${esc(t("forceChange.title"))}</h1></div>
       <div class="foot">${esc(t("forceChange.sub"))}</div>
     </div>
     <div class="login-main">
@@ -613,7 +613,7 @@ function renderShell() {
    <div class="app-shell">
      <aside class="sidebar${sidebarCollapsed ? " collapsed" : ""}" id="sidebar">
        <div class="sidebar-brand">
-         <div class="brand-mark">S</div>
+         <div class="brand-mark"><svg viewBox="0 0 64 64" width="19" height="19"><path d="M16 54 L16 30 L34 12 L48 22 L48 54 Z" fill="#ffffff"/><rect x="26" y="40" width="6" height="14" fill="#F2B84B"/></svg></div>
          <div class="brand-word">
            <span class="f-display">Sakin</span>
            <span class="badge-role">${esc(roleLabel(state.user.role))}</span>
@@ -1916,7 +1916,7 @@ async function renderKullanicilar(c) {
   const approved = list.filter((u) => u.isApproved);
   const resetRequests = approved.filter((u) => u.resetRequestedAt);
   c.innerHTML = `
-    ${sectionTitle("Kullanıcılar")}
+    ${sectionTitle("Kullanıcılar", "Sakinler, personel ve yöneticiler")}
     ${pending.length ? `
     <div class="flex-between"><div class="ledger-title" style="padding:0 0 8px;">Onay Bekleyenler</div></div>
     <div class="report-wrap mb-16"><table class="report">
@@ -1936,7 +1936,7 @@ async function renderKullanicilar(c) {
         ${resetRequests.map((u) => `<tr><td><div class="person-row"><span class="avatar-chip sm">${esc(initials(u.name))}</span>${esc(u.name)}</div></td><td>${esc(u.email)}</td><td>${dt(u.resetRequestedAt)}</td><td><button class="btn btn-primary btn-sm" data-reset="${u.id}">Geçici Şifre Oluştur</button></td></tr>`).join("")}
       </tbody>
     </table></div>` : ""}
-    <div class="flex-between">${sectionTitle("Sakinler & Personel", `${approved.length} kayıt`)}</div>
+    <div class="flex-between"><div class="ledger-title" style="padding:0 0 8px;">Sakinler &amp; Personel</div><div style="display:flex;align-items:center;gap:12px;"><span class="small muted">${approved.length} kayıt</span><button class="btn btn-primary btn-sm" id="newPersonnelBtn">+ Personel Ekle</button></div></div>
     <div class="report-wrap mb-16"><table class="report">
       <thead>
         <tr><th>Ad Soyad</th><th>Rol / Daire</th><th>E-posta</th><th>Durum</th><th>İşlemler</th></tr>
@@ -1945,23 +1945,15 @@ async function renderKullanicilar(c) {
       <tbody>
         ${approved.map((u) => {
           const roldaire = u.role === "sakin" ? (u.unitLabel || "-") : u.role === "personel" ? (u.department || "Personel") : "Yönetici";
-          return `<tr data-listrow data-adsoyad="${esc(u.name)}" data-roldaire="${esc(roldaire)}" data-eposta="${esc(u.email)}" data-durum="${u.isActive === false ? "pasif" : "aktif"}" style="${u.isActive === false ? "opacity:.55;" : ""}"><td><div class="person-row"><span class="avatar-chip sm">${esc(initials(u.name))}</span>${esc(u.name)} ${u.role === "yonetici" ? "👑" : ""}</div></td><td>${esc(roldaire)}</td><td>${esc(u.email)}</td><td>${u.isActive === false ? pill("Pasif") : pill("Aktif")}</td><td><div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-ghost btn-sm" data-edit="${u.id}">Düzenle</button>${u.role !== "yonetici" ? `<button class="btn btn-ghost btn-sm" data-reset="${u.id}">Şifre Sıfırla</button>` : ""}${u.role !== "yonetici" && u.id !== state.user.id ? (u.isActive === false ? `<button class="btn btn-ghost btn-sm" data-reactivate="${u.id}">Aktif Et</button>` : `<button class="btn btn-ghost btn-sm" data-deactivate="${u.id}">Pasife Al</button>`) : ""}${u.id !== state.user.id ? `<button class="btn-danger" data-deluser="${u.id}">Kalıcı Sil</button>` : ""}</div></td></tr>`;
+          const actionButtons = `<button class="btn btn-ghost btn-sm" data-edit="${u.id}">Düzenle</button>${u.role !== "yonetici" ? `<button class="btn btn-ghost btn-sm" data-reset="${u.id}">Şifre Sıfırla</button>` : ""}${u.role !== "yonetici" && u.id !== state.user.id ? (u.isActive === false ? `<button class="btn btn-ghost btn-sm" data-reactivate="${u.id}">Aktif Et</button>` : `<button class="btn btn-ghost btn-sm" data-deactivate="${u.id}">Pasife Al</button>`) : ""}${u.id !== state.user.id ? `<button class="btn-danger" data-deluser="${u.id}">Kalıcı Sil</button>` : ""}`;
+          return `<tr data-listrow data-adsoyad="${esc(u.name)}" data-roldaire="${esc(roldaire)}" data-eposta="${esc(u.email)}" data-durum="${u.isActive === false ? "pasif" : "aktif"}" style="${u.isActive === false ? "opacity:.55;" : ""}"><td><div class="person-row"><span class="avatar-chip sm">${esc(initials(u.name))}</span>${esc(u.name)}</div></td><td>${esc(roldaire)}</td><td>${esc(u.email)}</td><td>${u.isActive === false ? pill("Pasif") : pill("Aktif")}</td><td>${rowActionsMenu(actionButtons)}</td></tr>`;
         }).join("") || '<tr><td colspan="5" class="empty-row">Kayıt yok.</td></tr>'}
       </tbody>
     </table></div>
-    <div class="card form-card">
-      <div class="ledger-title" style="padding:0 0 10px;">Yeni Personel Ekle</div>
-      <form id="perForm" class="form-row">
-        <div class="field"><label>Ad Soyad</label><input name="name" required /></div>
-        <div class="field"><label>E-posta</label><input type="email" name="email" required /></div>
-        <div class="field"><label>Telefon</label><input name="phone" /></div>
-        <div class="field"><label>Departman / Görev</label><input name="department" list="personnelRoleList" placeholder="Temizlik, Güvenlik, Bakım… veya Yönetim Kurulu Üyesi" /><datalist id="personnelRoleList">${PERSONNEL_ROLE_SUGGESTIONS.map((r) => `<option value="${esc(r)}"></option>`).join("")}</datalist></div>
-        <div class="field"><label>Şifre</label><input type="password" name="password" required minlength="8" /></div>
-        <button class="btn btn-primary" type="submit">Ekle</button>
-      </form>
-    </div>
   `;
   wireColumnFilters(c, "[data-listrow]");
+  wireRowActionsMenus(c);
+  document.getElementById("newPersonnelBtn").addEventListener("click", renderNewPersonnelModal);
   c.querySelectorAll("[data-approve]").forEach((b) => b.addEventListener("click", async () => { try { await api("/users/" + b.dataset.approve + "/approve", { method: "PATCH" }); toast("Kullanıcı onaylandı."); renderTab("kullanicilar"); } catch (err) { toast(err.message); } }));
   c.querySelectorAll("[data-deluser]").forEach((b) => b.addEventListener("click", async () => { if (!confirm("Kalıcı olarak silinsin mi? Bu işlem geri alınamaz, geçmiş kayıtlar için 'Pasife Al' seçeneğini kullanmanız önerilir.")) return; try { await api("/users/" + b.dataset.deluser, { method: "DELETE" }); renderTab("kullanicilar"); } catch (err) { toast(err.message); } }));
   c.querySelectorAll("[data-deactivate]").forEach((b) => b.addEventListener("click", async () => { if (!confirm("Kullanıcı pasife alınsın mı? Geçmiş kayıtları korunur, sadece giriş yapamaz hale gelir.")) return; try { await api("/users/" + b.dataset.deactivate + "/deactivate", { method: "PATCH" }); toast("Kullanıcı pasife alındı."); renderTab("kullanicilar"); } catch (err) { toast(err.message); } }));
@@ -1978,10 +1970,37 @@ async function renderKullanicilar(c) {
       renderTab("kullanicilar");
     } catch (err) { toast(err.message); }
   }));
+}
+
+// "Yeni Personel Ekle" - eskiden Kullanicilar ekraninda hep-acik bir form
+// kartiydi (tablonun altinda, ayni agirlikta) - sayfayi "form dokumu" gibi
+// gosteriyordu. Diger duzenleme akislariyla (renderUserEditModal) ayni
+// modal-overlay deseni kullanilarak, tabloyu asil odak olarak birakiyor.
+function renderNewPersonnelModal() {
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(12,32,50,.35);z-index:70;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;";
+  overlay.innerHTML = `
+    <div class="card pad" style="max-width:420px;width:100%;">
+      <h3 class="f-display" style="margin:0 0 12px;">Yeni Personel Ekle</h3>
+      <form id="perForm">
+        <div class="field"><label>Ad Soyad</label><input name="name" required /></div>
+        <div class="field"><label>E-posta</label><input type="email" name="email" required /></div>
+        <div class="field"><label>Telefon</label><input name="phone" /></div>
+        <div class="field"><label>Departman / Görev</label><input name="department" list="personnelRoleList" placeholder="Temizlik, Güvenlik, Bakım… veya Yönetim Kurulu Üyesi" /><datalist id="personnelRoleList">${PERSONNEL_ROLE_SUGGESTIONS.map((r) => `<option value="${esc(r)}"></option>`).join("")}</datalist></div>
+        <div class="field"><label>Şifre</label><input type="password" name="password" required minlength="8" /></div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button type="button" class="btn btn-ghost" id="newPersonnelCancel" style="flex:1;">Vazgeç</button>
+          <button type="submit" class="btn btn-primary" style="flex:1;">Ekle</button>
+        </div>
+      </form>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#newPersonnelCancel").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
   document.getElementById("perForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
-    try { await api("/users/personnel", { method: "POST", body: Object.fromEntries(f) }); toast("Personel eklendi."); renderTab("kullanicilar"); }
+    try { await api("/users/personnel", { method: "POST", body: Object.fromEntries(f) }); toast("Personel eklendi."); overlay.remove(); renderTab("kullanicilar"); }
     catch (err) { toast(err.message); }
   });
 }
@@ -2102,6 +2121,33 @@ function wireColumnFilters(c, rowSelector) {
   }
   controls.forEach((el) => el.addEventListener(el.tagName === "SELECT" ? "change" : "input", applyFilters));
 }
+
+// Satir eylemleri icin tek "..." menusu (Kullanicilar ekranindaki 4 ayri
+// butonun hucreye sikismasi "amator" gorunuyordu). buttonsHtml, mevcut
+// data-edit/data-reset/... butonlerinin AYNEN kendisi - sadece bu sarmalayici
+// gorsel olarak tek menuye donusturuyor, event wiring hic degismiyor.
+function rowActionsMenu(buttonsHtml) {
+  return `<div class="row-actions">
+    <button type="button" class="row-actions-btn" title="İşlemler">${svgIcon('<circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"/>')}</button>
+    <div class="row-actions-menu" hidden>${buttonsHtml}</div>
+  </div>`;
+}
+function wireRowActionsMenus(c) {
+  c.querySelectorAll(".row-actions-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const menu = btn.nextElementSibling;
+      const wasHidden = menu.hidden;
+      c.querySelectorAll(".row-actions-menu").forEach((m) => { m.hidden = true; });
+      menu.hidden = !wasHidden;
+    });
+  });
+}
+// Tek seferlik, global: acik bir satir-eylem menusunun disina tiklaninca kapatir.
+document.addEventListener("click", (e) => {
+  if (e.target.closest(".row-actions")) return;
+  document.querySelectorAll(".row-actions-menu:not([hidden])").forEach((m) => { m.hidden = true; });
+});
 
 async function renderIkametEdenlerListesi(c) {
   const rows = await api("/reports/ikamet-edenler");

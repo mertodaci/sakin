@@ -22,7 +22,7 @@ async function loadDashboardData() {
     prisma.charge.findMany({ select: { unitId: true, status: true, amount: true, paidAmount: true } }),
     prisma.unit.findMany({ select: { id: true, creditBalance: true } }),
     prisma.partyCharge.findMany({ select: { status: true, amount: true, paidAmount: true } }),
-    prisma.transaction.findMany({ select: { type: true, amount: true, accountId: true } }),
+    prisma.transaction.findMany({ select: { type: true, amount: true, accountId: true, date: true } }),
     prisma.account.findMany({ select: { id: true, openingBalance: true } }),
     prisma.transfer.findMany({ select: { fromAccountId: true, toAccountId: true, amount: true } }),
     prisma.ticket.findMany({ select: { userId: true, status: true } }),
@@ -104,6 +104,18 @@ router.get("/dashboard", requireAuth, async (req, res) => {
   const totalPayables = data.partyCharges.filter((c) => c.status !== "paid").reduce((s, c) => s + (c.amount - c.paidAmount), 0);
   const income = data.transactions.filter((t) => t.type === "gelir").reduce((s, t) => s + t.amount, 0);
   const expense = data.transactions.filter((t) => t.type === "gider").reduce((s, t) => s + t.amount, 0);
+  // Dashboard mini-grafik: son 6 ay gelir/gider. Yeni bir sorgu ACMIYOR -
+  // yukarida income/expense toplami icin zaten cekilmis data.transactions
+  // uzerinde bellekte kirilim yapiyor (Muhasebe ekranindaki ayni desen).
+  const byMonth = {};
+  data.transactions.forEach((t) => {
+    const d = new Date(t.date);
+    const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleDateString("tr-TR", { month: "short", year: "2-digit" });
+    if (!byMonth[sortKey]) byMonth[sortKey] = { label, gelir: 0, gider: 0 };
+    byMonth[sortKey][t.type] += t.amount;
+  });
+  const monthlyFlow = Object.keys(byMonth).sort().slice(-6).map((k) => byMonth[k]);
   // Genel kasa durumu: tum hesaplarin (banka/nakit/pos) toplam bakiyesi (acilis bakiyeleri dahil)
   const kasa = data.accounts.reduce((s, a) => s + accountBalance(data, a.id), 0);
   const openTickets = data.tickets.filter((t) => t.status !== "Çözüldü").length;
@@ -118,6 +130,7 @@ router.get("/dashboard", requireAuth, async (req, res) => {
     totalPayables,
     income,
     expense,
+    monthlyFlow,
     openTickets,
     pendingApprovals,
     overdueEquipment,
