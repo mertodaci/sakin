@@ -236,6 +236,11 @@ async function applyPayment(tx, { unitId, amount, method, userId, userName, note
 // istemci her odeme denemesinde benzersiz bir requestId gonderir, ayni id
 // ikinci kez islenmez (idempotency key deseni - PaymentRequest tablosunda unique
 // constraint, mukerrer istek Prisma P2002 hatasiyla yakalanip 409 donduruluyor).
+// DIKKAT: PaymentRequest, GLOBAL_MODELS deny-list'inde (lib/tenantScope.js) -
+// siteId kolonu yok, id TUM PLATFORMDA unique. Cakismayi SITE ICINE hapsetmek
+// icin id'yi `${siteId}:${requestId}` olarak namespace'liyoruz - yoksa iki
+// farkli sitenin ayni requestId'yi (ornegin zayif/deterministik bir istemci
+// tarafindan) uretmesi, digerinin mesru odemesini "mukerrer" diye reddedebilirdi.
 router.post("/payments/pay", requireAuth, async (req, res) => {
   const { amount, method, requestId, accountId, chargeIds } = req.body || {};
   let unitId = req.body.unitId;
@@ -253,7 +258,7 @@ router.post("/payments/pay", requireAuth, async (req, res) => {
     const payment = await prisma.$transaction(async (tx) => {
       if (requestId) {
         try {
-          await tx.paymentRequest.create({ data: { id: requestId } });
+          await tx.paymentRequest.create({ data: { id: `${req.user.siteId}:${requestId}` } });
         } catch (e) {
           if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
             throw Object.assign(new Error("DUPLICATE_REQUEST"), { isDuplicate: true });

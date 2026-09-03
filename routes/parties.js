@@ -230,7 +230,10 @@ router.get("/party-payments", requireAuth, requireRole("yonetici"), async (req, 
 // Transaction + PartyPayment/allocations hep birlikte tek $transaction icinde
 // yazilir; requestId verilirse PaymentRequest tablosuna eklenir, ayni id
 // ikinci kez gelirse unique-violation (P2002) yakalanip 409 donulur (cift
-// tiklama/ag tekrarindan kaynaklanan mukerrer odeme koruması).
+// tiklama/ag tekrarindan kaynaklanan mukerrer odeme koruması). id, finance.js'le
+// ayni sebeple `${siteId}:${requestId}` olarak namespace'lenir - PaymentRequest
+// GLOBAL_MODELS'te (siteId kolonu yok), namespace olmadan iki farkli sitenin
+// ayni requestId'yi uretmesi digerinin odemesini yanlislikla reddedebilirdi.
 router.post("/party-payments/pay", requireAuth, requireRole("yonetici"), async (req, res) => {
   const { partyType, partyId, chargeId, amount, accountId, method, description, requestId } = req.body || {};
   if (!amount || Number(amount) <= 0) return res.status(400).json({ error: "Geçerli bir tutar girilmelidir." });
@@ -240,7 +243,7 @@ router.post("/party-payments/pay", requireAuth, requireRole("yonetici"), async (
     const payment = await prisma.$transaction(async (tx) => {
       if (requestId) {
         try {
-          await tx.paymentRequest.create({ data: { id: requestId } });
+          await tx.paymentRequest.create({ data: { id: `${req.user.siteId}:${requestId}` } });
         } catch (e) {
           if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
             throw Object.assign(new Error("DUPLICATE_REQUEST"), { isDuplicate: true });

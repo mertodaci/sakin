@@ -124,6 +124,17 @@ async function loadActivityLog() {
   return (await prisma.activityLog.findMany({ orderBy: { date: "desc" } })).map(toPlain);
 }
 
+// DIKKAT: PaymentRequest GLOBAL_MODELS'te (siteId kolonu yok) - bu UNSCOPED
+// olarak TUM platformdaki id'leri doner. Su an sadece db.load()'un
+// data.usedPaymentRequestIds alanini doldurmak icin kullaniliyor, o da
+// routes/system.js /export'ta hemen atiliyor (bkz. `{usedPaymentRequestIds,
+// ...exportable} = data`) - hicbir yerde gercekten kullanilmiyor. save()'deki
+// karsilik gelen blok da (asagida) hicbir cagiran tarafindan tetiklenmiyor
+// (kimse touchedCollections'a "usedPaymentRequestIds" gecmiyor) - AMA
+// tetiklenirse tx.paymentRequest.deleteMany, TUM SITELERIN kayitlarini
+// diff'leyip yabancilarini siler (unscoped). Bu iki fonksiyonu yeniden
+// canlandirmadan once mutlaka siteId-namespace'li ID'lere gore filtrelenmeli
+// (bkz. routes/finance.js, routes/parties.js - id'ler artik `${siteId}:...`).
 async function loadUsedPaymentRequestIds() {
   return (await prisma.paymentRequest.findMany()).map((p) => p.id);
 }
@@ -171,8 +182,13 @@ const READONLY_PASSTHROUGH = [
   { name: "budgets", load: simple("budget") },
   // users: routes/auth.js ve routes/directory.js'nin kullanici mutasyonu
   // yapan uclari artik dogrudan Prisma kullaniyor (bkz. db.prisma.user).
-  // Burada sadece hala data.users okuyan diger legacy route'lar (dashboard,
-  // comms, ops, jobs, system/export) icin salt-okunur olarak sunuluyor.
+  // dashboard/comms/ops/jobs artik data.users hic okumuyor (hepsi ayri ayri
+  // duzeltildi/migrate edildi - bkz. GLOBAL_MODELS, lib/tenantScope.js).
+  // Tek kalan okuyucu: routes/system.js /export - orada da bu UNSCOPED
+  // sonuc hemen loadSiteUsers(siteId) ile site-scoped hale getirilip ustune
+  // yaziliyor, DOGRUDAN kullanilmiyor. loadUsers() burada salt-okunur olarak
+  // duruyor cunku load()'un sekli sabit (bkz. yukaridaki not) - yeni bir
+  // okuyucu eklenirse data.users'in UNSCOPED oldugunu unutmayin.
   { name: "users", load: loadUsers },
   // contacts: routes/contacts.js artik dogrudan Prisma kullaniyor. Burada
   // sadece system.js'nin /export ucu icin salt-okunur olarak sunuluyor.
